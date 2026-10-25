@@ -22,6 +22,17 @@ Read the files in order, or jump to the topic you need.
 | 13 | [Challenges and next steps](13-challenges-and-next-steps.md) | Key decisions, problems solved, future work |
 | 14 | [Setup and repository layout](14-setup.md) | Run it locally, folder structure |
 
+## Product and technical specs
+
+| File | What it covers |
+|---|---|
+| [Product Requirements (PRD)](specs/01-prd.md) | Problem, goals, personas, user stories, functional and non-functional requirements, plans |
+| [Technical Requirements (TRD)](specs/02-trd.md) | Stack and versions, tenancy, API standards, data, jobs, billing, performance targets, testing, CI/CD |
+| [App flow](specs/03-app-flow.md) | Screen map, onboarding, issue lifecycle, drag-and-drop, sprints, upgrade and limit flows, role access |
+| [Implementation plan](specs/04-implementation-plan.md) | 14-day phases, milestones, work breakdown, risks, definition of done |
+| [UI/UX design brief](specs/05-ui-ux-design-brief.md) | Principles, information architecture, screens, colour tokens, components, accessibility |
+| [Backend schema](specs/06-backend-schema.md) | Every table, column, type, constraint and index; ER diagram; delete behaviour |
+
 ## Guides
 
 | File | Use |
