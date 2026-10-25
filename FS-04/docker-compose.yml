@@ -1,0 +1,81 @@
+# Full stack: PostgreSQL, Redis, Django API, Celery worker + beat, React (nginx), stripe-mock.
+#   cp .env.example .env && docker compose up --build
+#   App: http://localhost:3000   API docs: http://localhost:8000/api/docs/
+x-backend: &backend
+  build:
+    context: ./backend
+  env_file: .env
+  environment:
+    DATABASE_URL: postgres://taskflow:taskflow@db:5432/taskflow
+    REDIS_URL: redis://redis:6379/0
+    STRIPE_API_BASE: http://stripe-mock:12111
+  volumes:
+    - media:/app/media
+  depends_on:
+    db:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: taskflow
+      POSTGRES_USER: taskflow
+      POSTGRES_PASSWORD: taskflow
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U taskflow"]
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+
+  # Stripe's official API mock (used when STRIPE_MOCK=true; no Stripe account needed)
+  stripe-mock:
+    image: stripe/stripe-mock:latest
+    ports:
+      - "12111:12111"
+
+  backend:
+    <<: *backend
+    environment:
+      DATABASE_URL: postgres://taskflow:taskflow@db:5432/taskflow
+      REDIS_URL: redis://redis:6379/0
+      STRIPE_API_BASE: http://stripe-mock:12111
+      RUN_MIGRATIONS: "1"
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health/')"]
+      interval: 10s
+      retries: 10
+
+  worker:
+    <<: *backend
+    command: celery -A config worker -l info --concurrency 2
+
+  beat:
+    <<: *backend
+    command: celery -A config beat -l info --schedule /tmp/celerybeat-schedule
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
+  media:

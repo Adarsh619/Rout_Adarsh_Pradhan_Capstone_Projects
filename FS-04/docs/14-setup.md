@@ -1,0 +1,78 @@
+# 14 · Setup and repository layout
+
+[← Challenges and next steps](13-challenges-and-next-steps.md) · [Index](README.md)
+
+## Run with Docker (recommended)
+
+Prerequisite: Docker Desktop (on Windows, with WSL 2).
+
+```powershell
+copy .env.example .env
+docker compose up --build
+docker compose exec backend python manage.py seed_demo
+```
+
+| URL | What |
+|---|---|
+| http://localhost:3000 | The app. Sign in as `owner@acme.test` / `demo12345` |
+| http://localhost:8000/api/docs/ | Swagger API docs |
+| http://localhost:8000/admin/ | Django admin (`docker compose exec backend python manage.py createsuperuser`) |
+
+Other demo users (same password): `admin1@acme.test`, `member2@acme.test`, `viewer4@acme.test`, and `owner@globex.test` in a second tenant.
+
+Run the backend tests inside Docker:
+
+```powershell
+docker compose exec backend sh -c "pip install -q -r requirements-dev.txt && pytest"
+```
+
+## Run without Docker
+
+Needs Python 3.12+, Node 20+, PostgreSQL and Redis (or `docker compose up db redis stripe-mock`).
+
+```powershell
+cd backend
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements-dev.txt
+python manage.py migrate
+python manage.py seed_demo
+python manage.py runserver
+
+cd ..\frontend
+npm install
+npm run dev        # http://localhost:5173
+```
+
+## Environment variables (`.env`)
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `DJANGO_SECRET_KEY`, `DJANGO_DEBUG`, `DJANGO_ALLOWED_HOSTS` | dev values | Django security settings |
+| `DATABASE_URL`, `REDIS_URL` | localhost | Overridden by Docker Compose |
+| `CELERY_TASK_ALWAYS_EAGER` | `false` | `true` runs jobs inline without a worker |
+| `STRIPE_MOCK` | `true` | Billing mode, see [09 · Billing](09-billing.md) |
+| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_PRO`, `STRIPE_PRICE_BUSINESS` | empty | Only for real Stripe test mode |
+
+## Repository layout
+
+```
+FS-04/
+├── backend/
+│   ├── config/            settings, urls, celery app
+│   ├── apps/
+│   │   ├── accounts/      email-login User, register/me
+│   │   ├── tenancy/       Workspace, Membership, roles, tenant mixin
+│   │   ├── tracker/       workflows, projects, boards, sprints, issues, comments, attachments
+│   │   ├── audit/         AuditLog + record()
+│   │   ├── integrations/  webhooks, notifications, reports, Celery tasks
+│   │   └── billing/       plans, limits, Stripe service, mock mode
+│   └── tests/             pytest suites
+├── frontend/src/
+│   ├── components/        Layout, IssueModal, IssueCard, Notifications, Modal
+│   ├── pages/             Board, Sprints, Projects, Members, Workflows, Webhooks, AuditLog, Reports, Billing, MockCheckout
+│   └── test/              Vitest tests
+├── docs/                  this documentation
+├── docker-compose.yml
+└── .env.example
+```

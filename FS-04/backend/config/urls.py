@@ -7,7 +7,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from apps.accounts.views import MeView, RegisterView
 from apps.audit.views import AuditLogViewSet
-from apps.billing.views import BillingView, CheckoutView, PortalView, StripeWebhookView
+from apps.billing.views import BillingView, CheckoutView, MockCompleteView, PortalView, StripeWebhookView
 from apps.integrations.views import NotificationViewSet, ReportViewSet, WebhookViewSet
 from apps.tenancy.views import MembershipViewSet, WorkspaceViewSet
 from apps.tracker import views as t
@@ -45,6 +45,7 @@ urlpatterns = [
     path("api/billing/checkout/", CheckoutView.as_view()),
     path("api/billing/portal/", PortalView.as_view()),
     path("api/billing/stripe-webhook/", StripeWebhookView.as_view()),
+    path("api/billing/mock/complete/", MockCompleteView.as_view()),
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema")),
     path("api/", include(router.urls)),

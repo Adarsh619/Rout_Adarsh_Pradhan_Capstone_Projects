@@ -1,0 +1,24 @@
+erDiagram
+  USER ||--o{ MEMBERSHIP : has
+  WORKSPACE ||--o{ MEMBERSHIP : has
+  WORKSPACE ||--|| SUBSCRIPTION : billed_by
+  WORKSPACE ||--o{ WORKFLOW : owns
+  WORKFLOW ||--o{ WORKFLOW_STATUS : defines
+  WORKFLOW ||--o{ WORKFLOW_TRANSITION : allows
+  WORKSPACE ||--o{ PROJECT : owns
+  WORKFLOW ||--o{ PROJECT : used_by
+  PROJECT ||--o{ BOARD : has
+  PROJECT ||--o{ SPRINT : has
+  PROJECT ||--o{ ISSUE : contains
+  WORKFLOW_STATUS ||--o{ ISSUE : "current status"
+  SPRINT |o--o{ ISSUE : planned_in
+  ISSUE ||--o{ COMMENT : has
+  ISSUE ||--o{ ATTACHMENT : has
+  WORKSPACE ||--o{ AUDIT_LOG : records
+  WORKSPACE ||--o{ WEBHOOK : configures
+  WEBHOOK ||--o{ WEBHOOK_DELIVERY : sends
+  USER ||--o{ NOTIFICATION : receives
+  WORKSPACE ||--o{ REPORT : generates
+  MEMBERSHIP { string role "owner|admin|member|viewer" }
+  ISSUE { int workspace_id int number string title string type string priority float rank }
+  SUBSCRIPTION { string plan string status string stripe_customer_id }

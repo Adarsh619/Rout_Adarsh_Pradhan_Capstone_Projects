@@ -152,11 +152,17 @@ CELERY_BEAT_SCHEDULE = {
 EMAIL_BACKEND = os.environ.get("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "TaskFlow <noreply@taskflow.local>")
 
-# --- Stripe (test mode) -----------------------------------------------------
-STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
-STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
-STRIPE_PRICE_PRO = os.environ.get("STRIPE_PRICE_PRO", "")
-STRIPE_PRICE_BUSINESS = os.environ.get("STRIPE_PRICE_BUSINESS", "")
+# --- Stripe ---------------------------------------------------------------------
+# Two ways to run billing:
+#   STRIPE_MOCK=true  -> Stripe's official mock server (stripe-mock) + simulated checkout page.
+#                        No Stripe account needed (Stripe is invite-only in some countries).
+#   STRIPE_MOCK=false -> real Stripe *test mode* keys from dashboard.stripe.com.
+STRIPE_MOCK = env_bool("STRIPE_MOCK", False)
+STRIPE_API_BASE = os.environ.get("STRIPE_API_BASE", "http://localhost:12111")  # only used in mock mode
+STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "") or ("sk_test_mock" if STRIPE_MOCK else "")
+STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "") or ("whsec_mock_local" if STRIPE_MOCK else "")
+STRIPE_PRICE_PRO = os.environ.get("STRIPE_PRICE_PRO", "") or ("price_mock_pro" if STRIPE_MOCK else "")
+STRIPE_PRICE_BUSINESS = os.environ.get("STRIPE_PRICE_BUSINESS", "") or ("price_mock_business" if STRIPE_MOCK else "")
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173")
 
 LOGGING = {

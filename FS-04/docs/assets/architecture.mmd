@@ -1,0 +1,23 @@
+flowchart LR
+  subgraph Client
+    B[Browser<br/>React SPA + drag-and-drop Kanban]
+  end
+  subgraph Docker["Docker Compose"]
+    N[nginx<br/>static build + /api proxy]
+    D[Django REST API<br/>gunicorn · JWT · RBAC<br/>tenant scoping via X-Workspace]
+    W[Celery worker<br/>webhooks · emails · reports]
+    BT[Celery beat<br/>weekly reports · due reminders]
+    P[(PostgreSQL<br/>shared schema + workspace_id)]
+    R[(Redis<br/>broker / results)]
+  end
+  S[Stripe Billing<br/>test mode or stripe-mock]
+  X[Customer webhook endpoints]
+  B -->|HTTPS| N --> D
+  D --> P
+  D -->|enqueue on commit| R
+  BT --> R
+  R --> W
+  W --> P
+  W -->|HMAC-signed POST| X
+  D -->|Checkout / Portal sessions| S
+  S -->|signed webhooks| D
