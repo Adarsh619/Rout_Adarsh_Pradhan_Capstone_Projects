@@ -1,0 +1,10 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    { "label": "docker: up", "type": "shell", "command": "docker compose up --build", "problemMatcher": [] },
+    { "label": "docker: seed demo data", "type": "shell", "command": "docker compose exec backend python manage.py seed_demo", "problemMatcher": [] },
+    { "label": "docker: run backend tests", "type": "shell", "command": "docker compose run --rm -e INSTALL_DEV=true backend sh -c \"pip install -q -r requirements-dev.txt && pytest\"", "problemMatcher": [] },
+    { "label": "frontend: dev", "type": "shell", "command": "npm run dev", "options": { "cwd": "${workspaceFolder}/frontend" }, "problemMatcher": [] },
+    { "label": "frontend: test", "type": "shell", "command": "npm test", "options": { "cwd": "${workspaceFolder}/frontend" }, "problemMatcher": [] }
+  ]
+}

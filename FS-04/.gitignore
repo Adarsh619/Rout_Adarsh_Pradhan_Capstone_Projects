@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.ruff_cache/
+backend/db.sqlite3
+backend/media/
+backend/staticfiles/
+celerybeat-schedule*
+
+# Node
+node_modules/
+frontend/dist/
+frontend/coverage/
+
+# Env & editors
+.env
+.env.*
+!.env.example
+.idea/
+.DS_Store
+Thumbs.db
+
+# leftover copy of .github/.vscode from setup (safe to delete)
+_setup/
