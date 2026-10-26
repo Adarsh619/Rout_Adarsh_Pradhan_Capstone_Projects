@@ -1,5 +1,7 @@
 # 14-Day Commit Plan
 
+[← Accounts and setup checklist](ACCOUNTS_SETUP.md) · [Index](../README.md) · [Next: Presentation outline →](PRESENTATION_OUTLINE.md)
+
 The code is complete. This plan splits it into **small, reviewable daily commits** so your GitHub history shows
 steady progress. Each day: read the files, run them, change what you'd like, then commit.
 

@@ -1,5 +1,7 @@
 # Individual Reflection — <Your Name>
 
+[← Presentation outline](PRESENTATION_OUTLINE.md) · [Index](../README.md)
+
 ## What I owned
 - (List the parts you built or significantly changed: e.g. tenancy layer, Kanban board, Stripe integration, CI pipeline.)
 

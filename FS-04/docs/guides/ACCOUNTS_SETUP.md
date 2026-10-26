@@ -1,5 +1,7 @@
 # Accounts & Setup Checklist
 
+[Index](../README.md) · [Next: 14-day commit plan →](COMMIT_PLAN.md)
+
 ## Zero-cost guarantee
 Everything this project needs works on free tiers. **You never need to enter a credit card.**
 
