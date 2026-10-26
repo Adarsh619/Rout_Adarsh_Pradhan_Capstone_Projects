@@ -19,14 +19,18 @@ Interactive docs: **`/api/docs/`** (Swagger UI). Machine-readable schema: [`open
 | 402 | Plan limit reached; upgrade needed |
 | 403 | Role too low for this action |
 | 404 | Not found, or belongs to another workspace |
+| 429 | Too many requests: over the API limit, or over the stricter limit on register, login and password change |
 
 ## Endpoints
 
 | Method & path | Min. role | Description |
 |---|---|---|
 | `POST /api/auth/register/` | public | `{email, password, full_name?, workspace_name?}` → user + tokens (+ workspace slug) |
-| `POST /api/auth/token/` · `/token/refresh/` | public | JWT login / refresh |
-| `GET/PATCH /api/auth/me/` | user | Current profile |
+| `POST /api/auth/token/` | public | `{email, password}` → `{access, refresh}`. The email is matched case-insensitively |
+| `POST /api/auth/token/refresh/` | public | `{refresh}` → `{access, refresh}`. Returns a **new** refresh token; the old one is blacklisted and gets 401 if reused |
+| `POST /api/auth/logout/` | public | `{refresh}` → blacklists that refresh token. The access token stays valid until it expires (max 60 min) |
+| `GET/PATCH /api/auth/me/` | user | Current profile; only `full_name` can be changed |
+| `POST /api/auth/password/` | user | `{current_password, new_password}` → new `{access, refresh}`. Revokes every refresh token you held before |
 | `GET/POST /api/workspaces/` | user | Your workspaces / create one (you become owner) |
 | `GET/PATCH/DELETE /api/workspaces/{slug}/` | member / admin / owner | Workspace detail |
 | `GET/POST/PATCH/DELETE /api/members/` | viewer read, admin write | Add by `{email, role}` (user must exist); the owner can't be changed or removed |

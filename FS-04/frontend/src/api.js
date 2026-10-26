@@ -31,16 +31,21 @@ export function formatError(data) {
     .join("; ");
 }
 
-async function refreshAccess() {
-  if (!store.refresh) return false;
-  const r = await fetch(`${BASE}/api/auth/token/refresh/`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ refresh: store.refresh }),
-  });
-  if (!r.ok) { store.clear(); return false; }
-  store.set(await r.json());
-  return true;
+// Refresh tokens rotate (the old one is blacklisted), so parallel 401s must share one refresh call.
+let refreshing = null;
+function refreshAccess() {
+  refreshing ??= (async () => {
+    if (!store.refresh) return false;
+    const r = await fetch(`${BASE}/api/auth/token/refresh/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh: store.refresh }),
+    });
+    if (!r.ok) { store.clear(); return false; }
+    store.set(await r.json());
+    return true;
+  })().finally(() => { refreshing = null; });
+  return refreshing;
 }
 
 export async function request(path, { method = "GET", body, raw = false, retry = true } = {}) {

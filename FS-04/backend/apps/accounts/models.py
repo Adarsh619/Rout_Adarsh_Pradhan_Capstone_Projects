@@ -22,6 +22,10 @@ class EmailUserManager(UserManager):
         extra.update(is_staff=True, is_superuser=True)
         return self._create(email, password, **extra)
 
+    def get_by_natural_key(self, username):
+        # Emails are stored lower-case, so login (JWT and admin) ignores the case the user typed.
+        return self.get(email__iexact=username)
+
 
 class User(AbstractUser):
     """Users are global; they join workspaces through Membership."""

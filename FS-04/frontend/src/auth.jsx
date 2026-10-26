@@ -25,7 +25,14 @@ export function AuthProvider({ children }) {
     setUser(r.user);
     return r;
   };
-  const logout = () => { tokens.clear(); setUser(null); };
+  const logout = () => {
+    // Revoke the refresh token server-side; sign out locally even if that call fails.
+    if (tokens.refresh) {
+      request("/auth/logout/", { method: "POST", body: { refresh: tokens.refresh }, retry: false }).catch(() => {});
+    }
+    tokens.clear();
+    setUser(null);
+  };
 
   return <AuthContext.Provider value={{ user, loading, login, register, logout }}>{children}</AuthContext.Provider>;
 }

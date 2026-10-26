@@ -3,9 +3,9 @@ from django.http import JsonResponse
 from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from rest_framework.routers import DefaultRouter
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from rest_framework_simplejwt.views import TokenRefreshView
 
-from apps.accounts.views import MeView, RegisterView
+from apps.accounts.views import LoginView, LogoutView, MeView, PasswordChangeView, RegisterView
 from apps.audit.views import AuditLogViewSet
 from apps.billing.views import BillingView, CheckoutView, MockCompleteView, PortalView, StripeWebhookView
 from apps.integrations.views import NotificationViewSet, ReportViewSet, WebhookViewSet
@@ -38,9 +38,11 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/health/", health),
     path("api/auth/register/", RegisterView.as_view()),
-    path("api/auth/token/", TokenObtainPairView.as_view()),
+    path("api/auth/token/", LoginView.as_view()),
     path("api/auth/token/refresh/", TokenRefreshView.as_view()),
+    path("api/auth/logout/", LogoutView.as_view()),
     path("api/auth/me/", MeView.as_view()),
+    path("api/auth/password/", PasswordChangeView.as_view()),
     path("api/billing/", BillingView.as_view()),
     path("api/billing/checkout/", CheckoutView.as_view()),
     path("api/billing/portal/", PortalView.as_view()),

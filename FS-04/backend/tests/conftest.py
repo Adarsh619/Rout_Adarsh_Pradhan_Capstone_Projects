@@ -16,6 +16,14 @@ def _eager_celery(settings, tmp_path):
     app.conf.task_eager_propagates = True
 
 
+@pytest.fixture(autouse=True)
+def _reset_throttles():
+    # Rate-limit counters live in the cache; start every test with a clean slate.
+    from django.core.cache import cache
+
+    cache.clear()
+
+
 @pytest.fixture
 def make_user(db):
     def _make(email, password="pass12345"):
