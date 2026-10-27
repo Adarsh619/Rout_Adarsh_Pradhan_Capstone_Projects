@@ -32,8 +32,10 @@ Interactive docs: **`/api/docs/`** (Swagger UI). Machine-readable schema: [`open
 | `GET/PATCH /api/auth/me/` | user | Current profile; only `full_name` can be changed |
 | `POST /api/auth/password/` | user | `{current_password, new_password}` → new `{access, refresh}`. Revokes every refresh token you held before |
 | `GET/POST /api/workspaces/` | user | Your workspaces / create one (you become owner) |
-| `GET/PATCH/DELETE /api/workspaces/{slug}/` | member / admin / owner | Workspace detail |
-| `GET/POST/PATCH/DELETE /api/members/` | viewer read, admin write | Add by `{email, role}` (user must exist); the owner can't be changed or removed |
+| `GET/PATCH/DELETE /api/workspaces/{slug}/` | viewer / admin / owner | Workspace detail; PATCH `{name}` is audited as `workspace.updated` |
+| `POST /api/workspaces/{slug}/transfer/` | owner | `{user_id}` of another member → they become owner, you become admin |
+| `GET/POST/PATCH/DELETE /api/members/` | viewer read, admin write | Add by `{email, role}` (user must exist); the owner can't be changed or removed. Granting, changing or removing the **admin** role needs the owner (403 otherwise). Removing someone unassigns their open issues |
+| `POST /api/members/leave/` | viewer | Leave the current workspace (204); open issues are unassigned. The owner gets 400 and must transfer ownership first |
 | `/api/workflows/` · `/api/statuses/?workflow=` · `/api/transitions/?workflow=` | admin write | Custom workflows |
 | `/api/projects/` | admin write | Creating one also creates its board; `GET /projects/{id}/stats/` |
 | `/api/boards/?project=` | admin write | `GET /boards/{id}/columns/?sprint=all\|active\|backlog\|<id>&assignee=&q=` → columns with ordered issues, allowed transitions, active sprint |

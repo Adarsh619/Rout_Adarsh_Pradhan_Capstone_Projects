@@ -25,9 +25,12 @@ def _plain(v):
     return str(v)
 
 
-def record(request, action, instance, changes=None, emit_event=True):
-    """Write an audit entry and (optionally) fan the event out to webhooks/notifications."""
-    ws = request.workspace
+def record(request, action, instance, changes=None, emit_event=True, workspace=None):
+    """Write an audit entry and (optionally) fan the event out to webhooks/notifications.
+
+    `workspace` is for views that aren't tenant-scoped (the workspace list), where request.workspace is unset.
+    """
+    ws = workspace or request.workspace
     ip = request.META.get("HTTP_X_FORWARDED_FOR", request.META.get("REMOTE_ADDR", "")).split(",")[0].strip() or None
     entry = AuditLog.objects.create(
         workspace=ws,

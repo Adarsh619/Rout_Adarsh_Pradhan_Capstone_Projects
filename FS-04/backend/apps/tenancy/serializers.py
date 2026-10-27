@@ -16,9 +16,11 @@ class WorkspaceSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "slug", "created_at"]
 
     def get_role(self, obj):
-        user = self.context["request"].user
-        m = next((m for m in obj.memberships.all() if m.user_id == user.id), None)
-        return m.role if m else None
+        mine = getattr(obj, "my_memberships", None)  # prefetched by WorkspaceViewSet
+        if mine is None:
+            user = self.context["request"].user
+            mine = [m for m in obj.memberships.all() if m.user_id == user.id]
+        return mine[0].role if mine else None
 
     def get_plan(self, obj):
         sub = getattr(obj, "subscription", None)

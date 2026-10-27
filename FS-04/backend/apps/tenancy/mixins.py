@@ -11,7 +11,8 @@ def resolve_workspace(request):
     request._workspace_resolved = True
     request.workspace = None
     request.membership = None
-    slug = request.headers.get("X-Workspace") or request.query_params.get("workspace")
+    # Header only: a slug in the URL would end up in access logs and browser history.
+    slug = request.headers.get("X-Workspace")
     if not slug:
         raise ValidationError({"detail": "X-Workspace header is required."})
     membership = (

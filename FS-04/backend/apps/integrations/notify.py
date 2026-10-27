@@ -1,5 +1,7 @@
 from django.db import transaction
 
+from apps.tenancy.models import Membership
+
 from .models import Notification
 
 MESSAGES = {
@@ -17,6 +19,12 @@ def notify_issue_event(issue, verb, actor=None):
         recipients = {issue.assignee_id} - {None}
     if actor is not None:
         recipients.discard(actor.id)
+    if recipients:
+        # A reporter (or assignee of a done issue) may have left the workspace: never email ex-members.
+        recipients = set(
+            Membership.objects.filter(workspace_id=issue.workspace_id, user_id__in=recipients)
+            .values_list("user_id", flat=True)
+        )
     if not recipients:
         return []
     message = MESSAGES[verb].format(

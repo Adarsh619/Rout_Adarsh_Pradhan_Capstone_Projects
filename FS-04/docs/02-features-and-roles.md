@@ -8,7 +8,8 @@ A user signs up, creates a company workspace, invites colleagues with a role, an
 
 | Feature | What it does |
 |---|---|
-| Workspaces | Each company is a separate tenant with a unique slug (`/w/acme/...`). One user can belong to several workspaces. |
+| Workspaces | Each company is a separate tenant with a unique slug (`/w/acme/...`). One user can belong to several workspaces, and can leave any workspace they don't own. |
+| Members | Admins add existing users by email with a role. Removing someone (or them leaving) unassigns their open issues and stops all notifications to them. The owner can hand ownership to another member. |
 | Projects and boards | Each project has a key (`WEB`) and gets a board automatically. Issues are numbered per project (`WEB-42`). |
 | Kanban board | Drag cards between columns and reorder them. Columns the workflow forbids are greyed out while dragging. |
 | Custom workflows | Your own statuses (with a to-do / in-progress / done category) and the allowed moves between them. |
@@ -25,10 +26,12 @@ Roles are per workspace, and each role includes everything below it.
 
 | Role | Can do |
 |---|---|
-| Owner | Everything, plus billing and deleting the workspace |
-| Admin | Projects, boards, sprints, workflows, members, webhooks, audit log, reports |
+| Owner | Everything, plus billing, adding / changing / removing admins, transferring ownership and deleting the workspace. There is exactly one owner |
+| Admin | Projects, boards, sprints, workflows, webhooks, audit log, reports; adds, changes and removes members and viewers |
 | Member | Create and edit issues, move cards, comment, attach files |
 | Viewer | Read only |
+
+Anyone except the owner can leave a workspace. The owner must transfer ownership first; they then become an admin.
 
 The API enforces these rules (see [06 · API](06-api.md)); the React app also hides controls a role cannot use.
 
