@@ -1,3 +1,4 @@
+from django.db import IntegrityError, transaction
 from django.db.models import Count, Q
 from django.http import FileResponse
 from rest_framework import viewsets
@@ -197,7 +198,12 @@ class SprintViewSet(AuditedViewSet):
         if Sprint.objects.filter(project=sprint.project, state=Sprint.State.ACTIVE).exists():
             raise ValidationError("This project already has an active sprint.")
         sprint.state = Sprint.State.ACTIVE
-        sprint.save(update_fields=["state"])
+        try:
+            # Two Start clicks can both pass the check above; the one_active_sprint_per_project index stops the second.
+            with transaction.atomic():
+                sprint.save(update_fields=["state"])
+        except IntegrityError as e:
+            raise ValidationError("This project already has an active sprint.") from e
         record(request, "sprint.started", sprint)
         return Response(self.get_serializer(sprint).data)
 

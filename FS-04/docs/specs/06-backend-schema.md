@@ -89,6 +89,8 @@ All tracker tables also have `workspace_id bigint FK → tenancy_workspace, CASC
 | is_default | boolean | default false | One default per workspace, created with the workspace |
 | created_at | timestamptz | | |
 
+Partial unique index `one_default_workflow_per_workspace`: `(workspace_id) WHERE is_default`.
+
 ### `tracker_workflowstatus`
 
 | Column | Type | Constraints / default | Notes |
@@ -96,7 +98,7 @@ All tracker tables also have `workspace_id bigint FK → tenancy_workspace, CASC
 | workflow_id | bigint | FK → tracker_workflow, CASCADE | |
 | name | varchar(50) | | Board column name |
 | category | varchar(20) | `todo` / `in_progress` / `done`; default `todo` | Drives reports and sprint completion |
-| color | varchar(7) | default `#64748b` | Hex colour |
+| color | varchar(7) | default `#64748b`; must match `#rrggbb` (validator) | Hex colour, used directly in CSS |
 | order | integer ≥ 0 | default 0 | Column order |
 
 Unique: `(workflow_id, name)`.
@@ -115,7 +117,7 @@ Unique: `(workflow_id, from_status_id, to_status_id)`. No rows for a workflow = 
 
 | Column | Type | Constraints / default | Notes |
 |---|---|---|---|
-| key | varchar(10) | | Upper-case letters/digits, e.g. `WEB` |
+| key | varchar(10) | ASCII `A–Z`, `0–9` only (validated) | Stored upper-case, e.g. `WEB` |
 | name | varchar(120) | | |
 | description | text | | |
 | workflow_id | bigint | FK → tracker_workflow, **PROTECT** | |
@@ -141,9 +143,12 @@ Unique: `(workspace_id, key)`.
 | project_id | bigint | FK → tracker_project, CASCADE | |
 | name | varchar(100) | | |
 | goal | text | | |
-| start_date, end_date | date | null | `end_date` ≥ `start_date` (validated) |
-| state | varchar(10) | `planned` / `active` / `closed`; default `planned` | One `active` per project (validated) |
+| start_date, end_date | date | null | `end_date` ≥ `start_date` |
+| state | varchar(10) | `planned` / `active` / `closed`; default `planned` | One `active` per project |
 | created_at | timestamptz | | |
+
+Check constraint `sprint_ends_after_it_starts`: `start_date IS NULL OR end_date IS NULL OR end_date >= start_date`.
+Partial unique index `one_active_sprint_per_project`: `(project_id) WHERE state = 'active'`. Both hold even when two requests race; the API turns a violation into a 400.
 
 ### `tracker_issue`
 
@@ -185,6 +190,10 @@ Unique: `(project_id, number)`. Indexes: `(workspace_id, project_id, status_id)`
 | size | integer ≥ 0 | default 0 | Bytes; max 10 MB enforced by the API |
 | uploaded_by_id | bigint | FK → accounts_user, SET NULL, null | |
 | created_at | timestamptz | | |
+
+The stored file is deleted after the row's delete commits, including cascaded deletes (`apps/tracker/signals.py`).
+
+All tracker models' `clean()` also rejects parent objects from another workspace and users who aren't members. The API checks the same in its serializers; `clean()` covers Django admin and scripts.
 
 ## audit
 
@@ -281,8 +290,9 @@ Index: `(workspace_id, entity_type, entity_id)`.
 
 | When this is deleted… | …this happens |
 |---|---|
-| Workspace | Everything in it is deleted (`delete_workspace()` removes issues and projects first because of PROTECT) |
+| Workspace | Everything in it is deleted (`delete_workspace()` removes issues and projects first because of PROTECT), including uploaded files |
 | Workflow or status in use | Blocked (PROTECT) |
-| Project | Its boards, sprints, issues, comments, attachments are deleted |
+| Project | Its boards, sprints, issues, comments, attachments and their files are deleted |
+| Issue or attachment | The attachment rows are deleted, and their files are removed once the delete commits |
 | Sprint | Its issues return to the backlog (SET NULL) |
 | User | Blocked while they own a workspace (PROTECT). Otherwise their memberships and notifications are deleted, and issues, comments and audit entries keep the record with the person set to null |

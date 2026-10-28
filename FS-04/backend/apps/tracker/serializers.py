@@ -6,6 +6,7 @@ from apps.accounts.serializers import UserSerializer
 from apps.tenancy.models import Membership
 
 from .models import (
+    PROJECT_KEY_RE,
     Attachment,
     Board,
     Comment,
@@ -86,8 +87,8 @@ class ProjectSerializer(serializers.ModelSerializer):
 
     def validate_key(self, value):
         value = value.upper()
-        if not value.isalnum():
-            raise serializers.ValidationError("Key must be letters/numbers only.")
+        if not PROJECT_KEY_RE.fullmatch(value):  # ASCII only: isalnum() also accepts "É" or "²"
+            raise serializers.ValidationError("Key must be letters A–Z and digits 0–9 only.")
         qs = Project.objects.filter(workspace=self.context["workspace"], key=value)
         if self.instance:
             qs = qs.exclude(pk=self.instance.pk)
@@ -124,7 +125,10 @@ class SprintSerializer(serializers.ModelSerializer):
         read_only_fields = ["state", "created_at"]
 
     def validate(self, attrs):
-        s, e = attrs.get("start_date"), attrs.get("end_date")
+        # On PATCH only one date may be sent; compare it with the one already saved.
+        saved = self.instance
+        s = attrs.get("start_date", saved.start_date if saved else None)
+        e = attrs.get("end_date", saved.end_date if saved else None)
         if s and e and e < s:
             raise serializers.ValidationError({"end_date": "End date must be after start date."})
         return attrs
