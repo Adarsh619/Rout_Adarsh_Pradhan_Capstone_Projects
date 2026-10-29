@@ -44,7 +44,7 @@ Interactive docs: **`/api/docs/`** (Swagger UI). Machine-readable schema: [`open
 | `/api/comments/?issue=` | member write | Only the author or an admin can edit or delete. A comment's `issue` is fixed after creation |
 | `/api/attachments/?issue=` | member write | Multipart upload `{issue, file}` (max 10 MB); `GET /attachments/{id}/download/` |
 | `GET /api/audit-logs/?kind=&action=&actor_email=&since=&until=&search=&entity_type=&entity_id=` | admin | Audit trail, newest first, paginated (`limit`/`offset`). `kind` is the part of the action before the dot (`issue`, `member`, `billing`…); `since`/`until` are inclusive UTC dates; `search` covers the entity label, action and person. Each entry includes `actor_email` and `ip_address`. `GET /audit-logs/export/` returns the same filtered entries as CSV (up to 10,000 rows) |
-| `/api/webhooks/` | admin | CRUD; `GET /webhooks/events/`; `POST /webhooks/{id}/ping/`; `GET /webhooks/{id}/deliveries/` |
+| `/api/webhooks/` | admin | CRUD (create, edit and delete are audited); the `url` must be public http(s), so internal or private addresses get 400; `GET /webhooks/events/`; `POST /webhooks/{id}/ping/`; `POST /webhooks/{id}/rotate_secret/` → new signing secret; `GET /webhooks/{id}/deliveries/` (last 50, with status code and the receiver's response or error); `POST /webhooks/{id}/redeliver/ {delivery}` → sends that delivery's payload again (202) |
 | `GET /api/notifications/` | viewer | Your notifications; `PATCH {read}`; `POST mark_all_read/`; `GET unread_count/` |
 | `GET /api/reports/` · `POST /api/reports/generate/` | member / admin | Weekly summaries; generate queues a Celery task (202) |
 | `GET /api/billing/` | viewer | Plan, status, limits, usage, plan catalogue |
@@ -72,4 +72,18 @@ expected = "sha256=" + hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdi
 assert hmac.compare_digest(expected, request.headers["X-TaskFlow-Signature"])
 ```
 
-Events: `issue.created|updated|moved|deleted`, `comment.created`, `attachment.created`, `sprint.started|completed`, `project.created|updated|deleted`, plus `ping`.
+Events (all can be subscribed to; a test checks this list against what the API actually sends):
+
+| Kind | Events |
+|---|---|
+| issue | `issue.created`, `issue.updated`, `issue.moved`, `issue.deleted` |
+| comment | `comment.created`, `comment.updated`, `comment.deleted` |
+| attachment | `attachment.created`, `attachment.deleted` |
+| project / board | `project.created|updated|deleted`, `board.created|updated|deleted` |
+| sprint | `sprint.created`, `sprint.updated`, `sprint.deleted`, `sprint.started`, `sprint.completed` |
+| workflow | `workflow.created|updated|deleted`, `status.created|updated|deleted`, `transition.created|deleted` |
+| member | `member.added`, `member.role_changed`, `member.removed`, `member.left` |
+
+Plus `ping`, sent by the **Send ping** button. Billing, workspace and webhook changes are audited but not sent to webhooks.
+
+Delivery rules: no redirects are followed; the host is resolved before every attempt and must be public; network errors, timeouts, failed DNS lookups, 5xx, 408 and 429 are retried (up to 5 attempts in total), other answers are not. Delivery logs are kept for 30 days (`WEBHOOK_DELIVERY_RETENTION_DAYS`).

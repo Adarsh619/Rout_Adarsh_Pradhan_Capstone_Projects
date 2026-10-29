@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from .models import WEBHOOK_EVENTS, Notification, Report, Webhook, WebhookDelivery
+from .urlsafety import UnsafeURL, check_url
 
 
 class WebhookSerializer(serializers.ModelSerializer):
@@ -11,11 +12,20 @@ class WebhookSerializer(serializers.ModelSerializer):
         fields = ["id", "url", "events", "secret", "is_active", "created_at"]
         read_only_fields = ["secret", "created_at"]
 
+    def validate_url(self, value):
+        # The host's DNS is checked again before every delivery (see urlsafety.py).
+        try:
+            check_url(value)
+        except UnsafeURL as exc:
+            raise serializers.ValidationError(str(exc)) from exc
+        return value
+
 
 class WebhookDeliverySerializer(serializers.ModelSerializer):
     class Meta:
         model = WebhookDelivery
-        fields = ["id", "webhook", "event", "payload", "status_code", "success", "attempts", "created_at", "delivered_at"]
+        fields = ["id", "webhook", "event", "payload", "status_code", "response_body", "success", "attempts",
+                  "created_at", "delivered_at"]
 
 
 class NotificationSerializer(serializers.ModelSerializer):

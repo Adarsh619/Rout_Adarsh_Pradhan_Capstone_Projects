@@ -163,7 +163,17 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.integrations.tasks.send_due_date_reminders",
         "schedule": crontab(hour=7, minute=0),
     },
+    "daily-webhook-delivery-cleanup": {
+        "task": "apps.integrations.tasks.delete_old_webhook_deliveries",
+        "schedule": crontab(hour=3, minute=30),
+    },
 }
+
+# --- Outgoing webhooks ------------------------------------------------------
+# Private, loopback and internal addresses are refused (see apps/integrations/urlsafety.py).
+# Turn this on only to test against a receiver running on your own machine.
+WEBHOOK_ALLOW_PRIVATE_URLS = env_bool("WEBHOOK_ALLOW_PRIVATE_URLS", False)
+WEBHOOK_DELIVERY_RETENTION_DAYS = int(os.environ.get("WEBHOOK_DELIVERY_RETENTION_DAYS", 30))
 
 # --- Email (console in dev) -------------------------------------------------
 EMAIL_BACKEND = os.environ.get("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")

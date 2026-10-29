@@ -13,6 +13,7 @@ from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 MAX_ATTEMPTS = 5
+RETRYABLE_STATUS = {408, 429}  # plus every 5xx; other 3xx/4xx answers won't change by asking again
 
 
 def sign(secret, body: bytes) -> str:
@@ -22,6 +23,7 @@ def sign(secret, body: bytes) -> str:
 @shared_task(bind=True, max_retries=MAX_ATTEMPTS - 1)
 def deliver_webhook(self, delivery_id):
     from .models import WebhookDelivery
+    from .urlsafety import HostLookupFailed, UnsafeURL, check_url
 
     d = WebhookDelivery.objects.select_related("webhook").filter(pk=delivery_id).first()
     if d is None or d.success:
@@ -35,21 +37,43 @@ def deliver_webhook(self, delivery_id):
         "X-TaskFlow-Signature": sign(d.webhook.secret, body),
     }
     d.attempts += 1
+    retryable = False
     try:
-        resp = requests.post(d.webhook.url, data=body, headers=headers, timeout=10)
+        # Re-checked on every attempt: the host's DNS may now point somewhere internal.
+        check_url(d.webhook.url, resolve_dns=True)
+        # No redirects: a public URL could otherwise bounce the request to an internal one.
+        resp = requests.post(d.webhook.url, data=body, headers=headers, timeout=10, allow_redirects=False)
         d.status_code = resp.status_code
         d.response_body = resp.text[:2000]
         d.success = 200 <= resp.status_code < 300
-    except requests.RequestException as exc:
+        retryable = resp.status_code >= 500 or resp.status_code in RETRYABLE_STATUS
+    except UnsafeURL as exc:
+        d.response_body = f"Not sent: {exc}"
+        d.success = False
+        retryable = isinstance(exc, HostLookupFailed)  # DNS may come back; a private address won't change
+    except requests.RequestException as exc:  # timeouts, refused connections, TLS errors
         d.response_body = str(exc)[:2000]
         d.success = False
+        retryable = True
     if d.success:
         d.delivered_at = timezone.now()
     d.save()
-    if not d.success and d.attempts < MAX_ATTEMPTS:
+    if retryable and d.attempts < MAX_ATTEMPTS:
         # exponential backoff: 30s, 60s, 120s, 240s
         raise self.retry(countdown=30 * 2 ** (d.attempts - 1))
     return d.success
+
+
+@shared_task
+def delete_old_webhook_deliveries():
+    """Daily: drop delivery logs older than WEBHOOK_DELIVERY_RETENTION_DAYS so the table doesn't grow forever."""
+    from django.conf import settings
+
+    from .models import WebhookDelivery
+
+    cutoff = timezone.now() - timedelta(days=settings.WEBHOOK_DELIVERY_RETENTION_DAYS)
+    deleted, _ = WebhookDelivery.objects.filter(created_at__lt=cutoff).delete()
+    return deleted
 
 
 @shared_task
@@ -131,12 +155,17 @@ def generate_all_weekly_reports():
 def send_due_date_reminders():
     from apps.tracker.models import Issue, StatusCategory
 
+    from .models import Notification
     from .notify import notify_issue_event
 
     tomorrow = timezone.localdate() + timedelta(days=1)
+    # Skip issues already reminded today, so a Beat restart or a manual re-run doesn't email people twice.
+    reminded_today = Notification.objects.filter(
+        verb="due_soon", created_at__date=timezone.localdate()
+    ).values("issue_id")
     qs = Issue.objects.filter(due_date=tomorrow, assignee__isnull=False).exclude(
         status__category=StatusCategory.DONE
-    ).select_related("project", "status")
+    ).exclude(id__in=reminded_today).select_related("project", "status")
     count = 0
     for issue in qs:
         notify_issue_event(issue, "due_soon")

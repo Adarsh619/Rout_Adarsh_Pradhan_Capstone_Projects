@@ -25,6 +25,13 @@ def _reset_throttles():
 
 
 @pytest.fixture(autouse=True)
+def _public_dns(monkeypatch):
+    # Webhook deliveries resolve the receiver's host to check it's public. Tests don't use real DNS:
+    # every host resolves to a public documentation address unless a test says otherwise.
+    monkeypatch.setattr("apps.integrations.urlsafety.resolve", lambda host: {"93.184.215.14"})
+
+
+@pytest.fixture(autouse=True)
 def _fast_password_hashing(settings):
     # Real password hashing is deliberately slow (~0.3 s per user); tests only need it to work.
     settings.PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]

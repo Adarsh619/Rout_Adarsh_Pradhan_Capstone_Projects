@@ -8,9 +8,10 @@ Slow or external work runs on a Celery worker, with Redis as the queue, so API r
 
 | Task | Trigger | What it does |
 |---|---|---|
-| `deliver_webhook` | After any audited change commits | Signs and POSTs the event; retries 4 times with backoff (30 s, 60 s, 120 s, 240 s); logs every attempt |
-| `send_notification_emails` | Assignment, comment, card move, due soon | Emails the people involved (console output in development) |
-| `send_due_date_reminders` | Daily, 07:00 UTC | Notifies assignees of open issues due tomorrow |
+| `deliver_webhook` | After any audited change commits | Checks the receiver's host still resolves to a public address, signs and POSTs the event (no redirects followed), and logs every attempt with the status and response. Retries only what can succeed later (network errors, timeouts, failed DNS lookups, 5xx, 408, 429): up to 4 retries with backoff (30 s, 60 s, 120 s, 240 s). A 4xx or a blocked address isn't retried |
+| `send_notification_emails` | Assignment, comment, card move, due soon, delete request | Emails the people involved (console output in development) |
+| `send_due_date_reminders` | Daily, 07:00 UTC | Notifies assignees of open issues due tomorrow. Runs at most once a day per issue, so a Beat restart or a manual re-run doesn't email twice |
+| `delete_old_webhook_deliveries` | Daily, 03:30 UTC | Deletes webhook delivery logs older than `WEBHOOK_DELIVERY_RETENTION_DAYS` (30) |
 | `generate_all_weekly_reports` | Mondays, 06:00 UTC | Queues one report per workspace |
 | `generate_weekly_report` | Weekly, or **Generate now** on the Reports page | Created, completed, open and overdue counts plus open issues per assignee; emailed to admins |
 
@@ -22,8 +23,9 @@ Every change goes through one helper, `audit.services.record()`. It writes the a
 
 ## Webhook events
 
-`issue.created|updated|moved|deleted`, `comment.created`, `attachment.created`, `sprint.started|completed`, `project.created|updated|deleted`, plus `ping` for testing a hook.
+32 events across issues, comments, attachments, projects, boards, sprints, workflows and members, plus `ping` for testing a hook. The full list is in [06 · API](06-api.md#webhook-payload); a test fails if the app sends an event that isn't listed, or the list names one that's never sent.
 A webhook with an empty event list receives everything. The payload format and signature check are in [06 · API](06-api.md#webhook-payload).
+If a webhook's secret leaks, **rotate** it on the Webhooks page; failed deliveries can be sent again with **Redeliver**.
 
 ## Notifications
 

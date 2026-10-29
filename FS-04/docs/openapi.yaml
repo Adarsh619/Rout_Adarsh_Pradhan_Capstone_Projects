@@ -2694,6 +2694,76 @@ paths:
               schema:
                 $ref: '#/components/schemas/Webhook'
           description: ''
+  /api/webhooks/{id}/redeliver/:
+    post:
+      operationId: webhooks_redeliver_create
+      description: '`{delivery}`: send that delivery''s event again, as a new delivery
+        with the same payload.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this webhook.
+        required: true
+      tags:
+      - webhooks
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Webhook'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Webhook'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Webhook'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Webhook'
+          description: ''
+  /api/webhooks/{id}/rotate_secret/:
+    post:
+      operationId: webhooks_rotate_secret_create
+      description: New signing secret, effective for every delivery from now on (e.g.
+        after the old one leaked).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this webhook.
+        required: true
+      tags:
+      - webhooks
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Webhook'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Webhook'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Webhook'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Webhook'
+          description: ''
   /api/webhooks/events/:
     get:
       operationId: webhooks_events_retrieve
@@ -3219,12 +3289,33 @@ components:
       - issue.moved
       - issue.deleted
       - comment.created
-      - sprint.started
-      - sprint.completed
+      - comment.updated
+      - comment.deleted
+      - attachment.created
+      - attachment.deleted
       - project.created
       - project.updated
       - project.deleted
-      - attachment.created
+      - board.created
+      - board.updated
+      - board.deleted
+      - sprint.created
+      - sprint.updated
+      - sprint.deleted
+      - sprint.started
+      - sprint.completed
+      - workflow.created
+      - workflow.updated
+      - workflow.deleted
+      - status.created
+      - status.updated
+      - status.deleted
+      - transition.created
+      - transition.deleted
+      - member.added
+      - member.role_changed
+      - member.removed
+      - member.left
       type: string
       description: |-
         * `issue.created` - issue.created
@@ -3232,12 +3323,33 @@ components:
         * `issue.moved` - issue.moved
         * `issue.deleted` - issue.deleted
         * `comment.created` - comment.created
-        * `sprint.started` - sprint.started
-        * `sprint.completed` - sprint.completed
+        * `comment.updated` - comment.updated
+        * `comment.deleted` - comment.deleted
+        * `attachment.created` - attachment.created
+        * `attachment.deleted` - attachment.deleted
         * `project.created` - project.created
         * `project.updated` - project.updated
         * `project.deleted` - project.deleted
-        * `attachment.created` - attachment.created
+        * `board.created` - board.created
+        * `board.updated` - board.updated
+        * `board.deleted` - board.deleted
+        * `sprint.created` - sprint.created
+        * `sprint.updated` - sprint.updated
+        * `sprint.deleted` - sprint.deleted
+        * `sprint.started` - sprint.started
+        * `sprint.completed` - sprint.completed
+        * `workflow.created` - workflow.created
+        * `workflow.updated` - workflow.updated
+        * `workflow.deleted` - workflow.deleted
+        * `status.created` - status.created
+        * `status.updated` - status.updated
+        * `status.deleted` - status.deleted
+        * `transition.created` - transition.created
+        * `transition.deleted` - transition.deleted
+        * `member.added` - member.added
+        * `member.role_changed` - member.role_changed
+        * `member.removed` - member.removed
+        * `member.left` - member.left
     Issue:
       type: object
       properties:

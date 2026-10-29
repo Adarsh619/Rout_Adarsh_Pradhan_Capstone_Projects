@@ -4,16 +4,16 @@
 
 Recorded 29 Oct 2026 on PostgreSQL 16 (Docker), Python 3.14 locally and 3.12 in CI, Node 24 locally and 22 in CI. CI runs the same suites on every push, and has passed on every commit pushed so far.
 
-## Backend: pytest (130 tests, 96% line coverage)
+## Backend: pytest (162 tests, 96% line coverage)
 
 ```
 cd backend && pytest
-130 passed in ~32 s
-TOTAL  2040 statements  89 missed  96% coverage
+162 passed in ~40 s
+TOTAL  2153 statements  79 missed  96% coverage
 ```
 
 The suite used to take about 3.5 minutes. Tests now use Django's fast MD5 password hasher (real hashing is deliberately slow and every test creates users), and the seed tests create fewer issues where the count doesn't matter. Production hashing is unchanged. CI fails if coverage drops below 90%.
-Shared API helpers (`new_issue`, `move`, `new_sprint`) are fixtures in `tests/conftest.py`.
+Shared API helpers (`new_issue`, `move`, `new_sprint`) are fixtures in `tests/conftest.py`. Tests never use real DNS: an autouse fixture resolves every webhook host to a public documentation address unless a test says otherwise.
 
 | Suite | What it proves |
 |---|---|
@@ -28,6 +28,7 @@ Shared API helpers (`new_issue`, `move`, `new_sprint`) are fixtures in `tests/co
 | `test_issues_api.py` | A status change in the issue form **moves the card like a drag** (bottom of column, `issue.moved`, notification); parents fixed after creation; no issues in closed sprints; priority sorts by severity; bad board filters → 400; moves re-check the workflow against the locked, current status; a workflow keeps one status |
 | `test_issue_deletion.py` | **Only the reporter or an admin can delete an issue**; `can_delete` per caller (detail and board); "ask an admin" notifies admins and the owner by bell and email, once per unread request |
 | `test_audit.py` | **Spoofed `X-Forwarded-For` can't fake the audit IP or dodge the login limit**; entries can't be edited or deleted (model, bulk, admin), but go with their workspace; the actor's email survives account deletion; filters by kind, person, search and date; paging; IPs hidden from the issue History tab; **CSV export** respects filters, neutralises formulas and is admin-only |
+| `test_webhooks.py` | **Internal URLs refused** (localhost, private ranges, cloud metadata, Docker service names), at save time and again before delivery when DNS points inside; redirects not followed; **retry policy** (5xx/408/429/network/DNS failure yes, 4xx and private addresses no, stop at 5 attempts); **the event list matches exactly what the app sends**; secret rotation (audited without the secret, new deliveries signed with it); webhook edits and deletes audited; failed deliveries show the response and can be redelivered; old delivery logs cleaned up; due-date reminders once a day |
 
 ## Frontend: Vitest + Testing Library (19 tests)
 

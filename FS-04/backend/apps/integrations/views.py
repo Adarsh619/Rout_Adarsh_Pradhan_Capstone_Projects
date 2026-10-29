@@ -1,13 +1,14 @@
 from rest_framework import mixins, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
-from apps.audit.services import record
+from apps.audit.services import model_diff, record
 from apps.tenancy.mixins import TenantScopedMixin
 from apps.tenancy.models import Role
 
 from .events import queue_delivery
-from .models import WEBHOOK_EVENTS, Notification, Report, Webhook, WebhookDelivery
+from .models import WEBHOOK_EVENTS, Notification, Report, Webhook, WebhookDelivery, generate_secret
 from .serializers import (
     NotificationSerializer,
     ReportSerializer,
@@ -23,9 +24,20 @@ class WebhookViewSet(TenantScopedMixin, viewsets.ModelViewSet):
     read_role = Role.ADMIN
     write_role = Role.ADMIN
 
+    # Webhook changes are audited but not sent to webhooks themselves (emit_event=False).
     def perform_create(self, serializer):
         hook = serializer.save(workspace=self.request.workspace)
         record(self.request, "webhook.created", hook, {"url": hook.url}, emit_event=False)
+
+    def perform_update(self, serializer):
+        changes = model_diff(serializer.instance, serializer.validated_data)
+        hook = serializer.save()
+        if changes:
+            record(self.request, "webhook.updated", hook, changes, emit_event=False)
+
+    def perform_destroy(self, instance):
+        record(self.request, "webhook.deleted", instance, {"url": instance.url}, emit_event=False)
+        instance.delete()
 
     @action(detail=False, methods=["get"])
     def events(self, request):
@@ -37,11 +49,32 @@ class WebhookViewSet(TenantScopedMixin, viewsets.ModelViewSet):
         delivery = queue_delivery(hook, "ping", {"message": "Hello from TaskFlow"})
         return Response({"queued": 1, "delivery": delivery.id})
 
+    @action(detail=True, methods=["post"])
+    def rotate_secret(self, request, pk=None):
+        """New signing secret, effective for every delivery from now on (e.g. after the old one leaked)."""
+        hook = self.get_object()
+        hook.secret = generate_secret()
+        hook.save(update_fields=["secret"])
+        record(request, "webhook.secret_rotated", hook, emit_event=False)  # the secret itself isn't logged
+        return Response(self.get_serializer(hook).data)
+
     @action(detail=True, methods=["get"])
     def deliveries(self, request, pk=None):
         hook = self.get_object()
         qs = WebhookDelivery.objects.filter(workspace=request.workspace, webhook=hook)[:50]
         return Response(WebhookDeliverySerializer(qs, many=True).data)
+
+    @action(detail=True, methods=["post"])
+    def redeliver(self, request, pk=None):
+        """`{delivery}`: send that delivery's event again, as a new delivery with the same payload."""
+        hook = self.get_object()
+        original = WebhookDelivery.objects.filter(workspace=request.workspace, webhook=hook,
+                                                  pk=request.data.get("delivery")).first() \
+            if str(request.data.get("delivery", "")).isdigit() else None
+        if original is None:
+            raise ValidationError({"delivery": "Choose a delivery of this webhook."})
+        delivery = queue_delivery(hook, original.event, original.payload["data"], payload=original.payload)
+        return Response({"queued": 1, "delivery": delivery.id}, status=202)
 
 
 class NotificationViewSet(TenantScopedMixin, mixins.ListModelMixin, mixins.UpdateModelMixin, viewsets.GenericViewSet):

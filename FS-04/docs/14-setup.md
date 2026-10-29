@@ -67,6 +67,8 @@ npm run dev        # http://localhost:5173
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_PRO`, `STRIPE_PRICE_BUSINESS` | empty | Only for real Stripe test mode |
 | `TRUSTED_PROXY_COUNT` | `0` (Docker Compose sets `1`) | Proxies in front of Django; picks the real client IP for the audit log and rate limits, see [10 · Security](10-security.md) |
 | `API_RATE_LIMIT`, `AUTH_RATE_LIMIT` | `2000/hour`, `10/minute` | Rate limits for the whole API and for register / login / password change |
+| `WEBHOOK_ALLOW_PRIVATE_URLS` | `false` | `true` lets webhooks target internal addresses, only for testing against a receiver on your own machine |
+| `WEBHOOK_DELIVERY_RETENTION_DAYS` | `30` | How long webhook delivery logs are kept |
 
 ## Repository layout
 

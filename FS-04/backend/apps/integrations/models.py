@@ -5,10 +5,19 @@ from django.db import models
 
 from apps.tenancy.models import TenantModel
 
+# Every event the API can send to webhooks (each comes from an audit entry with emit_event=True).
+# A test checks this list against what the app actually emits, so a new event can't go unlisted.
 WEBHOOK_EVENTS = [
     "issue.created", "issue.updated", "issue.moved", "issue.deleted",
-    "comment.created", "sprint.started", "sprint.completed",
-    "project.created", "project.updated", "project.deleted", "attachment.created",
+    "comment.created", "comment.updated", "comment.deleted",
+    "attachment.created", "attachment.deleted",
+    "project.created", "project.updated", "project.deleted",
+    "board.created", "board.updated", "board.deleted",
+    "sprint.created", "sprint.updated", "sprint.deleted", "sprint.started", "sprint.completed",
+    "workflow.created", "workflow.updated", "workflow.deleted",
+    "status.created", "status.updated", "status.deleted",
+    "transition.created", "transition.deleted",
+    "member.added", "member.role_changed", "member.removed", "member.left",
 ]
 
 
@@ -50,7 +59,7 @@ class WebhookDelivery(TenantModel):
 class Notification(TenantModel):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="notifications")
     actor = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
-    verb = models.CharField(max_length=40)  # assigned / commented / moved / due_soon
+    verb = models.CharField(max_length=40)  # assigned / commented / moved / due_soon / delete_requested
     issue = models.ForeignKey("tracker.Issue", null=True, on_delete=models.CASCADE, related_name="+")
     message = models.CharField(max_length=255)
     read = models.BooleanField(default=False)
