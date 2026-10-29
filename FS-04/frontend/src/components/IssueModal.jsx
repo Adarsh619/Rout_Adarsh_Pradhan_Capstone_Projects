@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, download, formatError } from "../api";
+import { formatChanges } from "../auditFormat";
 import { can, useWorkspace } from "../workspace";
 import DeleteIssueControls from "./DeleteIssueControls";
 import Modal from "./Modal";
@@ -173,9 +174,9 @@ export default function IssueModal({ issueId, projectId, statuses = [], sprints 
               {history.map((h) => (
                 <li key={h.id}>
                   <span className="muted small">{new Date(h.created_at).toLocaleString()}</span>{" "}
-                  <strong>{h.actor_email}</strong> {h.action.split(".")[1]}{" "}
-                  {Object.entries(h.changes || {}).map(([k, v]) => (
-                    <span key={k} className="small">· {k}: {Array.isArray(v) ? `${v[0] ?? "—"} → ${v[1] ?? "—"}` : String(v)} </span>
+                  <strong>{h.actor_email || "system"}</strong> {h.action.split(".")[1].replaceAll("_", " ")}{" "}
+                  {formatChanges(h.changes).map((c) => (
+                    <span key={c.label} className="small">· {c.label}: {c.text} </span>
                   ))}
                 </li>
               ))}

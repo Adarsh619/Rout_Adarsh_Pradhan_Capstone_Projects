@@ -1,3 +1,6 @@
+import ipaddress
+
+from django.conf import settings
 from django.db import models
 
 from .models import AuditLog
@@ -25,22 +28,41 @@ def _plain(v):
     return str(v)
 
 
+def client_ip(request):
+    """The caller's IP address, as seen by the outermost proxy we trust.
+
+    Proxies *append* to X-Forwarded-For (nginx's $proxy_add_x_forwarded_for), so the left-most value is
+    whatever the browser sent and can't be trusted. With TRUSTED_PROXY_COUNT = n, the n-th value from the
+    right is the address our own proxy saw. With 0 (no proxy, e.g. runserver) the header is ignored.
+    Same rule as DRF's NUM_PROXIES, which the rate limits use.
+    """
+    trusted = settings.TRUSTED_PROXY_COUNT
+    forwarded = [part.strip() for part in request.META.get("HTTP_X_FORWARDED_FOR", "").split(",") if part.strip()]
+    ip = forwarded[-min(trusted, len(forwarded))] if trusted and forwarded else request.META.get("REMOTE_ADDR")
+    try:
+        return str(ipaddress.ip_address(ip)) if ip else None
+    except ValueError:
+        return None
+
+
 def record(request, action, instance, changes=None, emit_event=True, workspace=None):
     """Write an audit entry and (optionally) fan the event out to webhooks/notifications.
 
     `workspace` is for views that aren't tenant-scoped (the workspace list), where request.workspace is unset.
+    The actor's email is stored too, so the entry still says who acted after their account is deleted.
     """
     ws = workspace or request.workspace
-    ip = request.META.get("HTTP_X_FORWARDED_FOR", request.META.get("REMOTE_ADDR", "")).split(",")[0].strip() or None
+    actor = request.user if request.user.is_authenticated else None
     entry = AuditLog.objects.create(
         workspace=ws,
-        actor=request.user if request.user.is_authenticated else None,
+        actor=actor,
+        actor_email=actor.email if actor else "",
         action=action,
         entity_type=instance._meta.model_name,
         entity_id=str(instance.pk),
         entity_label=str(instance)[:255],
         changes=changes or {},
-        ip_address=ip,
+        ip_address=client_ip(request),
     )
     if emit_event:
         from apps.integrations.events import emit

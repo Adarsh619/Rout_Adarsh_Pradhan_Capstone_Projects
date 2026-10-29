@@ -53,6 +53,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       STRIPE_API_BASE: http://stripe-mock:12111
       RUN_MIGRATIONS: "1"
+      TRUSTED_PROXY_COUNT: "1"  # the frontend's nginx; see docs/10-security.md
     ports:
       - "8000:8000"
     healthcheck:

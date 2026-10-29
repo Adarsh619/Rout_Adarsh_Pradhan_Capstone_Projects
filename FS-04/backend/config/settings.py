@@ -101,8 +101,14 @@ MEDIA_ROOT = Path(os.environ.get("MEDIA_ROOT", BASE_DIR / "media"))
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 MAX_ATTACHMENT_SIZE = int(os.environ.get("MAX_ATTACHMENT_SIZE", 10 * 1024 * 1024))
 
+# How many reverse proxies sit in front of Django (nginx in Docker = 1). Decides which X-Forwarded-For entry
+# is the real client IP, for the audit log and the rate limits. 0 ignores the header, since browsers can set it.
+# Only correct if clients can't reach Django without going through those proxies.
+TRUSTED_PROXY_COUNT = int(os.environ.get("TRUSTED_PROXY_COUNT", 0))
+
 # --- REST framework -------------------------------------------------------
 REST_FRAMEWORK = {
+    "NUM_PROXIES": TRUSTED_PROXY_COUNT,  # unset, DRF would key rate limits on the raw, spoofable header
     "DEFAULT_AUTHENTICATION_CLASSES": ["rest_framework_simplejwt.authentication.JWTAuthentication"],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
     "DEFAULT_FILTER_BACKENDS": [

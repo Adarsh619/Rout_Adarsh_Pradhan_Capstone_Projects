@@ -17,7 +17,9 @@ Security rests on four checks run on every request: who you are, which tenant yo
 | Attachments | Max 10 MB; stored per workspace; downloaded only through an authenticated, tenant-checked endpoint | `AttachmentViewSet.download` |
 | Abuse | API rate limit, 2,000 requests/hour per user (`API_RATE_LIMIT`). Register, login and password change are limited to 10 requests/minute per IP address, or per user once signed in (`AUTH_RATE_LIMIT`), which slows password guessing; over the limit returns 429 | `REST_FRAMEWORK` in settings, `AuthThrottleMixin` |
 | Secrets | Read from `.env`, which Git ignores; containers run as a non-root user | `.gitignore`, `backend/Dockerfile` |
-| Accountability | Append-only audit log with actor, IP address and field-level changes | `apps/audit` |
+| Accountability | Audit log with actor, IP address and field-level changes. It's **append-only in code**: saving an existing entry, `delete()`, and bulk `update()`/`delete()` all raise `AppendOnlyError`, and Django admin can only view entries. Each entry keeps the actor's email, so it still says who acted after their account is deleted. IP addresses are visible to admins only (the audit log page and CSV), not in an issue's History tab | `apps/audit` |
+| Client IP | Browsers can send any `X-Forwarded-For` header, and nginx appends the real address to it. `TRUSTED_PROXY_COUNT` (1 in Docker Compose, 0 by default) says how many proxies to trust, and the address is read from the right-hand end, the entry our own proxy added. The audit log and the rate limits (DRF `NUM_PROXIES`) use the same rule, so a made-up header can neither fake an audit IP nor dodge the login limit | `config/settings.py`, `apps/audit/services.py::client_ip` |
+| CSV export | Cells that start with `=`, `+`, `-` or `@` are prefixed with `'`, so a spreadsheet shows a formula-like issue title or sprint name as text instead of running it | `apps/audit/views.py::csv_safe` |
 
 ## Before a real production launch
 
@@ -26,4 +28,4 @@ Security rests on four checks run on every request: who you are, which tenant yo
 - Move attachments to private object storage with signed URLs.
 - Use a shared cache (Redis) so the rate limits count across all gunicorn workers; the default in-memory cache counts per worker.
 - Run `python manage.py flushexpiredtokens` daily to remove expired entries from the token blacklist tables.
-- Behind a proxy, make sure the client IP DRF sees is the real one (`NUM_PROXIES`), or every user shares nginx's IP for the login limit.
+- Set `TRUSTED_PROXY_COUNT` to the number of proxies in front of Django (e.g. 2 for a load balancer plus nginx), and don't expose port 8000 publicly. The setting only holds if every request passes through those proxies; Docker Compose publishes port 8000 for local development only.

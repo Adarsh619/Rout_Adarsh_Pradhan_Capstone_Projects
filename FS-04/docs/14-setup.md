@@ -53,6 +53,8 @@ npm run dev        # http://localhost:5173
 | `CELERY_TASK_ALWAYS_EAGER` | `false` | `true` runs jobs inline without a worker |
 | `STRIPE_MOCK` | `true` | Billing mode, see [09 · Billing](09-billing.md) |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_PRO`, `STRIPE_PRICE_BUSINESS` | empty | Only for real Stripe test mode |
+| `TRUSTED_PROXY_COUNT` | `0` (Docker Compose sets `1`) | Proxies in front of Django; picks the real client IP for the audit log and rate limits, see [10 · Security](10-security.md) |
+| `API_RATE_LIMIT`, `AUTH_RATE_LIMIT` | `2000/hour`, `10/minute` | Rate limits for the whole API and for register / login / password change |
 
 ## Repository layout
 

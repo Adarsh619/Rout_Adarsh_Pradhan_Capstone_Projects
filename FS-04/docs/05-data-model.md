@@ -24,7 +24,7 @@ Diagram source: [`assets/erd.mmd`](assets/erd.mmd).
 | Issue | tracker | Project | Number, type, priority, status, sprint, assignee, points, due date, `rank` |
 | Comment | tracker | Issue | Author, body |
 | Attachment | tracker | Issue | File stored under `workspaces/<id>/`, size, uploader |
-| AuditLog | audit | Workspace | Actor, action, entity, JSON diff, IP; append-only |
+| AuditLog | audit | Workspace | Actor and a copy of their email (kept if the account is deleted), action, entity, JSON diff, client IP. Append-only: the model and its querysets refuse updates and deletes, and Django admin is read-only. Deleting the workspace still removes its entries |
 | Webhook | integrations | Workspace | URL, subscribed events, signing secret |
 | WebhookDelivery | integrations | Webhook | Event, payload, status code, attempts |
 | Notification | integrations | User in a workspace | Verb, message, read flag |
