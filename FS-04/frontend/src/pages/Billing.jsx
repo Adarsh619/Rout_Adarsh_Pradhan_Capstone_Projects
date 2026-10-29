@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api";
+import { checkoutMessage } from "../billingMessages";
 import { useWorkspace } from "../workspace";
 
 export default function Billing() {
@@ -23,11 +24,12 @@ export default function Billing() {
     } catch (e) { setError(e.message); }
   };
   if (!data) return <p className="muted">{error || "Loading…"}</p>;
+  const message = checkoutMessage(params.get("checkout"), data.mode, data.plans[data.plan].name);
 
   return (
     <div className="stack">
       <h2>Billing</h2>
-      {params.get("checkout") === "success" && <div className="toast static">Payment received — your plan updates as soon as Stripe sends the webhook.</div>}
+      {message && <div className="toast static">{message}</div>}
       {data.mode === "mock" && (
         <div className="toast static">
           <strong>Stripe mock mode.</strong> Stripe API calls go to Stripe's official <code>stripe-mock</code> server and the checkout page is simulated.

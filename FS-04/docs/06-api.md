@@ -36,12 +36,12 @@ Interactive docs: **`/api/docs/`** (Swagger UI). Machine-readable schema: [`open
 | `POST /api/workspaces/{slug}/transfer/` | owner | `{user_id}` of another member → they become owner, you become admin |
 | `GET/POST/PATCH/DELETE /api/members/` | viewer read, admin write | Add by `{email, role}` (user must exist); the owner can't be changed or removed. Granting, changing or removing the **admin** role needs the owner (403 otherwise). Removing someone unassigns their open issues |
 | `POST /api/members/leave/` | viewer | Leave the current workspace (204); open issues are unassigned. The owner gets 400 and must transfer ownership first |
-| `/api/workflows/` · `/api/statuses/?workflow=` · `/api/transitions/?workflow=` | admin write | Custom workflows |
+| `/api/workflows/` · `/api/statuses/?workflow=` · `/api/transitions/?workflow=` | admin write | Custom workflows. A status's `workflow` is fixed after creation; a workflow's last status can't be deleted (400) |
 | `/api/projects/` | admin write | Creating one also creates its board; `GET /projects/{id}/stats/` |
-| `/api/boards/?project=` | admin write | `GET /boards/{id}/columns/?sprint=all\|active\|backlog\|<id>&assignee=&q=` → columns with ordered issues, allowed transitions, active sprint |
-| `/api/sprints/?project=&state=` | admin write | `POST /sprints/{id}/start/`, `POST /sprints/{id}/complete/` |
-| `/api/issues/?project=&status=&assignee=&sprint=&type=&priority=&backlog=true` | member write | CRUD; `search`, `ordering`; `POST /issues/{id}/move/ {status, index}`; `GET /issues/{id}/history/` |
-| `/api/comments/?issue=` | member write | Only the author or an admin can edit or delete |
+| `/api/boards/?project=` | admin write | `GET /boards/{id}/columns/?sprint=all\|active\|backlog\|<id>&assignee=<id>&q=` → columns with ordered issues, allowed transitions, active sprint. Any other `sprint` value, or a non-numeric `assignee`, is a 400. A board's `project` is fixed after creation |
+| `/api/sprints/?project=&state=` | admin write | `POST /sprints/{id}/start/`, `POST /sprints/{id}/complete/` (one transaction). A sprint's `project` is fixed after creation |
+| `/api/issues/?project=&status=&assignee=&sprint=&type=&priority=&backlog=true` | member write | CRUD; `search`, `ordering` (`priority` sorts low → critical, `-priority` the reverse); `POST /issues/{id}/move/ {status, index}`; `GET /issues/{id}/history/`. Changing `status` with PATCH works like a move: the card goes to the bottom of the new column and it's logged and notified as `issue.moved`. Issues can't be added to a closed sprint |
+| `/api/comments/?issue=` | member write | Only the author or an admin can edit or delete. A comment's `issue` is fixed after creation |
 | `/api/attachments/?issue=` | member write | Multipart upload `{issue, file}` (max 10 MB); `GET /attachments/{id}/download/` |
 | `GET /api/audit-logs/?action=&entity_type=&entity_id=` | admin | Audit trail |
 | `/api/webhooks/` | admin | CRUD; `GET /webhooks/events/`; `POST /webhooks/{id}/ping/`; `GET /webhooks/{id}/deliveries/` |

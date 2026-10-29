@@ -51,7 +51,12 @@ def create_issue(serializer, workspace, reporter):
 
 @transaction.atomic
 def move_issue(issue, to_status, index=None):
-    """Move an issue to `to_status` at position `index` within that column, enforcing workflow rules."""
+    """Move an issue to `to_status` at position `index` within that column, enforcing workflow rules.
+
+    `index=None` puts it at the bottom. The issue's row is locked and its status re-read first, so two
+    simultaneous moves of the same card are checked one after the other against the workflow.
+    """
+    issue.status = Issue.objects.select_for_update().select_related("status").get(pk=issue.pk).status
     if to_status.workflow_id != issue.project.workflow_id:
         raise ValidationError({"status": "Status does not belong to this project's workflow."})
     if not issue.project.workflow.can_transition(issue.status, to_status):

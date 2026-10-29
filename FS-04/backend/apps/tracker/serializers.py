@@ -36,8 +36,27 @@ class MemberPKField(serializers.PrimaryKeyRelatedField):
         return get_user_model().objects.filter(id__in=ids)
 
 
+class FixedParentMixin:
+    """Fields in `fixed_on_update` are set at creation only.
+
+    Moving a status to another workflow, or a sprint / board / comment to another parent, would leave
+    the rows that point at it inconsistent (e.g. issues whose status isn't in their project's workflow).
+    Sending the current value again is fine; the issue form resends every field on save.
+    """
+
+    fixed_on_update = ()
+
+    def validate(self, attrs):
+        if self.instance is not None:
+            for name in self.fixed_on_update:
+                if name in attrs and attrs[name] != getattr(self.instance, name):
+                    raise serializers.ValidationError({name: "Can't be changed after creation."})
+        return super().validate(attrs)
+
+
 # --- workflows --------------------------------------------------------------
-class WorkflowStatusSerializer(serializers.ModelSerializer):
+class WorkflowStatusSerializer(FixedParentMixin, serializers.ModelSerializer):
+    fixed_on_update = ("workflow",)
     workflow = TenantPKField(queryset=Workflow.objects.all())
 
     class Meta:
@@ -106,7 +125,8 @@ class ProjectSerializer(serializers.ModelSerializer):
         return board.id if board else None
 
 
-class BoardSerializer(serializers.ModelSerializer):
+class BoardSerializer(FixedParentMixin, serializers.ModelSerializer):
+    fixed_on_update = ("project",)
     project = TenantPKField(queryset=Project.objects.all())
 
     class Meta:
@@ -115,7 +135,8 @@ class BoardSerializer(serializers.ModelSerializer):
         read_only_fields = ["created_at"]
 
 
-class SprintSerializer(serializers.ModelSerializer):
+class SprintSerializer(FixedParentMixin, serializers.ModelSerializer):
+    fixed_on_update = ("project",)
     project = TenantPKField(queryset=Project.objects.all())
     issue_count = serializers.IntegerField(read_only=True, default=0)
 
@@ -131,7 +152,7 @@ class SprintSerializer(serializers.ModelSerializer):
         e = attrs.get("end_date", saved.end_date if saved else None)
         if s and e and e < s:
             raise serializers.ValidationError({"end_date": "End date must be after start date."})
-        return attrs
+        return super().validate(attrs)
 
 
 # --- issues -----------------------------------------------------------------
@@ -171,6 +192,10 @@ class IssueSerializer(serializers.ModelSerializer):
         sprint = attrs.get("sprint")
         if sprint and sprint.project_id != project.id:
             raise serializers.ValidationError({"sprint": "Sprint belongs to a different project."})
+        # Only a change *into* a closed sprint is refused: done issues stay in the sprint they closed with,
+        # and the issue form resends that sprint whenever such an issue is edited.
+        if sprint and sprint.state == Sprint.State.CLOSED and (not self.instance or sprint != self.instance.sprint):
+            raise serializers.ValidationError({"sprint": "This sprint is closed. Pick a planned or active sprint."})
         return attrs
 
 
@@ -179,7 +204,8 @@ class IssueMoveSerializer(serializers.Serializer):
     index = serializers.IntegerField(min_value=0, required=False)
 
 
-class CommentSerializer(serializers.ModelSerializer):
+class CommentSerializer(FixedParentMixin, serializers.ModelSerializer):
+    fixed_on_update = ("issue",)
     issue = TenantPKField(queryset=Issue.objects.all())
     author = UserSerializer(read_only=True)
 

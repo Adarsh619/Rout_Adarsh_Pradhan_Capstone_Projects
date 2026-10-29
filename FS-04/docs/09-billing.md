@@ -45,6 +45,7 @@ sequenceDiagram
 
 In mock mode every Stripe SDK call goes to `stripe-mock`, Stripe's official mock server, which checks each request against Stripe's API specification.
 Confirming the simulated checkout calls `POST /api/billing/mock/complete/`. That endpoint builds the events Stripe would send, signs them with `STRIPE_WEBHOOK_SECRET` (`t=…,v1=HMAC-SHA256`) and runs them through the same `process_webhook()` function real Stripe events use.
+Afterwards the billing page shows what happened (`frontend/src/billingMessages.js`): "Simulated payment complete — you're on Pro. No card was charged." after subscribing, "Plan changed to Business." after a change, and "Subscription cancelled — you're back on the Free plan." after cancelling. With real Stripe, a new subscription shows "Payment received — your plan updates as soon as Stripe sends the webhook."
 
 Switching modes changes only `.env`, not code, and neither mode ever charges money. Real test-mode setup is in the [accounts guide](guides/ACCOUNTS_SETUP.md).
 

@@ -22,9 +22,11 @@ export default function MockCheckout() {
     e?.preventDefault();
     setBusy(true);
     setError("");
+    // Tell the billing page what happened, so it doesn't say "payment received" after a cancellation.
+    const result = body.action === "cancel" ? "canceled" : manage ? "changed" : "success";
     try {
       await api.post("/billing/mock/complete/", body);
-      navigate(`/w/${slug}/billing?checkout=success`);
+      navigate(`/w/${slug}/billing?checkout=${result}`);
     } catch (err) { setError(err.message); setBusy(false); }
   };
 

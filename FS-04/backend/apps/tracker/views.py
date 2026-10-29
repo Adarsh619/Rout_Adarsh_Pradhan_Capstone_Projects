@@ -1,9 +1,11 @@
 from django.db import IntegrityError, transaction
-from django.db.models import Count, Q
+from django.db.models import Case, Count, IntegerField, Q, Value, When
 from django.http import FileResponse
+from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 
@@ -85,6 +87,9 @@ class WorkflowStatusViewSet(AuditedViewSet):
     def perform_destroy(self, instance):
         if instance.issues.exists():
             raise ValidationError("Move issues out of this status before deleting it.")
+        if not instance.workflow.statuses.exclude(pk=instance.pk).exists():
+            # New issues start in the workflow's first status, so a workflow can't be left with none.
+            raise ValidationError("A workflow needs at least one status.")
         super().perform_destroy(instance)
 
 
@@ -150,6 +155,11 @@ class BoardViewSet(AuditedViewSet):
             .order_by("rank", "id")
         )
         sprint = request.query_params.get("sprint")
+        assignee = request.query_params.get("assignee")
+        if sprint is not None and sprint not in {"active", "backlog", "all"} and not sprint.isdigit():
+            raise ValidationError({"sprint": "Use a sprint id, active, backlog or all."})
+        if assignee and not assignee.isdigit():
+            raise ValidationError({"assignee": "Use a user id."})
         active = project.sprints.filter(state=Sprint.State.ACTIVE).first()
         if sprint == "active" or (sprint is None and board.kind == Board.Kind.SCRUM):
             issues = issues.filter(sprint=active) if active else issues.none()
@@ -157,10 +167,10 @@ class BoardViewSet(AuditedViewSet):
             pass
         elif sprint == "backlog":
             issues = issues.filter(sprint__isnull=True)
-        elif sprint and sprint.isdigit():
+        elif sprint:
             issues = issues.filter(sprint_id=int(sprint))
-        if request.query_params.get("assignee"):
-            issues = issues.filter(assignee_id=request.query_params["assignee"])
+        if assignee:
+            issues = issues.filter(assignee_id=int(assignee))
         if request.query_params.get("q"):
             issues = issues.filter(Q(title__icontains=request.query_params["q"]))
         ctx = self.get_serializer_context()
@@ -208,8 +218,11 @@ class SprintViewSet(AuditedViewSet):
         return Response(self.get_serializer(sprint).data)
 
     @action(detail=True, methods=["post"])
+    @transaction.atomic
     def complete(self, request, pk=None):
+        # One transaction: issues return to the backlog and the sprint closes together, or neither happens.
         sprint = self.get_object()
+        sprint.state = Sprint.objects.select_for_update().values_list("state", flat=True).get(pk=sprint.pk)
         if sprint.state != Sprint.State.ACTIVE:
             raise ValidationError("Only active sprints can be completed.")
         unfinished = sprint.issues.exclude(status__category=StatusCategory.DONE)
@@ -221,12 +234,30 @@ class SprintViewSet(AuditedViewSet):
 
 
 # --- issues -----------------------------------------------------------------
+PRIORITY_RANK = Case(
+    *[When(priority=p, then=Value(i)) for i, p in enumerate(Issue.Priority.values)],  # low=0 … critical=3
+    output_field=IntegerField(),
+)
+
+
+class IssueOrderingFilter(OrderingFilter):
+    """`?ordering=priority` sorts by severity (low → critical), not alphabetically."""
+
+    def get_ordering(self, request, queryset, view):
+        ordering = super().get_ordering(request, queryset, view) or []
+        return [o.replace("priority", "priority_rank") if o.lstrip("-") == "priority" else o for o in ordering]
+
+    def filter_queryset(self, request, queryset, view):
+        return super().filter_queryset(request, queryset.annotate(priority_rank=PRIORITY_RANK), view)
+
+
 class IssueViewSet(AuditedViewSet):
     queryset = (
         Issue.objects.select_related("project", "status", "assignee", "reporter")
         .annotate(comment_count=Count("comments"))
     )
     serializer_class = IssueSerializer
+    filter_backends = [DjangoFilterBackend, SearchFilter, IssueOrderingFilter]
     filterset_fields = ["project", "status", "assignee", "sprint", "type", "priority"]
     search_fields = ["title", "description"]
     ordering_fields = ["created_at", "updated_at", "priority", "rank", "due_date"]
@@ -245,9 +276,25 @@ class IssueViewSet(AuditedViewSet):
         if issue.assignee_id:
             notify_issue_event(issue, "assigned", self.request.user)
 
+    def _move(self, issue, to_status, index=None):
+        """Every status change (drag on the board or the issue form) re-ranks, audits and notifies the same way."""
+        old_status = issue.status
+        move_issue(issue, to_status, index)
+        if old_status != issue.status:
+            record(self.request, "issue.moved", issue, {"status": [old_status.name, issue.status.name]})
+            notify_issue_event(issue, "moved", self.request.user)
+        return issue
+
+    @transaction.atomic
     def perform_update(self, serializer):
-        old_assignee = serializer.instance.assignee_id
+        issue = serializer.instance
+        # Lock the row and take its current status, so this save can't undo a move made meanwhile.
+        issue.status = Issue.objects.select_for_update().select_related("status").get(pk=issue.pk).status
+        old_assignee = issue.assignee_id
+        new_status = serializer.validated_data.pop("status", None)
         issue = super().perform_update(serializer)
+        if new_status is not None and new_status != issue.status:
+            self._move(issue, new_status)  # lands at the bottom of the new column
         if issue.assignee_id and issue.assignee_id != old_assignee:
             notify_issue_event(issue, "assigned", self.request.user)
 
@@ -257,11 +304,8 @@ class IssueViewSet(AuditedViewSet):
         issue = self.get_object()
         ser = IssueMoveSerializer(data=request.data, context=self.get_serializer_context())
         ser.is_valid(raise_exception=True)
-        old_status = issue.status
-        issue = move_issue(issue, ser.validated_data["status"], ser.validated_data.get("index"))
-        if old_status != issue.status:
-            record(request, "issue.moved", issue, {"status": [old_status.name, issue.status.name]})
-            notify_issue_event(issue, "moved", request.user)
+        with transaction.atomic():
+            self._move(issue, ser.validated_data["status"], ser.validated_data.get("index"))
         issue = self.get_queryset().get(pk=issue.pk)
         return Response(self.get_serializer(issue).data)
 
@@ -314,8 +358,7 @@ class AttachmentViewSet(AuditedViewSet):
     def perform_destroy(self, instance):
         if instance.uploaded_by_id != self.request.user.id and not self.request.membership.has_role(Role.ADMIN):
             raise PermissionDenied("Only the uploader or an admin can delete this attachment.")
-        instance.file.delete(save=False)
-        super().perform_destroy(instance)
+        super().perform_destroy(instance)  # signals.py removes the file once the delete commits
 
     @action(detail=True, methods=["get"])
     def download(self, request, pk=None):
