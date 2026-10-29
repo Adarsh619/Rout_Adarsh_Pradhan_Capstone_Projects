@@ -19,15 +19,17 @@ def usage(workspace):
     }
 
 
-def current_plan(workspace):
+def enforce_limit(workspace, resource):
+    """Raise 402 if the workspace's plan has no room for one more `resource`.
+
+    Call it inside the transaction that creates the item: it locks the workspace's subscription row, so two
+    requests creating at the same moment are counted one after the other instead of both seeing room for one.
+    (Outside a transaction, select_for_update raises, which keeps callers honest.)
+    """
     from .models import Subscription
 
-    sub, _ = Subscription.objects.get_or_create(workspace=workspace)
-    return sub.effective_plan
-
-
-def enforce_limit(workspace, resource):
-    plan = current_plan(workspace)
+    sub, _ = Subscription.objects.select_for_update().get_or_create(workspace=workspace)
+    plan = sub.effective_plan
     limit = PLANS[plan]["limits"][resource]
     if limit is None:
         return

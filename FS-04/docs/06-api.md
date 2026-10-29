@@ -48,7 +48,7 @@ Interactive docs: **`/api/docs/`** (Swagger UI). Machine-readable schema: [`open
 | `GET /api/notifications/` | viewer | Your notifications; `PATCH {read}`; `POST mark_all_read/`; `GET unread_count/` |
 | `GET /api/reports/` · `POST /api/reports/generate/` | member / admin | Weekly summaries; generate queues a Celery task (202) |
 | `GET /api/billing/` | viewer | Plan, status, limits, usage, plan catalogue |
-| `POST /api/billing/checkout/ {plan}` · `POST /api/billing/portal/` | owner | Stripe Checkout / Customer Portal URLs |
+| `POST /api/billing/checkout/ {plan}` · `POST /api/billing/portal/` | owner | Stripe Checkout / Customer Portal URLs. Checkout returns 400 if the workspace already has a subscription: plan changes go through the portal |
 | `POST /api/billing/stripe-webhook/` | Stripe signature | Subscription sync (idempotent) |
 | `POST /api/billing/mock/complete/ {plan}` or `{action: "cancel"}` | owner, mock mode only | Simulate Stripe after checkout/portal: sends signed events through the webhook handler (404 when `STRIPE_MOCK=false`) |
 | `GET /api/health/` | public | Liveness probe |

@@ -454,19 +454,39 @@ paths:
       - jwtAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingOverview'
+          description: ''
   /api/billing/checkout/:
     post:
       operationId: billing_checkout_create
-      description: Every queryset is filtered by the current workspace and every create
-        stamps it.
+      description: 'Start a subscription. Refused (400) if the workspace already has
+        one: change plans through the portal.'
       tags:
       - billing
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Checkout'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Checkout'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Checkout'
+        required: true
       security:
       - jwtAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Redirect'
+          description: ''
   /api/billing/mock/complete/:
     post:
       operationId: billing_mock_complete_create
@@ -476,34 +496,77 @@ paths:
         Sends signed Stripe events through the real webhook handler.
       tags:
       - billing
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MockAction'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MockAction'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MockAction'
       security:
       - jwtAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MockBillingResult'
+          description: ''
   /api/billing/portal/:
     post:
       operationId: billing_portal_create
-      description: Every queryset is filtered by the current workspace and every create
-        stamps it.
+      description: Open Stripe's Customer Portal to change plan or cancel.
       tags:
       - billing
       security:
       - jwtAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Redirect'
+          description: ''
   /api/billing/stripe-webhook/:
     post:
       operationId: billing_stripe_webhook_create
-      description: Receives Stripe events. Signature is verified with STRIPE_WEBHOOK_SECRET.
+      description: Called by Stripe. Returns 400 for a bad signature; duplicates return
+        status 'duplicate'.
       tags:
       - billing
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: {}
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              additionalProperties: {}
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: {}
       security:
       - {}
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StripeWebhookResult'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StripeWebhookResult'
+          description: ''
   /api/boards/:
     get:
       operationId: boards_list
@@ -3131,6 +3194,14 @@ paths:
           description: ''
 components:
   schemas:
+    ActionEnum:
+      enum:
+      - subscribe
+      - cancel
+      type: string
+      description: |-
+        * `subscribe` - subscribe
+        * `cancel` - cancel
     Attachment:
       type: object
       properties:
@@ -3209,6 +3280,74 @@ components:
       - entity_id
       - entity_type
       - id
+    BillingOverview:
+      type: object
+      properties:
+        plan:
+          $ref: '#/components/schemas/BillingPlanEnum'
+        effective_plan:
+          allOf:
+          - $ref: '#/components/schemas/BillingPlanEnum'
+          description: |-
+            Plan whose limits apply (Free if past due)
+
+            * `free` - free
+            * `pro` - pro
+            * `business` - business
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+        current_period_end:
+          type: string
+          format: date-time
+          nullable: true
+        cancel_at_period_end:
+          type: boolean
+        limits:
+          type: object
+          additionalProperties:
+            type: integer
+            nullable: true
+          description: null = unlimited
+        usage:
+          type: object
+          additionalProperties:
+            type: integer
+        plans:
+          type: object
+          additionalProperties: {}
+          description: 'Plan catalogue: name, price_usd and limits per plan'
+        mode:
+          $ref: '#/components/schemas/ModeEnum'
+        stripe_enabled:
+          type: boolean
+        has_subscription:
+          type: boolean
+        can_manage:
+          type: boolean
+          description: True for the owner
+      required:
+      - can_manage
+      - cancel_at_period_end
+      - current_period_end
+      - effective_plan
+      - has_subscription
+      - limits
+      - mode
+      - plan
+      - plans
+      - status
+      - stripe_enabled
+      - usage
+    BillingPlanEnum:
+      enum:
+      - free
+      - pro
+      - business
+      type: string
+      description: |-
+        * `free` - free
+        * `pro` - pro
+        * `business` - business
     Board:
       type: object
       description: |-
@@ -3247,6 +3386,13 @@ components:
         * `todo` - To do
         * `in_progress` - In progress
         * `done` - Done
+    Checkout:
+      type: object
+      properties:
+        plan:
+          $ref: '#/components/schemas/PaidPlanEnum'
+      required:
+      - plan
     Comment:
       type: object
       description: |-
@@ -3471,6 +3617,41 @@ components:
       - id
       - joined_at
       - user
+    MockAction:
+      type: object
+      properties:
+        action:
+          allOf:
+          - $ref: '#/components/schemas/ActionEnum'
+          default: subscribe
+        plan:
+          $ref: '#/components/schemas/PaidPlanEnum'
+    MockBillingResult:
+      type: object
+      properties:
+        plan:
+          type: string
+        status:
+          type: string
+        webhooks:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+      required:
+      - plan
+      - status
+      - webhooks
+    ModeEnum:
+      enum:
+      - mock
+      - live
+      - disabled
+      type: string
+      description: |-
+        * `mock` - mock
+        * `live` - live
+        * `disabled` - disabled
     Notification:
       type: object
       properties:
@@ -3852,6 +4033,14 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Workspace'
+    PaidPlanEnum:
+      enum:
+      - pro
+      - business
+      type: string
+      description: |-
+        * `pro` - pro
+        * `business` - business
     PasswordChange:
       type: object
       properties:
@@ -4272,6 +4461,14 @@ components:
       - issue_count
       - key
       - name
+    Redirect:
+      type: object
+      properties:
+        url:
+          type: string
+          description: Stripe's hosted page, or the app's simulated page in mock mode
+      required:
+      - url
     Register:
       type: object
       properties:
@@ -4375,6 +4572,27 @@ components:
         * `planned` - Planned
         * `active` - Active
         * `closed` - Closed
+    StatusEnum:
+      enum:
+      - active
+      - trialing
+      - past_due
+      - canceled
+      - incomplete
+      type: string
+      description: |-
+        * `active` - Active
+        * `trialing` - Trialing
+        * `past_due` - Past due
+        * `canceled` - Canceled
+        * `incomplete` - Incomplete
+    StripeWebhookResult:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+      - status
     TokenBlacklist:
       type: object
       properties:

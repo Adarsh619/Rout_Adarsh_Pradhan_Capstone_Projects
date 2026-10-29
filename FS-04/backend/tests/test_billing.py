@@ -78,13 +78,6 @@ def _post_signed(client, event, secret="whsec_test", signature=None):
                        HTTP_STRIPE_SIGNATURE=sig)
 
 
-@pytest.fixture
-def stripe_live(settings):
-    settings.STRIPE_MOCK = False
-    settings.STRIPE_WEBHOOK_SECRET = "whsec_test"
-    settings.STRIPE_PRICE_PRO = "price_pro"
-
-
 def test_stripe_webhook_syncs_subscription_idempotently(client, stripe_live, workspace):
     event = _sub_event("evt_1", workspace)
     assert _post_signed(client, event).status_code == 200
@@ -145,7 +138,10 @@ def test_mock_subscribe_change_and_cancel_go_through_signed_webhooks(api, stripe
     assert api.post("/api/billing/mock/complete/", {"plan": "business"}, format="json").data["plan"] == "business"
     assert api.post("/api/billing/mock/complete/", {"action": "cancel"}, format="json").data["plan"] == "free"
     assert StripeEvent.objects.count() == 4
-    assert AuditLog.objects.filter(action__startswith="billing.").count() == 3
+    # Each click is audited for the owner, and each plan change again as applied from Stripe's event.
+    assert AuditLog.objects.filter(action__in=["billing.subscribe", "billing.change", "billing.cancel"]).count() == 3
+    stripe_updates = AuditLog.objects.filter(action="billing.stripe_update").order_by("id")
+    assert [e.changes["plan"] for e in stripe_updates] == [["free", "pro"], ["pro", "business"], ["business", "free"]]
 
 
 def test_mock_endpoint_disabled_outside_mock_mode(api, stripe_live):

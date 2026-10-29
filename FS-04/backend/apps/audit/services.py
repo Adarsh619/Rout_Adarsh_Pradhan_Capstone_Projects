@@ -73,3 +73,14 @@ def record(request, action, instance, changes=None, emit_event=True, workspace=N
             "actor": request.user.email if request.user.is_authenticated else None,
         })
     return entry
+
+
+def record_system(workspace, action, instance, changes=None):
+    """Audit a change made by the system rather than a person (e.g. a Stripe webhook): no actor, no IP.
+
+    The audit log page shows these as "system". Not sent to webhooks.
+    """
+    return AuditLog.objects.create(
+        workspace=workspace, action=action, entity_type=instance._meta.model_name, entity_id=str(instance.pk),
+        entity_label=str(instance)[:255], changes=changes or {},
+    )

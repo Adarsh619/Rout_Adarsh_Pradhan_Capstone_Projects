@@ -1,5 +1,7 @@
 from django.conf import settings
 from django.http import Http404
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import permissions, serializers
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -21,9 +23,42 @@ def billing_mode():
     return "live" if settings.STRIPE_SECRET_KEY else "disabled"
 
 
+# --- request / response shapes (also what Swagger and docs/openapi.yaml show) -------------------
+class BillingOverviewSerializer(serializers.Serializer):
+    plan = serializers.ChoiceField(choices=list(PLANS))
+    effective_plan = serializers.ChoiceField(choices=list(PLANS), help_text="Plan whose limits apply (Free if past due)")
+    status = serializers.ChoiceField(choices=Subscription.Status.choices)
+    current_period_end = serializers.DateTimeField(allow_null=True)
+    cancel_at_period_end = serializers.BooleanField()
+    limits = serializers.DictField(child=serializers.IntegerField(allow_null=True), help_text="null = unlimited")
+    usage = serializers.DictField(child=serializers.IntegerField())
+    plans = serializers.DictField(help_text="Plan catalogue: name, price_usd and limits per plan")
+    mode = serializers.ChoiceField(choices=["mock", "live", "disabled"])
+    stripe_enabled = serializers.BooleanField()
+    has_subscription = serializers.BooleanField()
+    can_manage = serializers.BooleanField(help_text="True for the owner")
+
+
+class CheckoutSerializer(serializers.Serializer):
+    plan = serializers.ChoiceField(choices=["pro", "business"])
+
+
+class RedirectSerializer(serializers.Serializer):
+    url = serializers.CharField(help_text="Stripe's hosted page, or the app's simulated page in mock mode")
+
+
+class MockActionSerializer(serializers.Serializer):
+    action = serializers.ChoiceField(choices=["subscribe", "cancel"], default="subscribe")
+    plan = serializers.ChoiceField(choices=["pro", "business"], required=False)
+
+
+WebhookResult = inline_serializer("StripeWebhookResult", {"status": serializers.CharField()})
+
+
 class BillingView(TenantScopedMixin, APIView):
     """GET current plan, limits and usage for the workspace."""
 
+    @extend_schema(responses=BillingOverviewSerializer)
     def get(self, request):
         sub, _ = Subscription.objects.get_or_create(workspace=request.workspace)
         mode = billing_mode()
@@ -43,13 +78,12 @@ class BillingView(TenantScopedMixin, APIView):
         })
 
 
-class CheckoutSerializer(serializers.Serializer):
-    plan = serializers.ChoiceField(choices=["pro", "business"])
-
-
 class CheckoutView(TenantScopedMixin, APIView):
+    """Start a subscription. Refused (400) if the workspace already has one: change plans through the portal."""
+
     write_role = Role.OWNER
 
+    @extend_schema(request=CheckoutSerializer, responses=RedirectSerializer)
     def post(self, request):
         ser = CheckoutSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
@@ -59,8 +93,11 @@ class CheckoutView(TenantScopedMixin, APIView):
 
 
 class PortalView(TenantScopedMixin, APIView):
+    """Open Stripe's Customer Portal to change plan or cancel."""
+
     write_role = Role.OWNER
 
+    @extend_schema(request=None, responses=RedirectSerializer)
     def post(self, request):
         return Response({"url": create_portal_session(request.workspace)})
 
@@ -72,14 +109,11 @@ class StripeWebhookView(APIView):
     permission_classes = [permissions.AllowAny]
     throttle_classes = []
 
+    @extend_schema(request=OpenApiTypes.OBJECT, responses={200: WebhookResult, 400: WebhookResult},
+                   description="Called by Stripe. Returns 400 for a bad signature; duplicates return status 'duplicate'.")
     def post(self, request):
         status, body = process_webhook(request.body, request.headers.get("Stripe-Signature", ""))
         return Response(body, status=status)
-
-
-class MockActionSerializer(serializers.Serializer):
-    action = serializers.ChoiceField(choices=["subscribe", "cancel"], default="subscribe")
-    plan = serializers.ChoiceField(choices=["pro", "business"], required=False)
 
 
 class MockCompleteView(TenantScopedMixin, APIView):
@@ -90,6 +124,10 @@ class MockCompleteView(TenantScopedMixin, APIView):
 
     write_role = Role.OWNER
 
+    @extend_schema(request=MockActionSerializer, responses=inline_serializer("MockBillingResult", {
+        "plan": serializers.CharField(), "status": serializers.CharField(),
+        "webhooks": serializers.ListField(child=serializers.DictField()),
+    }))
     def post(self, request):
         if not settings.STRIPE_MOCK:
             raise Http404("Mock billing is disabled.")
@@ -106,5 +144,6 @@ class MockCompleteView(TenantScopedMixin, APIView):
         old_plan = sub.plan
         results = mock.deliver(mock.simulate_events(sub, action, plan))
         sub.refresh_from_db()
+        # The owner's click; the plan change itself is also audited as "billing.stripe_update" by the webhook handler.
         record(request, f"billing.{action}", sub, {"plan": [old_plan, sub.plan]}, emit_event=False)
         return Response({"plan": sub.plan, "status": sub.status, "webhooks": [r[1] for r in results]})

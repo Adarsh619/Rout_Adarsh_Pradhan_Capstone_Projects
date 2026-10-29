@@ -111,6 +111,7 @@ class ProjectViewSet(AuditedViewSet):
     search_fields = ["name", "key"]
     audit_name = "project"
 
+    @transaction.atomic  # the limit check and the new project are one step (see enforce_limit)
     def perform_create(self, serializer):
         ws = self.request.workspace
         enforce_limit(ws, "projects")
@@ -290,6 +291,7 @@ class IssueViewSet(AuditedViewSet):
             qs = qs.filter(sprint__isnull=True)
         return qs
 
+    @transaction.atomic  # the limit check and the new issue are one step (see enforce_limit)
     def perform_create(self, serializer):
         enforce_limit(self.request.workspace, "issues")
         issue = create_issue(serializer, self.request.workspace, self.request.user)

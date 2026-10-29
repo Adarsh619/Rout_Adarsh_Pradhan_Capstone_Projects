@@ -139,6 +139,11 @@ SPECTACULAR_SETTINGS = {
     "TITLE": "TaskFlow API",
     "DESCRIPTION": "Multi-tenant project management API. Send `X-Workspace: <slug>` on tenant-scoped endpoints.",
     "VERSION": "1.0.0",
+    # Two "plan" choice lists in billing: every plan, and the ones you can buy.
+    "ENUM_NAME_OVERRIDES": {
+        "BillingPlanEnum": ["free", "pro", "business"],
+        "PaidPlanEnum": ["pro", "business"],
+    },
 }
 
 CORS_ALLOWED_ORIGINS = [

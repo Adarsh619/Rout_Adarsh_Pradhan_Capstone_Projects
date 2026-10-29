@@ -18,6 +18,8 @@ class Subscription(models.Model):
     stripe_subscription_id = models.CharField(max_length=80, blank=True)
     current_period_end = models.DateTimeField(null=True, blank=True)
     cancel_at_period_end = models.BooleanField(default=False)
+    # `created` time (Unix seconds) of the last Stripe subscription event applied; older ones are ignored.
+    stripe_event_created = models.PositiveBigIntegerField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):

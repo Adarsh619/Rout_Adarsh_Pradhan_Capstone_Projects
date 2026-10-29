@@ -276,6 +276,7 @@ Index: `(workspace_id, entity_type, entity_id)`.
 | stripe_subscription_id | varchar(80) | | |
 | current_period_end | timestamptz | null | Renewal date |
 | cancel_at_period_end | boolean | default false | |
+| stripe_event_created | bigint | null | Unix time of the last Stripe subscription event applied; older events are ignored |
 | updated_at | timestamptz | | |
 
 ### `billing_stripeevent` (global)

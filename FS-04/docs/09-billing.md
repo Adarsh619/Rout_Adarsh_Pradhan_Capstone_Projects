@@ -56,4 +56,20 @@ Switching modes changes only `.env`, not code, and neither mode ever charges mon
 | `checkout.session.completed` | Stores the customer and subscription IDs |
 | `customer.subscription.created` / `updated` | Sets plan (from the price ID), status and renewal date |
 | `customer.subscription.deleted` | Back to Free; clears the renewal date |
-| `invoice.payment_failed` | Marks the subscription past due (Free limits apply) |
+| `invoice.payment_failed` | Marks the subscription past due (Free limits apply), if the invoice belongs to the current subscription |
+
+## Safe against late, repeated and failed deliveries
+
+Stripe delivers each event at least once and in no guaranteed order, so the handler (`apps/billing/services.py`):
+
+| Situation | What happens |
+|---|---|
+| The same event arrives twice | Applied once: processed event IDs are stored (`StripeEvent`), and a repeat returns `duplicate` |
+| An older event arrives after a newer one | Ignored: each subscription remembers the `created` time of the last event applied (`stripe_event_created`) |
+| An event is about a different subscription (e.g. a late "deleted" for one the owner cancelled before resubscribing) | Ignored, so it can't downgrade a paying workspace |
+| Applying an event fails | Nothing is saved, not even the "processed" mark; Stripe gets a 500 and retries, and the retry is applied |
+| The owner tries to check out while already subscribed | Refused (400: "Use Manage subscription to change plans"), so nobody pays for two subscriptions. The Billing page shows **Switch plan**, which opens Manage, instead of **Upgrade** |
+
+Every plan or status change applied from Stripe is written to the audit log as `billing.stripe_update` (shown as "system"). In mock mode the owner's click is logged as well (`billing.subscribe` / `change` / `cancel`).
+
+Plan limits are checked while holding a lock on the workspace's subscription row, so two requests creating at the same moment can't both squeeze past a limit; the same lock stops two quick Upgrade clicks creating two Stripe customers.

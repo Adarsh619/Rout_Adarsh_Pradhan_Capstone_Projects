@@ -69,7 +69,10 @@ export default function Billing() {
               {Object.entries(p.limits).map(([k, v]) => <li key={k}>{v ?? "Unlimited"} {k}</li>)}
             </ul>
             {key === data.plan ? <span className="badge">Current plan</span>
-              : key !== "free" && data.can_manage && <button className="primary" onClick={go("/billing/checkout/", { plan: key })}>Upgrade</button>}
+              : key !== "free" && data.can_manage && (data.has_subscription
+                // Already subscribed: change the existing subscription, never start a second one (double billing).
+                ? <button onClick={go("/billing/portal/")}>Switch plan</button>
+                : <button className="primary" onClick={go("/billing/checkout/", { plan: key })}>Upgrade</button>)}
           </div>
         ))}
       </div>

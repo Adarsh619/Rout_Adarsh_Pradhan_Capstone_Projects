@@ -1,3 +1,4 @@
+from django.db import transaction
 from django.db.models import Prefetch
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
@@ -85,6 +86,7 @@ class MembershipViewSet(TenantScopedMixin, mixins.ListModelMixin, mixins.CreateM
         if Role.ADMIN in roles and self.request.membership.role != Role.OWNER:
             raise PermissionDenied("Only the workspace owner can add, change or remove admins.")
 
+    @transaction.atomic  # the limit check and the new membership are one step (see enforce_limit)
     def perform_create(self, serializer):
         self._owner_only_for_admins(serializer.validated_data.get("role", Role.MEMBER))
         enforce_limit(self.request.workspace, "members")

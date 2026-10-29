@@ -97,6 +97,14 @@ def statuses(workspace):
 
 
 @pytest.fixture
+def stripe_live(settings):
+    """Real Stripe mode (not mock): webhooks signed with a known test secret, one Pro price."""
+    settings.STRIPE_MOCK = False
+    settings.STRIPE_WEBHOOK_SECRET = "whsec_test"
+    settings.STRIPE_PRICE_PRO = "price_pro"
+
+
+@pytest.fixture
 def member(add_member):
     return add_member("member@acme.test", Role.MEMBER)
 
