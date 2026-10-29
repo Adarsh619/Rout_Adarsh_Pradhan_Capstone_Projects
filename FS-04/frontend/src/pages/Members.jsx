@@ -34,7 +34,7 @@ export default function Members() {
   return (
     <div className="stack">
       <h2>Members</h2>
-      <p className="muted small">Roles: <b>viewer</b> read-only · <b>member</b> work on issues · <b>admin</b> manage projects, workflows, webhooks, members · <b>owner</b> billing, admins, ownership.</p>
+      <p className="muted small">Roles: <b>viewer</b> read-only · <b>member</b> work on issues, delete the ones they created ·<b>admin</b> manage projects, workflows, webhooks, members · <b>owner</b> billing, admins, ownership.</p>
       {error && <div className="error">{error}</div>}
       <table className="table panel">
         <thead><tr><th>Name</th><th>Email</th><th>Role</th><th /></tr></thead>

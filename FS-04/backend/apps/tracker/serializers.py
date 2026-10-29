@@ -167,15 +167,22 @@ class IssueSerializer(serializers.ModelSerializer):
     status_name = serializers.CharField(source="status.name", read_only=True)
     status_category = serializers.CharField(source="status.category", read_only=True)
     comment_count = serializers.IntegerField(read_only=True, default=0)
+    can_delete = serializers.SerializerMethodField()
 
     class Meta:
         model = Issue
         fields = [
             "id", "key", "number", "project", "title", "description", "type", "priority",
             "status", "status_name", "status_category", "sprint", "assignee", "assignee_detail",
-            "reporter_detail", "story_points", "due_date", "rank", "comment_count", "created_at", "updated_at",
+            "reporter_detail", "story_points", "due_date", "rank", "comment_count", "can_delete",
+            "created_at", "updated_at",
         ]
         read_only_fields = ["number", "rank", "created_at", "updated_at"]
+
+    def get_can_delete(self, obj):
+        """Whether the caller may delete this issue, so the UI doesn't repeat the role rules."""
+        request = self.context.get("request")
+        return obj.can_be_deleted_by(getattr(request, "membership", None))
 
     def validate(self, attrs):
         project = attrs.get("project") or (self.instance and self.instance.project)

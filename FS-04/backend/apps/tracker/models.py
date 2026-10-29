@@ -15,7 +15,7 @@ from django.core.validators import RegexValidator
 from django.db import models
 from django.db.models import F, Q
 
-from apps.tenancy.models import Membership, TenantModel
+from apps.tenancy.models import Membership, Role, TenantModel
 
 hex_color = RegexValidator(r"^#[0-9a-fA-F]{6}$", "Use a hex colour like #2563eb.")
 PROJECT_KEY_RE = re.compile(r"[A-Z0-9]+")
@@ -243,6 +243,14 @@ class Issue(TenantModel):
     @property
     def key(self):
         return f"{self.project.key}-{self.number}"
+
+    def can_be_deleted_by(self, membership):
+        """The reporter or an admin/owner may delete an issue, the same rule as comments and attachments."""
+        if membership is None:
+            return False
+        return membership.has_role(Role.ADMIN) or (
+            membership.has_role(Role.MEMBER) and self.reporter_id == membership.user_id
+        )
 
     def clean(self):
         project, status, sprint = related(self, "project"), related(self, "status"), related(self, "sprint")

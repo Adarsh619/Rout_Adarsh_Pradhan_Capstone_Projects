@@ -28,10 +28,19 @@ Roles are per workspace, and each role includes everything below it.
 |---|---|
 | Owner | Everything, plus billing, adding / changing / removing admins, transferring ownership and deleting the workspace. There is exactly one owner |
 | Admin | Projects, boards, sprints, workflows, webhooks, audit log, reports; adds, changes and removes members and viewers |
-| Member | Create and edit issues, move cards, comment, attach files |
+| Member | Create and edit issues, move cards, comment, attach files; delete the issues they created |
 | Viewer | Read only |
 
 Anyone except the owner can leave a workspace. The owner must transfer ownership first; they then become an admin.
+
+### Deleting issues
+
+Deleting an issue also deletes its comments, attachments and files, and can't be undone, so it follows the same rule as comments and attachments: **only the person who created the issue (its reporter) or an admin / the owner** can delete it.
+A member who opens someone else's issue sees why there is no Delete button, and who can delete the issue:
+
+> 🔒 Only **Asha Rao** (who created WEB-12) or a workspace admin can delete it. [Ask an admin to delete]
+
+**Ask an admin to delete** sends every admin and the owner a bell notification and an email ("Meera asked to delete WEB-12: Fix login"). Clicking the notification opens the issue, where they can delete it. Asking again while that request is unread sends nothing new.
 
 The API enforces these rules (see [06 · API](06-api.md)); the React app also hides controls a role cannot use.
 

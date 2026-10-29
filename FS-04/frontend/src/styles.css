@@ -37,6 +37,15 @@ code { font-size: .8em; word-break: break-all; }
 .error { color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, transparent); padding: 8px 10px; border-radius: 8px; font-size: .9rem; }
 .toast { position: fixed; bottom: 20px; right: 20px; background: #111827; color: #fff; padding: 10px 14px; border-radius: 10px; z-index: 50; }
 .toast.static { position: static; background: color-mix(in srgb, var(--primary) 12%, transparent); color: var(--text); }
+/* Quiet explanation panel, e.g. "Only the reporter or an admin can delete this issue" with a follow-up action. */
+.notice { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; padding: 8px 12px; border-radius: 10px; font-size: .85rem;
+  background: color-mix(in srgb, var(--muted) 12%, transparent); border: 1px solid var(--border); color: var(--text); }
+.notice strong { font-weight: 600; }
+.notice-action { font-size: .82rem; padding: 4px 10px; background: var(--panel); border-color: var(--border); color: var(--primary); }
+.notice-action:disabled { opacity: .6; cursor: default; }
+.notice-done { font-size: .82rem; font-weight: 600; color: #16a34a; }
+.issue-footer > div:first-child { flex: 1 1 auto; min-width: 0; }
+@media (max-width: 800px) { .issue-footer > div:first-child { flex-basis: 100%; } .issue-footer > button { width: 100%; } }
 
 .auth { min-height: 100vh; display: grid; place-items: center; padding: 16px; }
 .auth-card { width: 380px; max-width: 100%; background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 28px; box-shadow: var(--shadow); }
@@ -75,7 +84,8 @@ nav { display: flex; flex-direction: column; gap: 2px; flex: 1; }
 .prio-low { background: #e0f2fe; color: #075985; } .prio-medium { background: #fef9c3; color: #854d0e; }
 .prio-high { background: #ffedd5; color: #9a3412; } .prio-critical { background: #fee2e2; color: #991b1b; }
 
-.overlay { position: fixed; inset: 0; background: rgba(15,18,32,.5); display: grid; place-items: start center; padding: 6vh 16px; overflow-y: auto; z-index: 30; }
+/* minmax(0, 1fr) keeps the grid column at the screen's width, so max-width: 100% can shrink wide modals on phones. */
+.overlay { position: fixed; inset: 0; background: rgba(15,18,32,.5); display: grid; grid-template-columns: minmax(0, 1fr); place-items: start center; padding: 6vh 16px; overflow-y: auto; z-index: 30; }
 .modal { background: var(--panel); border-radius: 14px; padding: 18px; width: 520px; max-width: 100%; display: flex; flex-direction: column; gap: 14px; }
 .modal.wide { width: 900px; } .modal-head { display: flex; justify-content: space-between; align-items: center; }
 .issue-form { display: flex; flex-direction: column; gap: 12px; }

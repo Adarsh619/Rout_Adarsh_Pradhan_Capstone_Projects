@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, download, formatError } from "../api";
 import { can, useWorkspace } from "../workspace";
+import DeleteIssueControls from "./DeleteIssueControls";
 import Modal from "./Modal";
 
 const EMPTY = { title: "", description: "", type: "task", priority: "medium", assignee: "", story_points: "", due_date: "", sprint: "" };
@@ -53,11 +54,17 @@ export default function IssueModal({ issueId, projectId, statuses = [], sprints 
   };
 
   const remove = async () => {
-    if (!window.confirm("Delete this issue?")) return;
-    await api.del(`/issues/${issueId}/`);
-    onSaved?.();
-    onClose();
+    if (!window.confirm(`Delete ${issue.key}? Its comments and attachments are deleted too. This can't be undone.`)) return;
+    try {
+      await api.del(`/issues/${issueId}/`);
+      onSaved?.();
+      onClose();
+    } catch (err) { setError(err.message); }
   };
+  const requestDeletion = () => api.post(`/issues/${issueId}/request_deletion/`);
+  // A reporter who has left the workspace can't delete anything any more, so only admins are named then.
+  const reporter = issue?.reporter_detail;
+  const reporterName = reporter && members.some((m) => m.user.id === reporter.id) ? reporter.display_name : null;
 
   const addComment = async (e) => {
     e.preventDefault();
@@ -109,8 +116,13 @@ export default function IssueModal({ issueId, projectId, statuses = [], sprints 
         </div>
         {error && <div className="error">{error}</div>}
         {editable && (
-          <div className="row between">
-            <div>{issueId && <button type="button" className="danger" onClick={remove}>Delete</button>}</div>
+          <div className="row between gap wrap issue-footer">
+            <div>
+              {issue && (
+                <DeleteIssueControls canDelete={issue.can_delete} issueKey={issue.key} reporterName={reporterName}
+                  onDelete={remove} onRequest={requestDeletion} />
+              )}
+            </div>
             <button type="submit" className="primary">{issueId ? "Save changes" : "Create issue"}</button>
           </div>
         )}

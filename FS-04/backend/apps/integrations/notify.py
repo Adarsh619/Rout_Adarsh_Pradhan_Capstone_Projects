@@ -1,6 +1,6 @@
 from django.db import transaction
 
-from apps.tenancy.models import Membership
+from apps.tenancy.models import Membership, Role
 
 from .models import Notification
 
@@ -9,6 +9,7 @@ MESSAGES = {
     "commented": "{actor} commented on {key}: {title}",
     "moved": "{actor} moved {key} to {status}",
     "due_soon": "{key} is due on {due}: {title}",
+    "delete_requested": "{actor} asked to delete {key}: {title}",
 }
 
 
@@ -25,6 +26,21 @@ def notify_issue_event(issue, verb, actor=None):
             Membership.objects.filter(workspace_id=issue.workspace_id, user_id__in=recipients)
             .values_list("user_id", flat=True)
         )
+    return _send(issue, verb, actor, recipients)
+
+
+def notify_workspace_admins(issue, verb, actor=None):
+    """Notify the workspace's admins and owner about an issue (e.g. a member asking for it to be deleted)."""
+    recipients = set(
+        Membership.objects.filter(workspace_id=issue.workspace_id, role__in=[Role.ADMIN, Role.OWNER])
+        .values_list("user_id", flat=True)
+    )
+    if actor is not None:
+        recipients.discard(actor.id)
+    return _send(issue, verb, actor, recipients)
+
+
+def _send(issue, verb, actor, recipients):
     if not recipients:
         return []
     message = MESSAGES[verb].format(

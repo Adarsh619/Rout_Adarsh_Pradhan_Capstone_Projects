@@ -33,6 +33,7 @@ A webhook with an empty event list receives everything. The payload format and s
 | commented | Assignee and reporter, except the comment's author |
 | moved | Assignee and reporter, except the person who moved it |
 | due_soon | The assignee, the day before the due date |
+| delete_requested | Every admin and the owner, except the member who asked (see [02 · Deleting issues](02-features-and-roles.md#deleting-issues)) |
 
 Each creates an in-app notification (the bell polls every 30 s) and queues an email.
 

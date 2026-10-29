@@ -2,7 +2,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import Case, Count, IntegerField, Q, Value, When
 from django.http import FileResponse
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import viewsets
+from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.filters import OrderingFilter, SearchFilter
@@ -11,7 +11,8 @@ from rest_framework.response import Response
 
 from apps.audit.services import model_diff, record
 from apps.billing.limits import enforce_limit
-from apps.integrations.notify import notify_issue_event
+from apps.integrations.models import Notification
+from apps.integrations.notify import notify_issue_event, notify_workspace_admins
 from apps.tenancy.mixins import TenantScopedMixin
 from apps.tenancy.models import Role
 
@@ -262,6 +263,26 @@ class IssueViewSet(AuditedViewSet):
     search_fields = ["title", "description"]
     ordering_fields = ["created_at", "updated_at", "priority", "rank", "due_date"]
     audit_name = "issue"
+
+    def perform_destroy(self, instance):
+        if not instance.can_be_deleted_by(self.request.membership):
+            raise PermissionDenied("Only the reporter or an admin can delete this issue.")
+        super().perform_destroy(instance)
+
+    @action(detail=True, methods=["post"])
+    def request_deletion(self, request, pk=None):
+        """A member who can't delete an issue asks the workspace's admins and owner to do it."""
+        issue = self.get_object()
+        if issue.can_be_deleted_by(request.membership):
+            raise ValidationError("You can delete this issue yourself.")
+        pending = Notification.objects.filter(
+            workspace=request.workspace, actor=request.user, issue=issue, verb="delete_requested", read=False
+        )
+        if pending.exists():  # don't flood admins with repeat clicks
+            return Response({"already_requested": True})
+        notes = notify_workspace_admins(issue, "delete_requested", request.user)
+        record(request, "issue.deletion_requested", issue, {"title": issue.title}, emit_event=False)
+        return Response({"notified": len(notes)}, status=status.HTTP_202_ACCEPTED)
 
     def get_queryset(self):
         qs = super().get_queryset()
