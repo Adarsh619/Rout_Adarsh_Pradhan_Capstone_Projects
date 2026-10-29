@@ -14,24 +14,18 @@ from apps.tracker.models import Attachment, Issue, Project, Sprint, Workflow, Wo
 pytestmark = pytest.mark.django_db
 
 
-def make_sprint(api, project, **fields):
-    r = api.post("/api/sprints/", {"project": project["id"], "name": "Sprint", **fields}, format="json")
-    assert r.status_code == 201, r.data
-    return r.data
-
-
 # --- 1. one active sprint per project ------------------------------------------------
 
 
-def test_database_allows_only_one_active_sprint(api, project):
-    s1, s2 = make_sprint(api, project), make_sprint(api, project)
+def test_database_allows_only_one_active_sprint(api, project, new_sprint):
+    s1, s2 = new_sprint(api, project), new_sprint(api, project)
     assert api.post(f"/api/sprints/{s1['id']}/start/").status_code == 200
     with pytest.raises(IntegrityError), transaction.atomic():
         Sprint.objects.filter(pk=s2["id"]).update(state=Sprint.State.ACTIVE)
 
 
-def test_concurrent_start_gets_400_not_500(api, project, monkeypatch):
-    s1, s2 = make_sprint(api, project), make_sprint(api, project)
+def test_concurrent_start_gets_400_not_500(api, project, monkeypatch, new_sprint):
+    s1, s2 = new_sprint(api, project), new_sprint(api, project)
     assert api.post(f"/api/sprints/{s1['id']}/start/").status_code == 200
     # Simulate the race: the second request's "already active?" check runs before the first commits.
     real_exists = QuerySet.exists
@@ -55,8 +49,8 @@ def test_database_allows_only_one_default_workflow(workspace):
 # --- 3. sprint dates ---------------------------------------------------------------
 
 
-def test_sprint_end_date_checked_on_partial_update(api, project):
-    s = make_sprint(api, project, start_date="2026-11-10", end_date="2026-11-20")
+def test_sprint_end_date_checked_on_partial_update(api, project, new_sprint):
+    s = new_sprint(api, project, start_date="2026-11-10", end_date="2026-11-20")
     r = api.patch(f"/api/sprints/{s['id']}/", {"end_date": "2026-11-01"}, format="json")
     assert r.status_code == 400 and "end_date" in r.data
     r = api.patch(f"/api/sprints/{s['id']}/", {"start_date": "2026-11-25"}, format="json")

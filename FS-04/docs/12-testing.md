@@ -4,13 +4,16 @@
 
 Recorded 29 Oct 2026 on PostgreSQL 16 (Docker), Python 3.14 locally and 3.12 in CI, Node 24 locally and 22 in CI. CI runs the same suites on every push, and has passed on every commit pushed so far.
 
-## Backend: pytest (127 tests, 95% line coverage)
+## Backend: pytest (130 tests, 96% line coverage)
 
 ```
 cd backend && pytest
-127 passed in ~3.5 min
-TOTAL  1987 statements  93 missed  95% coverage
+130 passed in ~32 s
+TOTAL  2040 statements  89 missed  96% coverage
 ```
+
+The suite used to take about 3.5 minutes. Tests now use Django's fast MD5 password hasher (real hashing is deliberately slow and every test creates users), and the seed tests create fewer issues where the count doesn't matter. Production hashing is unchanged. CI fails if coverage drops below 90%.
+Shared API helpers (`new_issue`, `move`, `new_sprint`) are fixtures in `tests/conftest.py`.
 
 | Suite | What it proves |
 |---|---|
@@ -18,7 +21,7 @@ TOTAL  1987 statements  93 missed  95% coverage
 | `test_issues_and_workflows.py` | Project creates its board and default workflow; unique keys; `WEB-1..N` numbering; drag-and-drop move re-ordering; **workflow transitions enforced**; custom workflow (free movement until rules are added); statuses from another workflow rejected; audit diffs + issue history; comments + notifications + author-only edits; attachments upload and **tenant-checked download**; sprint lifecycle (one active, carry-over to backlog); board sprint filters; project stats |
 | `test_integrations.py` | Webhook payload **HMAC signature** correct; event filtering; failure triggers a Celery retry; webhooks admin-only; weekly report generated + emailed; due-date reminders |
 | `test_billing.py` | Free plan limit → **402**; upgraded plan lifts limits; past-due falls back to Free; Checkout session created with the right price; owner-only checkout; webhooks signed exactly like Stripe signs them: plan sync is **idempotent**, cancellation downgrades, payment failure → past-due, bad or wrong-secret signature → 400; **mock mode**: subscribe → change → cancel through signed webhooks, owner-only, disabled outside mock mode; **integration test against the real `stripe-mock` server** (CI service container) |
-| `test_seed_and_perf.py` | Faker seed creates two isolated tenants and `--reset` works; **board endpoint query count stays constant** |
+| `test_seed_and_perf.py` | Faker seed creates two isolated tenants and `--reset` works; it refuses to run with `DEBUG=false`; every seeded row passes the model rules (`full_clean()`), viewers never report, comment or get assigned, open issues never sit in a closed sprint; the seed includes a full audit trail, notifications, a closed sprint and a report; **the board uses the same number of queries for 20 and 60 issues, and no more than 7** |
 | `test_accounts.py` | Login ignores email case; weak passwords rejected (short, common, numeric, like the email); `/me` can't change the email; **refresh tokens rotate and the old one stops working**; logout and password change revoke tokens; **login is rate-limited**; Django admin's add-user form asks for an email |
 | `test_tenancy.py` | **Removed or departed members get no more notifications** and their open issues are unassigned; only the owner manages admins; the tenant comes from the header only; leaving; **ownership transfer**; duplicate workspace slugs retried; workspace renames audited; workspace list query count constant; admin keeps one owner |
 | `test_tracker_models.py` | **Database rules**: one active sprint, one default workflow, sprint end after start; hex colours and ASCII project keys; **attachment files deleted after commit** (also on cascade, kept on rollback); `clean()` rejects cross-tenant links; Django admin numbers issues and lists them in a constant number of queries |
@@ -47,7 +50,7 @@ persisted → opened the issue modal → visited billing, workflows, audit, memb
 | Django admin issue list | Constant query count however many issues |
 | Production JS bundle | 316 kB (99 kB gzipped) |
 
-How to reproduce the query count: `pytest tests/test_seed_and_perf.py -s --no-cov` (it times a single, cold request).
+The query count is an **assertion**, not just a printout: `test_board_query_count_does_not_grow_with_issues` fails if the board needs more than 7 queries, or more for 60 issues than for 20. To see the numbers: `pytest tests/test_seed_and_perf.py -s --no-cov` (prints the query count and a warm timing).
 
 ## Bugs found by testing
 

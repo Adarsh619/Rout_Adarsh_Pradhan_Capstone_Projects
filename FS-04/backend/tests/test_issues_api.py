@@ -9,23 +9,10 @@ from apps.tracker.services import move_issue
 pytestmark = pytest.mark.django_db
 
 
-def new_issue(api, project, **fields):
-    r = api.post("/api/issues/", {"project": project["id"], "title": "Task", **fields}, format="json")
-    assert r.status_code == 201, r.data
-    return r.data
-
-
-def move(api, issue_id, status, index=None):
-    body = {"status": status.id} if index is None else {"status": status.id, "index": index}
-    r = api.post(f"/api/issues/{issue_id}/move/", body, format="json")
-    assert r.status_code == 200, r.data
-    return r.data
-
-
 # --- 1. status edits in the issue form behave like a drag ----------------------------------
 
 
-def test_status_change_in_issue_form_moves_card_to_bottom_and_notifies(api, project, statuses, member):
+def test_status_change_in_issue_form_moves_card_to_bottom_and_notifies(api, project, statuses, member, new_issue, move):
     todo, doing = statuses[0], statuses[1]
     a, b = new_issue(api, project), new_issue(api, project)
     move(api, a["id"], doing)
@@ -47,7 +34,7 @@ def test_status_change_in_issue_form_moves_card_to_bottom_and_notifies(api, proj
     assert Notification.objects.filter(user=member, verb="moved").exists()
 
 
-def test_status_change_in_issue_form_still_follows_workflow(api, project, statuses):
+def test_status_change_in_issue_form_still_follows_workflow(api, project, statuses, new_issue):
     done = statuses[3]
     issue = new_issue(api, project)
     r = api.patch(f"/api/issues/{issue['id']}/", {"status": done.id}, format="json")
@@ -58,7 +45,7 @@ def test_status_change_in_issue_form_still_follows_workflow(api, project, status
 # --- 2. parents are fixed after creation -------------------------------------------------
 
 
-def test_parent_links_cannot_be_changed(api, project, statuses):
+def test_parent_links_cannot_be_changed(api, project, statuses, new_issue):
     other_wf = api.post("/api/workflows/", {"name": "Support"}, format="json").data
     other_project = api.post("/api/projects/", {"key": "OPS", "name": "Ops"}, format="json").data
     status = statuses[0]
@@ -85,7 +72,7 @@ def test_parent_links_cannot_be_changed(api, project, statuses):
 # --- 3. closed sprints ---------------------------------------------------------------------
 
 
-def test_issues_cannot_join_a_closed_sprint(api, project, statuses):
+def test_issues_cannot_join_a_closed_sprint(api, project, statuses, new_issue, move):
     sprint = api.post("/api/sprints/", {"project": project["id"], "name": "S1"}, format="json").data
     finished = new_issue(api, project, sprint=sprint["id"])
     for s in statuses[1:]:  # To Do → In Progress → In Review → Done
@@ -106,7 +93,7 @@ def test_issues_cannot_join_a_closed_sprint(api, project, statuses):
 # --- 4. priority ordering ------------------------------------------------------------------
 
 
-def test_ordering_by_priority_follows_severity(api, project):
+def test_ordering_by_priority_follows_severity(api, project, new_issue):
     for p in ["critical", "low", "high", "medium"]:
         new_issue(api, project, priority=p, title=p)
 
@@ -133,7 +120,7 @@ def test_board_rejects_malformed_filters(api, project):
 # --- 6. moves re-read the status under a lock ----------------------------------------------
 
 
-def test_move_checks_workflow_against_current_status_not_a_stale_copy(api, project, statuses):
+def test_move_checks_workflow_against_current_status_not_a_stale_copy(api, project, statuses, new_issue, move):
     todo, doing, review, done = statuses
     data = new_issue(api, project)
     move(api, data["id"], doing)

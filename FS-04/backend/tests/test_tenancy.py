@@ -12,10 +12,10 @@ from apps.tracker.models import Issue, StatusCategory, WorkflowStatus
 pytestmark = pytest.mark.django_db
 
 
-def new_issue(client, project, **fields):
-    r = client.post("/api/issues/", {"project": project["id"], "title": "Task", **fields}, format="json")
-    assert r.status_code == 201, r.data
-    return Issue.objects.get(pk=r.data["id"])
+@pytest.fixture
+def issue_obj(new_issue):
+    """Like the shared `new_issue` fixture, but returns the Issue model so tests can refresh_from_db()."""
+    return lambda client, project, **fields: Issue.objects.get(pk=new_issue(client, project, **fields)["id"])
 
 
 def mark_done(issue):
@@ -27,12 +27,12 @@ def mark_done(issue):
 
 
 def test_removing_member_unassigns_open_issues_and_stops_notifications(api, project, workspace, add_member,
-                                                                     client_for):
+                                                                     client_for, issue_obj):
     m = add_member("leaver@acme.test", Role.MEMBER)
-    open_issue = new_issue(api, project, assignee=m.id)
-    done_issue = new_issue(api, project, assignee=m.id)
+    open_issue = issue_obj(api, project, assignee=m.id)
+    done_issue = issue_obj(api, project, assignee=m.id)
     mark_done(done_issue)
-    reported = new_issue(client_for(m, workspace), project)  # m is the reporter
+    reported = issue_obj(client_for(m, workspace), project)  # m is the reporter
 
     membership = Membership.objects.get(workspace=workspace, user=m)
     assert api.delete(f"/api/members/{membership.id}/").status_code == 204
@@ -92,9 +92,9 @@ def test_workspace_query_parameter_is_ignored(owner, workspace):
 # --- 4. leave a workspace ----------------------------------------------------------
 
 
-def test_member_can_leave(api, project, workspace, add_member, client_for):
+def test_member_can_leave(api, project, workspace, add_member, client_for, issue_obj):
     m = add_member("quitter@acme.test", Role.VIEWER)
-    issue = new_issue(api, project, assignee=m.id)
+    issue = issue_obj(api, project, assignee=m.id)
     c = client_for(m, workspace)
 
     assert c.post("/api/members/leave/").status_code == 204

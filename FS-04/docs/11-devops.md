@@ -31,7 +31,7 @@ flowchart LR
 
 | Job | Runs on | Steps |
 |---|---|---|
-| Backend | Every push / PR | ruff lint, `makemigrations --check`, pytest with PostgreSQL, Redis and stripe-mock service containers; uploads JUnit and coverage reports |
+| Backend | Every push / PR | ruff lint, `makemigrations --check`, pytest with PostgreSQL, Redis and stripe-mock service containers; **fails if line coverage drops below 90%** (`--cov-fail-under=90`; it's 96% today); uploads JUnit and coverage reports |
 | Frontend | Every push / PR | `npm ci`, ESLint, Vitest, production build |
 | Docker | `main` only, after both pass | Builds backend and frontend images and pushes them to GitHub Container Registry |
 | Deploy | `main` only, after Docker | POSTs to `BACKEND_DEPLOY_HOOK` / `FRONTEND_DEPLOY_HOOK` secrets (e.g. Render); skipped when they are not set |

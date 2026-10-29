@@ -20,6 +20,18 @@ docker compose exec backend python manage.py seed_demo
 
 Other demo users (same password): `admin1@acme.test`, `member2@acme.test`, `viewer4@acme.test`, and `owner@globex.test` in a second tenant.
 
+What the demo data contains, for each of the two companies (Acme Corp, Globex Inc):
+
+| Data | Detail |
+|---|---|
+| People | Owner, one admin, two members and one viewer. Viewers never report, comment on or get assigned issues, as in the real app |
+| Projects | WEB (Kanban board) and API (Scrum board), 60 issues each (`--issues N` to change) with comments, due dates and story points |
+| Sprints | Sprint 0 (closed, with finished work), Sprint 1 (active), Sprint 2 (planned) per project |
+| History | A full audit trail: members added, projects and sprints created, every issue created and walked through the workflow, every comment. A few notifications per person (two unread). One weekly report |
+| Plan | Free, so the 2-project and 5-member limits are already reached: good for demonstrating the upgrade |
+
+`seed_demo --reset` deletes and recreates both companies. The command refuses to run with `DJANGO_DEBUG=false` (the demo password is public) unless you pass `--force`.
+
 Run the backend tests inside Docker:
 
 ```powershell

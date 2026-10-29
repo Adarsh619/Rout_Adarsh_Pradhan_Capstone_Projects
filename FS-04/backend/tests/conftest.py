@@ -24,6 +24,12 @@ def _reset_throttles():
     cache.clear()
 
 
+@pytest.fixture(autouse=True)
+def _fast_password_hashing(settings):
+    # Real password hashing is deliberately slow (~0.3 s per user); tests only need it to work.
+    settings.PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
+
+
 @pytest.fixture
 def make_user(db):
     def _make(email, password="pass12345"):
@@ -83,6 +89,40 @@ def statuses(workspace):
     return list(WorkflowStatus.objects.filter(workspace=workspace).order_by("order"))
 
 
-@pytest.fixture(params=[Role.MEMBER])
+@pytest.fixture
 def member(add_member):
     return add_member("member@acme.test", Role.MEMBER)
+
+
+# --- API helpers shared by the test files: each returns the response data and fails loudly on errors ----
+
+
+@pytest.fixture
+def new_issue():
+    def _new(client, project, **fields):
+        r = client.post("/api/issues/", {"project": project["id"], "title": "Task", **fields}, format="json")
+        assert r.status_code == 201, r.data
+        return r.data
+
+    return _new
+
+
+@pytest.fixture
+def move():
+    def _move(client, issue_id, status, index=None):
+        body = {"status": status.id} if index is None else {"status": status.id, "index": index}
+        r = client.post(f"/api/issues/{issue_id}/move/", body, format="json")
+        assert r.status_code == 200, r.data
+        return r.data
+
+    return _move
+
+
+@pytest.fixture
+def new_sprint():
+    def _new(client, project, **fields):
+        r = client.post("/api/sprints/", {"project": project["id"], "name": "Sprint", **fields}, format="json")
+        assert r.status_code == 201, r.data
+        return r.data
+
+    return _new
