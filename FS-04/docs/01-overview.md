@@ -3,7 +3,7 @@
 [← Index](README.md) · [Next: Features and roles →](02-features-and-roles.md)
 
 TaskFlow is a Jira-style project management product where every company gets its own isolated workspace with projects, Kanban boards, sprints and subscription billing.
-All seven steps of the internship brief are implemented, tested and running in Docker.
+All seven steps of the internship brief are implemented, tested and running in Docker. After the first build, every area was reviewed again day by day (Days 2–14) and its bugs fixed with regression tests; the [review log](13-challenges-and-next-steps.md#day-by-day-review-days-214) lists what changed.
 
 ## Problem
 
@@ -30,13 +30,15 @@ Teams need one place to plan and track work. A SaaS product has to serve many co
 | 4. Workflows, comments, attachments, audit log | Custom statuses and transitions; tenant-checked downloads; field-level audit diffs | [02](02-features-and-roles.md), [05](05-data-model.md) |
 | 5. Webhooks + Celery jobs | HMAC-signed webhooks with retries; notifications; daily and weekly jobs | [08](08-background-jobs.md) |
 | 6. Stripe Billing + limits | Free / Pro / Business plans, HTTP 402 at limits, idempotent webhook sync | [09](09-billing.md) |
-| 7. Docker + GitHub Actions | 7-service Compose stack; lint, test, image build, optional deploy | [11](11-devops.md) |
+| 7. Docker + GitHub Actions | 7-service Compose stack; lint, test, coverage gate, Compose smoke test, image build, optional deploy | [11](11-devops.md) |
+
+In numbers: **176 backend tests at 96% coverage**, **57 frontend tests**, the board answers in **7 SQL queries** whatever its size, and CI is green on `main`.
 
 ## Deliverables checklist
 
 | Deliverable | Where |
 |---|---|
-| Working demo | Run locally with Docker ([14](14-setup.md)); record the screen for the demo video |
+| Working demo | Run locally with Docker ([14](14-setup.md)); record the screen for the demo video (script in the [presentation outline](guides/PRESENTATION_OUTLINE.md)) |
 | GitHub repo with clean commits, README, setup | Repository root `README.md`; [commit plan](guides/COMMIT_PLAN.md) |
 | Architecture diagram + data/API docs | [03](03-architecture.md), [05](05-data-model.md), [06](06-api.md), [`openapi.yaml`](openapi.yaml) |
 | Test results + performance numbers | [12](12-testing.md) |

@@ -11,14 +11,15 @@ A user signs up, creates a company workspace, invites colleagues with a role, an
 | Workspaces | Each company is a separate tenant with a unique slug (`/w/acme/...`). One user can belong to several workspaces, and can leave any workspace they don't own. |
 | Members | Admins add existing users by email with a role. Removing someone (or them leaving) unassigns their open issues and stops all notifications to them. The owner can hand ownership to another member. |
 | Projects and boards | Each project has a key (`WEB`) and gets a board automatically. Issues are numbered per project (`WEB-42`). |
-| Kanban board | Drag cards between columns and reorder them. Columns the workflow forbids are greyed out while dragging. |
-| Custom workflows | Your own statuses (with a to-do / in-progress / done category) and the allowed moves between them. |
-| Sprints | Plan, start (one active per project) and complete. Unfinished issues return to the backlog. |
+| Kanban board | Drag cards between columns and reorder them. Columns the workflow forbids are greyed out while dragging. Search, assignee and sprint filters are kept in the URL; overdue cards are flagged; Enter opens a card. |
+| Custom workflows | Your own statuses (with a to-do / in-progress / done category), their column order, and the allowed moves between them. The page shows which projects use each workflow. |
+| Sprints | Plan, start (one active per project) and complete. Unfinished issues return to the backlog. Each sprint shows its progress in issues and story points. |
 | Issues | Type, priority, story points, due date, assignee, comments, file attachments and a change history. |
-| Audit log | Who changed what and when, with old → new values. |
-| Webhooks | Subscribe a URL to events; signed payloads, retries and a delivery log. |
+| Audit log | Who changed what and when, with old → new values; filter by kind, person and date; export as CSV. Entries can't be edited or deleted. |
+| Webhooks | Subscribe a public URL to events; signed payloads, retries, a delivery log, redelivery and secret rotation. |
 | Notifications and reports | In-app bell and email; daily due-date reminders; weekly summary reports. |
-| Billing | Free, Pro and Business plans with enforced limits and Stripe checkout. |
+| Billing | Free, Pro and Business plans with enforced limits, Stripe checkout and the customer portal; plan changes are audited. |
+| Account | Sign out revokes the session; login is rate-limited. Password change (which signs out other sessions) is available in the API (`POST /api/auth/password/`); the app has no screen for it yet. |
 
 ## Roles
 
@@ -51,3 +52,9 @@ The API enforces these rules (see [06 · API](06-api.md)); the React app also hi
 | ![Kanban board](assets/screenshots/board.png) | ![Issue modal](assets/screenshots/issue.png) |
 | **Billing** | **Simulated Stripe checkout** |
 | ![Billing](assets/screenshots/billing.png) | ![Mock checkout](assets/screenshots/mock-checkout.png) |
+| **Projects** | **Workflows** |
+| ![Projects](assets/screenshots/projects.png) | ![Workflows](assets/screenshots/workflows.png) |
+| **Audit log** | |
+| ![Audit log](assets/screenshots/audit.png) | |
+
+Screenshots were taken on 25 Oct 2026, before the review days; the pages have since gained the features described above (filters, overdue flags, the redesigned audit and webhook pages).

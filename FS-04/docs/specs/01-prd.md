@@ -102,8 +102,8 @@ Hitting a limit shows an "upgrade" message (HTTP 402). Past-due or cancelled sub
 | Metric | Target | Result |
 |---|---|---|
 | Brief steps implemented | 7 / 7 | 7 / 7 |
-| Automated backend tests passing | All | 49 / 49 |
-| Backend line coverage | ≥ 80% | 94% |
+| Automated backend tests passing | All | 176 / 176 (plus 57 frontend tests) |
+| Backend line coverage | ≥ 80% | 96% (CI fails below 90%) |
 | Cross-tenant leaks found in tests | 0 | 0 |
 | CI pipeline | Green on main | Green |
 

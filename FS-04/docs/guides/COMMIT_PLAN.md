@@ -5,6 +5,11 @@
 The code is complete. This plan splits it into **small, reviewable daily commits** so your GitHub history shows
 steady progress. Each day: read the files, run them, change what you'd like, then commit.
 
+> **What actually happened:** the whole project had already been committed at once (`28a62ed`), so the table below
+> was used as the **review order** instead: each day took that day's area, reviewed it, fixed what the review found with
+> tests and docs, and committed the result. The real commits are listed in
+> [13 · Day-by-day review](../13-challenges-and-next-steps.md#day-by-day-review-days-214).
+
 > Earlier commits won't run on their own, because `config/urls.py` and `settings.py` already reference every app.
 > From Day 7 on, `pytest` passes after each commit. Test as you go with `pytest tests/<file>` once that file is committed.
 

@@ -12,7 +12,7 @@ A 14-day plan following the brief's seven steps, with milestones, deliverables a
 | 1. Tenancy + models | 2–4 | 1 | User, Workspace, Membership, roles; Workflow, Project, Board, Sprint, Issue models | Migrations apply; isolation design reviewed | ✅ Done |
 | 2. REST API + permissions | 4–5 | 2 | Viewsets, serializers, role permissions, tenant scoping, OpenAPI | Isolation + role tests pass | ✅ Done |
 | 3. Workflows, comments, attachments, audit | 5–6 | 4 | Custom statuses/transitions, comments, uploads, audit log | Transition enforcement + audit diff tests pass | ✅ Done |
-| 4. Tests + seed data | 7 | – | pytest suites, Faker `seed_demo` | ≥ 80% coverage | ✅ Done (94%) |
+| 4. Tests + seed data | 7 | – | pytest suites, Faker `seed_demo` | ≥ 80% coverage | ✅ Done (96%) |
 | 5. Celery, webhooks, notifications | 8 | 5 | Signed webhooks with retries, emails, reminders, weekly reports | Webhook signature + retry tests pass | ✅ Done |
 | 6. Stripe Billing | 9 | 6 | Plans + limits, checkout, portal, webhooks, mock mode | Upgrade → limits lift; idempotent webhooks | ✅ Done |
 | 7. React foundation | 10 | 3 | Vite app, auth, API client, layout, workspace switcher | Login → workspace works | ✅ Done |
