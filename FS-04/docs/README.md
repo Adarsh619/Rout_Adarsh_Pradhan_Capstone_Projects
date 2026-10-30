@@ -18,7 +18,7 @@ Read the files in order, or jump to the topic you need.
 | 09 | [Billing](09-billing.md) | Plans and limits, Stripe flow, mock mode |
 | 10 | [Security](10-security.md) | Authentication, sessions, authorisation, signatures, SSRF, client IPs, attachments |
 | 11 | [DevOps](11-devops.md) | Docker Compose services, images, nginx, CI/CD pipeline with smoke test |
-| 12 | [Testing and performance](12-testing.md) | 176 backend + 57 frontend tests, coverage, performance numbers, bugs found |
+| 12 | [Testing and performance](12-testing.md) | 176 backend + 61 frontend tests, coverage, performance numbers, bugs found |
 | 13 | [Challenges and next steps](13-challenges-and-next-steps.md) | Key decisions, problems solved, day-by-day review log, known limits, future work |
 | 14 | [Setup and repository layout](14-setup.md) | Run it locally, folder structure |
 

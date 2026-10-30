@@ -46,7 +46,8 @@ All code was first committed together, so instead of re-committing it file by fi
 | 11 | Kanban board | `74462c7` | Drops on a filtered board landed among hidden cards; double-click created duplicate issues; backlog showed only the first 100 issues; search raced |
 | 12 | Admin pages | `6c09d55` | Destructive actions on one click; admin pages blank for members; first workflow rule silently blocked every move; report refresh guessed a delay |
 | 13 | Docker and CI | `7f58ebb` | Images never started in CI (now a Compose smoke test); `.venv` copied into the image; workers could start before migrations; database port open to the network; nginx caching and headers |
-| 14 | Docs | this commit | README, index, overview, features and this log brought up to date with Days 2–13 |
+| 14 | Docs | `74ac210` | README, index, overview, features and this log brought up to date with Days 2–13 |
+| 14+ | Account page | this commit | Password change was API-only: added an account page (name, password) and fixed password hints being read as part of the field's name |
 
 ## Known limits
 

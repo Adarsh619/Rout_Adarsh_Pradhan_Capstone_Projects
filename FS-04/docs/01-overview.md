@@ -32,7 +32,7 @@ Teams need one place to plan and track work. A SaaS product has to serve many co
 | 6. Stripe Billing + limits | Free / Pro / Business plans, HTTP 402 at limits, idempotent webhook sync | [09](09-billing.md) |
 | 7. Docker + GitHub Actions | 7-service Compose stack; lint, test, coverage gate, Compose smoke test, image build, optional deploy | [11](11-devops.md) |
 
-In numbers: **176 backend tests at 96% coverage**, **57 frontend tests**, the board answers in **7 SQL queries** whatever its size, and CI is green on `main`.
+In numbers: **176 backend tests at 96% coverage**, **61 frontend tests**, the board answers in **7 SQL queries** whatever its size, and CI is green on `main`.
 
 ## Deliverables checklist
 

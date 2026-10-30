@@ -13,7 +13,7 @@ jobs and **Stripe subscription billing** (test mode).
 | Frontend | React 18 · Vite · React Router · @hello-pangea/dnd |
 | Infra | Docker Compose · nginx · GitHub Actions (test → smoke-test the stack → build images → deploy) |
 
-**Status:** all seven steps of the brief are built, reviewed day by day and tested: **176 backend tests (96% coverage)**, **57 frontend tests**, and a CI smoke test that starts the whole Docker stack on every push.
+**Status:** all seven steps of the brief are built, reviewed day by day and tested: **176 backend tests (96% coverage)**, **61 frontend tests**, and a CI smoke test that starts the whole Docker stack on every push.
 
 ![Architecture](docs/assets/architecture.png)
 
@@ -24,7 +24,7 @@ jobs and **Stripe subscription billing** (test mode).
 - **Multi-tenancy**: shared-schema isolation. The tenant comes from the `X-Workspace` header; every queryset is filtered by it, and
   every foreign key in a request is validated against the same workspace, so you can't reference another company's data by guessing IDs.
 - **Roles per workspace**: `viewer` (read-only) → `member` (work on issues, delete the ones they created) → `admin` (projects, workflows, sprints, members, webhooks, audit log) → `owner` (billing, admins, ownership transfer). Pages a role can't use explain why instead of failing.
-- **Accounts**: email login (any letter case), strong-password rules, rate-limited sign-in, rotating refresh tokens, logout and password change that revoke sessions.
+- **Accounts**: email login (any letter case), strong-password rules, rate-limited sign-in, rotating refresh tokens, logout that revokes the session, and an account page to change your name and password (other devices get signed out).
 - **Kanban board** with drag-and-drop, optimistic updates and server-side ordering. Columns the workflow doesn't allow are greyed out while you drag. Filters (search, assignee, sprint) live in the URL, overdue cards are flagged, and a drop on a filtered board lands exactly where you dropped it.
 - **Custom workflows**: your own statuses (todo / in-progress / done categories) and allowed transitions, enforced by the API.
 - **Sprints**: plan, start (one active per project), complete (unfinished issues go back to the backlog).
@@ -90,7 +90,7 @@ Django reads `.env` through VS Code's launch config. In a plain terminal, set th
 
 ```bash
 cd backend && pytest            # 176 tests, 96% coverage (fails below 90%), PostgreSQL + stripe-mock, ~45 s
-cd frontend && npm test         # 57 tests: Vitest + Testing Library
+cd frontend && npm test         # 61 tests: Vitest + Testing Library
 ```
 
 Results and performance numbers: [docs/12-testing.md](docs/12-testing.md).
@@ -131,7 +131,7 @@ backend/
 frontend/src/
   api.js auth.jsx workspace.jsx boardLogic.js
   components/        Layout, IssueModal, IssueCard, Notifications, Modal, DeleteIssueControls
-  pages/             Board, Sprints, Projects, Members, Workflows, Webhooks, AuditLog, Reports, Billing, NotFound…
+  pages/             Board, Sprints, Projects, Members, Workflows, Webhooks, AuditLog, Reports, Billing, Account, NotFound…
   test/              Vitest + Testing Library suites
 docs/                design docs (01–14), guides, diagrams, screenshots, OpenAPI schema
 ```

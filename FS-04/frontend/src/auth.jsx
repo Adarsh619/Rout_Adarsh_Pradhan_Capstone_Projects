@@ -54,7 +54,14 @@ export function AuthProvider({ children }) {
     setUser(null);
   };
 
-  const value = { user, loading, bootError, retry: loadMe, sessionExpired, login, register, logout };
+  // The server revokes every session on a password change and returns a new pair for this one.
+  const changePassword = async (currentPassword, newPassword) => {
+    const t = await api.post("/auth/password/", { current_password: currentPassword, new_password: newPassword });
+    tokens.set(t);
+  };
+  const updateProfile = async (fields) => setUser(await api.patch("/auth/me/", fields));
+
+  const value = { user, loading, bootError, retry: loadMe, sessionExpired, login, register, logout, changePassword, updateProfile };
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

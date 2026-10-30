@@ -16,6 +16,7 @@ import Reports from "./pages/Reports";
 import Billing from "./pages/Billing";
 import MockCheckout from "./pages/MockCheckout";
 import NotFound from "./pages/NotFound";
+import Account from "./pages/Account";
 
 // Signed-out visitors go to the login page, which sends them back here afterwards.
 export function Private({ children }) {
@@ -39,6 +40,7 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/" element={<Private><Workspaces /></Private>} />
+      <Route path="/account" element={<Private><Account /></Private>} />
       <Route path="/w/:slug" element={<Private><Layout /></Private>}>
         <Route index element={<Projects />} />
         <Route path="p/:projectId/board" element={<Board />} />

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { api, setWorkspace } from "../api";
 import { useAuth } from "../auth";
 
@@ -29,7 +29,7 @@ export default function Workspaces() {
   return (
     <div className="auth">
       <div className="auth-card stack" style={{ width: 460 }}>
-        <div className="row between"><h2>Your workspaces</h2><button className="link" onClick={logout}>Sign out</button></div>
+        <div className="row between"><h2>Your workspaces</h2><span className="row gap"><Link className="small" to="/account">Account</Link><button className="link" onClick={logout}>Sign out</button></span></div>
         <p className="muted small">Signed in as {user.email}. Each workspace is a fully isolated company tenant.</p>
         {loadError && (
           <div className="error row between" role="alert">{loadError}<button className="link" onClick={load}>Try again</button></div>

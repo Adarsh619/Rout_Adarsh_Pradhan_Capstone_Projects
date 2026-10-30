@@ -39,6 +39,8 @@ code { font-size: .8em; word-break: break-all; }
 .empty-code { font-size: 3.5rem; font-weight: 800; line-height: 1; color: color-mix(in srgb, var(--primary) 70%, var(--muted)); }
 .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px; box-shadow: var(--shadow); }
 .badge { font-size: .72rem; background: var(--col); border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px; }
+.field { display: flex; flex-direction: column; gap: 4px; } .field-error { color: var(--danger); font-size: .8rem; }
+.account h3 { margin-top: 6px; } .account form + form { border-top: 1px solid var(--border); padding-top: 14px; }
 .error { color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, transparent); padding: 8px 10px; border-radius: 8px; font-size: .9rem; }
 .toast { position: fixed; bottom: 20px; right: 20px; background: #111827; color: #fff; padding: 10px 14px; border-radius: 10px; z-index: 50; }
 .toast.static { position: static; background: color-mix(in srgb, var(--primary) 12%, transparent); color: var(--text); }

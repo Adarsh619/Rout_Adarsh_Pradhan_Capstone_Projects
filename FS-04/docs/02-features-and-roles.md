@@ -19,7 +19,7 @@ A user signs up, creates a company workspace, invites colleagues with a role, an
 | Webhooks | Subscribe a public URL to events; signed payloads, retries, a delivery log, redelivery and secret rotation. |
 | Notifications and reports | In-app bell and email; daily due-date reminders; weekly summary reports. |
 | Billing | Free, Pro and Business plans with enforced limits, Stripe checkout and the customer portal; plan changes are audited. |
-| Account | Sign out revokes the session; login is rate-limited. Password change (which signs out other sessions) is available in the API (`POST /api/auth/password/`); the app has no screen for it yet. |
+| Account | **Your account** page (click your name in the sidebar, or Account on the workspace list): change your display name and your password. Changing the password keeps you signed in here and signs out every other device. Sign out revokes the session; login is rate-limited. |
 
 ## Roles
 

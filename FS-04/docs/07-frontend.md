@@ -25,6 +25,7 @@ A React single-page app built with Vite. The workspace slug in the URL (`/w/<slu
 |---|---|---|
 | `/login`, `/register` | Sign in, create account and first workspace | Everyone (signed-in users are sent on) |
 | `/` | Workspace picker | Signed-in users |
+| `/account` | Your account: display name and password change | Signed-in users |
 | `/w/:slug` | Projects | All roles (create: admin) |
 | `/w/:slug/p/:id/board` | Kanban board | All roles (drag: member+) |
 | `/w/:slug/p/:id/sprints` | Backlog and sprints | All roles (manage: admin) |
@@ -45,6 +46,7 @@ A React single-page app built with Vite. The workspace slug in the URL (`/w/<slu
 | Proxy error page (nginx's HTML 502) | A readable message instead of a JSON parse crash |
 | Workspace you don't belong to | "Workspace not found" (404). Other failures show the message and **Try again** |
 | Submitting a form | The button is disabled and says "Signing in…" or "Creating…", so double clicks don't send twice |
+| Changing your password | The server revokes every session and returns a new token pair for this one, so you stay signed in here and other devices are signed out. A wrong current password or a weak new one is shown under that field; mismatched confirmation is caught before sending |
 
 The sign-in page shows the demo login (`owner@acme.test / demo12345`). It's baked in at build time and can be hidden for a public deployment with `VITE_DEMO_HINT=false` in `.env` (passed to the frontend image as a build argument).
 
@@ -52,7 +54,7 @@ The sign-in page shows the demo login (`owner@acme.test / demo12345`). It's bake
 
 - **Dialogs** (`Modal.jsx`) are `role="dialog"` with `aria-modal` and a labelled title. Focus moves into the dialog when it opens, Tab and Shift+Tab stay inside it, Escape closes it, and focus returns to whatever opened it.
 - **Notifications** are buttons, so they work with the keyboard; the bell announces the unread count ("Notifications, 2 unread"); Escape or a click outside closes the panel. Opening a notification marks it read.
-- Visible focus ring on every control (`:focus-visible`), and correct `autocomplete` values so password managers fill the login and registration forms. Registration lists the password rules under the field.
+- Visible focus ring on every control (`:focus-visible`), and correct `autocomplete` values so password managers fill the login and registration forms. Registration and the account page list the password rules under the field. Hints and errors sit **outside** the `<label>` (linked with `aria-describedby`), so a screen reader announces the field as just "New password" and reads the hint separately.
 
 ## Polling
 

@@ -96,7 +96,7 @@ export default function Layout() {
             <NavLink to={`/w/${slug}/billing`} className={link}>Billing</NavLink>
           </nav>
           <div className="sidebar-footer">
-            <div className="small">{user.display_name}</div>
+            <Link className="small" to="/account" state={{ from: `/w/${slug}` }} title="Your account and password">{user.display_name}</Link>
             <button className="link" onClick={() => { logout(); navigate("/login"); }}>Sign out</button>
           </div>
         </aside>

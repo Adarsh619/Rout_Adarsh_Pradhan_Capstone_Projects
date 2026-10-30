@@ -28,11 +28,13 @@ export default function Register() {
         <p className="muted">Create your account and company workspace</p>
         <label>Full name<input autoFocus autoComplete="name" value={form.full_name} onChange={set("full_name")} /></label>
         <label>Email<input type="email" required autoComplete="email" value={form.email} onChange={set("email")} /></label>
-        <label>Password
-          <input type="password" required minLength={8} autoComplete="new-password" aria-describedby="password-rules"
-            value={form.password} onChange={set("password")} />
+        <div className="field">
+          <label>Password
+            <input type="password" required minLength={8} autoComplete="new-password" aria-describedby="password-rules"
+              value={form.password} onChange={set("password")} />
+          </label>
           <span id="password-rules" className="muted small">At least 8 characters, not only numbers, not a common password and not like your email.</span>
-        </label>
+        </div>
         <label>Company / workspace name<input autoComplete="organization" value={form.workspace_name} onChange={set("workspace_name")} placeholder="Acme Corp" /></label>
         {error && <div className="error" role="alert">{error}</div>}
         <button className="primary" disabled={busy}>{busy ? "Creating account…" : "Create account"}</button>
