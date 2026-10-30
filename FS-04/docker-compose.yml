@@ -72,6 +72,8 @@ services:
   frontend:
     build:
       context: ./frontend
+      args:
+        VITE_DEMO_HINT: ${VITE_DEMO_HINT:-true}
     ports:
       - "3000:80"
     depends_on:

@@ -8,7 +8,7 @@ Security rests on four checks run on every request: who you are, which tenant yo
 |---|---|---|
 | Authentication | JWT access tokens (60 min) and refresh tokens (7 days); emails matched case-insensitively at login | `SIMPLE_JWT` in settings, `apps/accounts/models.py` |
 | Passwords | Hashed by Django. Rejected if shorter than 8 characters, all digits, on Django's list of 20,000 common passwords, or too similar to the user's email or name. Checked at registration and password change | `AUTH_PASSWORD_VALIDATORS` in settings |
-| Sessions | Refresh tokens rotate: every refresh returns a new one and blacklists the old one. Logout blacklists the current refresh token; a password change blacklists all of them. Access tokens can't be revoked and simply expire | `SIMPLE_JWT`, `token_blacklist` app, `apps/accounts/views.py` |
+| Sessions | Refresh tokens rotate: every refresh returns a new one and blacklists the old one. Logout blacklists the current refresh token; a password change blacklists all of them. Access tokens can't be revoked and simply expire. When a session can't be renewed, the web app clears its tokens and returns to the login page | `SIMPLE_JWT`, `token_blacklist` app, `apps/accounts/views.py` |
 | Tenant isolation | Membership lookup on every request, from the `X-Workspace` header only; queries filtered by workspace; foreign keys validated per workspace; 404 for outsiders | `apps/tenancy/mixins.py`, `apps/tracker/serializers.py` |
 | Former members | Removal or leaving unassigns the person's open issues; notifications and emails go only to current members, so ex-members receive nothing about the workspace | `apps/tenancy/services.py::remove_member`, `apps/integrations/notify.py` |
 | Authorisation | Role ladder checked per action; comments and attachments editable only by author or admin; only the owner manages billing, grants or removes the admin role, transfers ownership or deletes a workspace. Django admin can't create a second owner or delete the owner's membership | `apps/tenancy/permissions.py`, `apps/tenancy/views.py`, `apps/tenancy/admin.py` |
@@ -25,6 +25,7 @@ Security rests on four checks run on every request: who you are, which tenant yo
 ## Before a real production launch
 
 - Set `DJANGO_DEBUG=false`, a long random `DJANGO_SECRET_KEY`, and exact `DJANGO_ALLOWED_HOSTS` / `CORS_ALLOWED_ORIGINS`.
+- Build the frontend with `VITE_DEMO_HINT=false` so the sign-in page doesn't show the demo login.
 - Serve over HTTPS and store tokens in httpOnly cookies instead of `localStorage`.
 - Move attachments to private object storage with signed URLs.
 - Use a shared cache (Redis) so the rate limits count across all gunicorn workers; the default in-memory cache counts per worker.

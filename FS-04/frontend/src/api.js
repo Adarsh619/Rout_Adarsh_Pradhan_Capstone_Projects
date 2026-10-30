@@ -14,9 +14,15 @@ let currentWorkspace = null;
 export const setWorkspace = (slug) => { currentWorkspace = slug; };
 export const tokens = store;
 
+// Fired when the session can't be renewed; AuthProvider listens and sends the user to the login page.
+export const SESSION_EXPIRED = "taskflow:session-expired";
+
+const OFFLINE = "Can't reach the server. Check your connection and try again.";
+const UNAVAILABLE = "The server is temporarily unavailable. Please try again in a moment.";
+
 export class ApiError extends Error {
   constructor(status, data) {
-    super(formatError(data) || `Request failed (${status})`);
+    super(formatError(data) || fallbackMessage(status));
     this.status = status;
     this.data = data;
   }
@@ -31,12 +37,31 @@ export function formatError(data) {
     .join("; ");
 }
 
+function fallbackMessage(status) {
+  if (status === 0) return OFFLINE;
+  if (status >= 502 && status <= 504) return UNAVAILABLE;
+  if (status >= 500) return "Something went wrong on the server. Please try again.";
+  return `Request failed (${status})`;
+}
+
+// fetch() only rejects when the server can't be reached; turn that into an ApiError with status 0.
+async function send(url, options) {
+  try { return await fetch(url, options); } catch { throw new ApiError(0, null); }
+}
+
+// Error pages from a proxy (e.g. nginx's HTML 502) aren't JSON; keep the status and use a readable message.
+async function readBody(res) {
+  const text = await res.text();
+  if (!text) return null;
+  try { return JSON.parse(text); } catch { return null; }
+}
+
 // Refresh tokens rotate (the old one is blacklisted), so parallel 401s must share one refresh call.
 let refreshing = null;
 function refreshAccess() {
   refreshing ??= (async () => {
     if (!store.refresh) return false;
-    const r = await fetch(`${BASE}/api/auth/token/refresh/`, {
+    const r = await send(`${BASE}/api/auth/token/refresh/`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refresh: store.refresh }),
@@ -54,15 +79,16 @@ export async function request(path, { method = "GET", body, raw = false, retry =
   if (currentWorkspace) headers["X-Workspace"] = currentWorkspace;
   const isForm = body instanceof FormData;
   if (body && !isForm) headers["Content-Type"] = "application/json";
-  const res = await fetch(`${BASE}/api${path}`, {
+  const res = await send(`${BASE}/api${path}`, {
     method, headers, body: body ? (isForm ? body : JSON.stringify(body)) : undefined,
   });
-  if (res.status === 401 && retry && (await refreshAccess())) {
-    return request(path, { method, body, raw, retry: false });
+  if (res.status === 401 && retry && headers.Authorization) {
+    if (await refreshAccess()) return request(path, { method, body, raw, retry: false });
+    store.clear();
+    window.dispatchEvent(new Event(SESSION_EXPIRED));
   }
   if (raw) return res;
-  const text = await res.text();
-  const data = text ? JSON.parse(text) : null;
+  const data = await readBody(res);
   if (!res.ok) throw new ApiError(res.status, data);
   return data;
 }

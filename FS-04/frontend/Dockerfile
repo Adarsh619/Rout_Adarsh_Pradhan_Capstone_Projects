@@ -6,6 +6,9 @@ RUN npm ci
 COPY . .
 ARG VITE_API_URL=""
 ENV VITE_API_URL=$VITE_API_URL
+# Set to "false" to hide the demo login hint on the sign-in page (e.g. for a public deployment).
+ARG VITE_DEMO_HINT="true"
+ENV VITE_DEMO_HINT=$VITE_DEMO_HINT
 RUN npm run build
 
 FROM nginx:1.27-alpine

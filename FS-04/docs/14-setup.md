@@ -69,6 +69,7 @@ npm run dev        # http://localhost:5173
 | `API_RATE_LIMIT`, `AUTH_RATE_LIMIT` | `2000/hour`, `10/minute` | Rate limits for the whole API and for register / login / password change |
 | `WEBHOOK_ALLOW_PRIVATE_URLS` | `false` | `true` lets webhooks target internal addresses, only for testing against a receiver on your own machine |
 | `WEBHOOK_DELIVERY_RETENTION_DAYS` | `30` | How long webhook delivery logs are kept |
+| `VITE_DEMO_HINT` | `true` | Shows the demo login on the sign-in page; `false` hides it. Read when the frontend is built, so rebuild the `frontend` image after changing it |
 
 ## Repository layout
 

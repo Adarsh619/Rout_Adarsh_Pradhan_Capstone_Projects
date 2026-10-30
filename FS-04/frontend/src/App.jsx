@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { useAuth } from "./auth";
 import Layout from "./components/Layout";
 import Login from "./pages/Login";
@@ -14,11 +14,22 @@ import AuditLog from "./pages/AuditLog";
 import Reports from "./pages/Reports";
 import Billing from "./pages/Billing";
 import MockCheckout from "./pages/MockCheckout";
+import NotFound from "./pages/NotFound";
 
-function Private({ children }) {
-  const { user, loading } = useAuth();
+// Signed-out visitors go to the login page, which sends them back here afterwards.
+export function Private({ children }) {
+  const { user, loading, bootError, retry } = useAuth();
+  const location = useLocation();
   if (loading) return <div className="center muted">Loading…</div>;
-  return user ? children : <Navigate to="/login" replace />;
+  if (bootError) {
+    return <div className="center empty-state"><p>{bootError}</p><button className="primary" onClick={retry}>Try again</button></div>;
+  }
+  return user ? children : <Navigate to="/login" replace state={{ from: location }} />;
+}
+
+function WorkspaceNotFound() {
+  const { slug } = useParams();
+  return <NotFound home={`/w/${slug}`} homeLabel="Back to projects" />;
 }
 
 export default function App() {
@@ -38,8 +49,9 @@ export default function App() {
         <Route path="reports" element={<Reports />} />
         <Route path="billing" element={<Billing />} />
         <Route path="billing/checkout" element={<MockCheckout />} />
+        <Route path="*" element={<WorkspaceNotFound />} />
       </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<NotFound />} />
     </Routes>
   );
 }

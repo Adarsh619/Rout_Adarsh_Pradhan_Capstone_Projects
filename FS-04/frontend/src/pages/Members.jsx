@@ -4,9 +4,9 @@ import { api } from "../api";
 import { can, useWorkspace } from "../workspace";
 
 export default function Members() {
-  const { role, user, workspace, reloadWorkspace } = useWorkspace();
+  // The member list lives in the workspace context, so the board and audit filters stay current too.
+  const { role, user, workspace, members, reloadMembers, reloadWorkspace } = useWorkspace();
   const navigate = useNavigate();
-  const [members, setMembers] = useState([]);
   const [email, setEmail] = useState("");
   const [newRole, setNewRole] = useState("member");
   const [error, setError] = useState("");
@@ -15,8 +15,8 @@ export default function Members() {
   // Admins manage members and viewers; only the owner can grant, change or remove the admin role.
   const assignable = owner ? ["viewer", "member", "admin"] : ["viewer", "member"];
   const canManage = (m) => admin && m.role !== "owner" && (owner || m.role !== "admin");
-  const load = () => api.list("/members/").then(setMembers);
-  useEffect(() => { load(); }, []);
+  const load = reloadMembers;
+  useEffect(() => { reloadMembers(); }, [reloadMembers]);
 
   const act = (fn) => async (...a) => { setError(""); try { await fn(...a); load(); } catch (e) { setError(e.message); } };
   const add = act(async (e) => { e.preventDefault(); await api.post("/members/", { email, role: newRole }); setEmail(""); });

@@ -1,32 +1,41 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth";
 
 export default function Register() {
-  const { register } = useAuth();
+  const { user, register } = useAuth();
   const navigate = useNavigate();
   const [form, setForm] = useState({ full_name: "", email: "", password: "", workspace_name: "" });
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+
+  if (user && !busy) return <Navigate to="/" replace />;
+
   const submit = async (e) => {
     e.preventDefault();
     setError("");
+    setBusy(true);
     try {
       const r = await register(form);
       navigate(r.workspace ? `/w/${r.workspace}` : "/");
-    } catch (err) { setError(err.message); }
+    } catch (err) { setError(err.message); setBusy(false); }
   };
   return (
     <div className="auth">
       <form className="auth-card stack" onSubmit={submit}>
         <h1><span className="logo">▦</span> TaskFlow</h1>
         <p className="muted">Create your account and company workspace</p>
-        <label>Full name<input value={form.full_name} onChange={set("full_name")} /></label>
-        <label>Email<input type="email" required value={form.email} onChange={set("email")} /></label>
-        <label>Password<input type="password" required minLength={8} value={form.password} onChange={set("password")} /></label>
-        <label>Company / workspace name<input value={form.workspace_name} onChange={set("workspace_name")} placeholder="Acme Corp" /></label>
-        {error && <div className="error">{error}</div>}
-        <button className="primary">Create account</button>
+        <label>Full name<input autoFocus autoComplete="name" value={form.full_name} onChange={set("full_name")} /></label>
+        <label>Email<input type="email" required autoComplete="email" value={form.email} onChange={set("email")} /></label>
+        <label>Password
+          <input type="password" required minLength={8} autoComplete="new-password" aria-describedby="password-rules"
+            value={form.password} onChange={set("password")} />
+          <span id="password-rules" className="muted small">At least 8 characters, not only numbers, not a common password and not like your email.</span>
+        </label>
+        <label>Company / workspace name<input autoComplete="organization" value={form.workspace_name} onChange={set("workspace_name")} placeholder="Acme Corp" /></label>
+        {error && <div className="error" role="alert">{error}</div>}
+        <button className="primary" disabled={busy}>{busy ? "Creating account…" : "Create account"}</button>
         <p className="small">Already registered? <Link to="/login">Sign in</Link></p>
       </form>
     </div>
