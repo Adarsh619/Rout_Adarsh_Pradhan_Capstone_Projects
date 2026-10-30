@@ -1,6 +1,7 @@
 FROM python:3.12-slim
 
-ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
+# WEB_CONCURRENCY is read by gunicorn: the number of web worker processes (override in .env).
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 WEB_CONCURRENCY=3
 WORKDIR /app
 
 COPY requirements.txt requirements-dev.txt ./
@@ -15,4 +16,4 @@ USER app
 
 EXPOSE 8000
 ENTRYPOINT ["./entrypoint.sh"]
-CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3", "--access-logfile", "-"]
+CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--access-logfile", "-"]

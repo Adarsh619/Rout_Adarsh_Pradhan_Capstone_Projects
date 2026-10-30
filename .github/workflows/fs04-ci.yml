@@ -13,10 +13,15 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Least privilege by default; the image job asks for package writes itself.
+permissions:
+  contents: read
+
 jobs:
   backend:
     name: Backend · lint + tests
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:16-alpine
@@ -31,7 +36,7 @@ jobs:
         image: redis:7-alpine
         ports: ["6379:6379"]
       stripe-mock:
-        image: stripe/stripe-mock:latest
+        image: stripe/stripe-mock:v0.206.0  # same version as docker-compose.yml
         ports: ["12111:12111"]
     env:
       DATABASE_URL: postgres://taskflow:taskflow@localhost:5432/taskflow
@@ -66,6 +71,7 @@ jobs:
   frontend:
     name: Frontend · lint + tests + build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: FS-04/frontend
@@ -81,11 +87,42 @@ jobs:
       - run: npm test
       - run: npm run build
 
+  # Starts the whole Docker Compose stack the way a user would and checks it answers, on every push and
+  # pull request: catches a broken Dockerfile, nginx config or migration before any image is published.
+  smoke:
+    name: Docker Compose · smoke test
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: FS-04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start the stack
+        run: |
+          cp .env.example .env
+          docker compose up -d --build --wait --wait-timeout 300
+      - name: Check the app, API, proxy and admin
+        run: |
+          curl -fsS http://localhost:3000/ | grep -q '<div id="root">'
+          curl -fsS http://localhost:3000/api/health/
+          curl -fsS http://localhost:3000/api/schema/ -o /dev/null
+          curl -fsS -o /dev/null -w "admin login: %{http_code}\n" http://localhost:3000/admin/login/
+          curl -fsSI http://localhost:3000/ | grep -qi 'x-content-type-options: nosniff'
+          # Signing up through nginx exercises Django, PostgreSQL and the migrations end to end.
+          curl -fsS -X POST http://localhost:3000/api/auth/register/ -H 'Content-Type: application/json' \
+            -d '{"email":"smoke@example.com","password":"Smoke-test-123","workspace_name":"Smoke"}' | grep -q '"access"'
+      - name: Show logs if anything failed
+        if: failure()
+        run: docker compose logs --no-color --tail 200
+
   docker:
     name: Build & push images
-    needs: [backend, frontend]
+    needs: [smoke]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
       packages: write
@@ -118,6 +155,7 @@ jobs:
     name: Deploy
     needs: docker
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     environment: production
     steps:
       - name: Trigger deploy hooks (Render / Railway / any platform with a deploy webhook)
@@ -130,4 +168,5 @@ jobs:
             exit 0
           fi
           curl -fsS -X POST "$BACKEND_DEPLOY_HOOK"
-          [ -n "$FRONTEND_DEPLOY_HOOK" ] && curl -fsS -X POST "$FRONTEND_DEPLOY_HOOK" || true
+          # A configured frontend hook that fails must fail the job, not be swallowed.
+          if [ -n "$FRONTEND_DEPLOY_HOOK" ]; then curl -fsS -X POST "$FRONTEND_DEPLOY_HOOK"; fi

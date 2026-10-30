@@ -1,7 +1,13 @@
+# Local-only files that must never end up in the image (the virtualenv alone is hundreds of MB).
+.venv/
+venv/
 __pycache__/
 *.pyc
 .pytest_cache/
+.ruff_cache/
 .coverage
+coverage.xml
+test-results.xml
 htmlcov/
 media/
 staticfiles/

@@ -1,16 +1,19 @@
 # Full stack: PostgreSQL, Redis, Django API, Celery worker + beat, React (nginx), stripe-mock.
 #   cp .env.example .env && docker compose up --build
-#   App: http://localhost:3000   API docs: http://localhost:8000/api/docs/
+#   App: http://localhost:3000 (FRONTEND_PORT)   API docs: http://localhost:8000/api/docs/
+# Only the app's port is reachable from other machines; the database, API and stripe-mock ports are
+# published on 127.0.0.1 for local tools and tests.
 x-backend: &backend
   build:
     context: ./backend
   env_file: .env
-  environment:
+  environment: &backend-env
     DATABASE_URL: postgres://taskflow:taskflow@db:5432/taskflow
     REDIS_URL: redis://redis:6379/0
     STRIPE_API_BASE: http://stripe-mock:12111
   volumes:
     - media:/app/media
+  restart: unless-stopped
   depends_on:
     db:
       condition: service_healthy
@@ -27,7 +30,8 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U taskflow"]
       interval: 5s
@@ -35,39 +39,48 @@ services:
 
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       retries: 10
 
-  # Stripe's official API mock (used when STRIPE_MOCK=true; no Stripe account needed)
+  # Stripe's official API mock (used when STRIPE_MOCK=true; no Stripe account needed).
+  # Pinned so a new stripe-mock release can't change test results without a commit.
   stripe-mock:
-    image: stripe/stripe-mock:latest
+    image: stripe/stripe-mock:v0.206.0
     ports:
-      - "12111:12111"
+      - "127.0.0.1:12111:12111"
+    restart: unless-stopped
 
   backend:
     <<: *backend
     environment:
-      DATABASE_URL: postgres://taskflow:taskflow@db:5432/taskflow
-      REDIS_URL: redis://redis:6379/0
-      STRIPE_API_BASE: http://stripe-mock:12111
+      <<: *backend-env
       RUN_MIGRATIONS: "1"
       TRUSTED_PROXY_COUNT: "1"  # the frontend's nginx; see docs/10-security.md
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health/')"]
       interval: 10s
+      start_period: 30s
       retries: 10
 
+  # Workers start once the backend is healthy, i.e. after it has applied the migrations.
   worker:
     <<: *backend
     command: celery -A config worker -l info --concurrency 2
+    depends_on:
+      backend:
+        condition: service_healthy
 
   beat:
     <<: *backend
     command: celery -A config beat -l info --schedule /tmp/celerybeat-schedule
+    depends_on:
+      backend:
+        condition: service_healthy
 
   frontend:
     build:
@@ -75,9 +88,15 @@ services:
       args:
         VITE_DEMO_HINT: ${VITE_DEMO_HINT:-true}
     ports:
-      - "3000:80"
+      - "${FRONTEND_PORT:-3000}:80"
+    restart: unless-stopped
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"]
+      interval: 10s
+      retries: 5
 
 volumes:
   pgdata:
