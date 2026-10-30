@@ -15,3 +15,13 @@ it("renders issue details and handles clicks", () => {
   fireEvent.click(screen.getByText("Fix login redirect"));
   expect(onClick).toHaveBeenCalled();
 });
+
+it("marks an overdue card, but not in a done column", () => {
+  const late = { ...issue, due_date: "2020-01-05" };
+  const { container, rerender } = render(<IssueCard issue={late} />);
+  expect(container.querySelector(".card")).toHaveClass("overdue");
+  expect(screen.getByTitle("Overdue")).toBeInTheDocument();
+  rerender(<IssueCard issue={late} done />);
+  expect(container.querySelector(".card")).not.toHaveClass("overdue");
+  expect(screen.getByTitle("Due date")).toBeInTheDocument();
+});

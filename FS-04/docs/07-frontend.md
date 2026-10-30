@@ -61,9 +61,40 @@ The bell asks for the unread count every 30 seconds, but **only while the browse
 ## How drag-and-drop works
 
 1. The board loads in one request: `GET /boards/{id}/columns/` returns every status column with its ordered issues and the workflow's allowed transitions.
-2. When a drag starts, columns the workflow forbids are dimmed and refuse drops.
-3. On drop, the card moves on screen at once (optimistic update), then `POST /issues/{id}/move/ {status, index}` saves it.
+2. When a drag starts, columns the workflow forbids are dimmed, say "Not allowed from here" and refuse drops.
+3. On drop, the card moves on screen at once (optimistic update), then `POST /issues/{id}/move/` saves it with the **neighbouring card** (`after: <id>`, or `before: <id>` at the top of a column). `dropPosition()` in `boardLogic.js` works this out.
 4. If the server rejects the move, the board snaps back and a message explains why.
+
+Why the neighbour and not just the index: a filtered board (search, assignee, sprint) hides some cards, so "position 1" on screen isn't position 1 in the real column. Before Day 11 a card dropped between two visible cards could land above hidden ones, somewhere else entirely. The server now looks the neighbour up in the full column.
+
+## Board features
+
+| Feature | How it works |
+|---|---|
+| Filters in the URL | `?q=&assignee=&sprint=` and the open issue `?issue=` are part of the address, so reload, Back and shared links keep them. **Clear filters** resets them and shows how many cards match |
+| Search | Waits until typing pauses (300 ms) and ignores late answers from older searches, so results never jump back |
+| Overdue cards | Red edge and date when the due date has passed, except in "done" columns (`isOverdue()`) |
+| Keyboard | Tab to a card, **Enter** opens it, **Space** picks it up to move with the arrow keys |
+| Empty columns | "No issues" / "No matching issues" placeholder |
+| Errors | A failed board load shows the message and **Try again**; a missing project shows "Project not found" |
+
+## Issue window (`IssueModal.jsx`)
+
+- **Save** is disabled while saving ("Saving…"), so a double click can't create the same issue twice.
+- The **Status** list only offers moves the workflow allows from the saved status.
+- Editing shows "Unsaved changes"; closing with Escape, the backdrop or ✕ asks before throwing edits away.
+- A deleted issue (old link or notification) says so instead of showing an empty form.
+- Files over 10 MB are refused before uploading; comment add/delete failures are shown, and deleting asks first.
+- Over a plan's issue limit (402) the message points to Billing.
+
+## Backlog & sprints (`Sprints.jsx`)
+
+- Loads **every** issue of the project (`api.all()` follows the pages), not only the first 100.
+- Each sprint shows progress: issues and story points in "done" statuses.
+- **Complete sprint** asks first and says how many unfinished issues go back to the backlog; the result appears on the page instead of a browser alert.
+- Completed sprints are listed in a collapsible section.
+
+Projects (`Projects.jsx`) checks the key format (`A–Z` and digits) in the browser and explains that the key prefixes issue numbers.
 
 The library is `@hello-pangea/dnd`, a maintained fork of `react-beautiful-dnd`; it supports keyboard dragging too.
 

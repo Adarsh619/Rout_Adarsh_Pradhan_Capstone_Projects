@@ -50,11 +50,13 @@ def create_issue(serializer, workspace, reporter):
 
 
 @transaction.atomic
-def move_issue(issue, to_status, index=None):
-    """Move an issue to `to_status` at position `index` within that column, enforcing workflow rules.
+def move_issue(issue, to_status, index=None, after=None, before=None):
+    """Move an issue to `to_status` at a position within that column, enforcing workflow rules.
 
-    `index=None` puts it at the bottom. The issue's row is locked and its status re-read first, so two
-    simultaneous moves of the same card are checked one after the other against the workflow.
+    The position is `after` / `before` another issue's id when given (a filtered board only sees some
+    cards, so a neighbour is the reliable reference), otherwise `index`; `None` puts it at the bottom.
+    The issue's row is locked and its status re-read first, so two simultaneous moves of the same
+    card are checked one after the other against the workflow.
     """
     issue.status = Issue.objects.select_for_update().select_related("status").get(pk=issue.pk).status
     if to_status.workflow_id != issue.project.workflow_id:
@@ -69,6 +71,11 @@ def move_issue(issue, to_status, index=None):
         .exclude(pk=issue.pk)
         .order_by("rank", "id")
     )
+    ids = [c.pk for c in column]
+    if after in ids:
+        index = ids.index(after) + 1
+    elif before in ids:
+        index = ids.index(before)
     if index is None or index > len(column):
         index = len(column)
     column.insert(max(index, 0), issue)

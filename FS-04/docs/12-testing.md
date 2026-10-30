@@ -4,12 +4,12 @@
 
 Recorded 29 Oct 2026 on PostgreSQL 16 (Docker), Python 3.14 locally and 3.12 in CI, Node 24 locally and 22 in CI. CI runs the same suites on every push, and has passed on every commit pushed so far.
 
-## Backend: pytest (173 tests, 96% line coverage)
+## Backend: pytest (176 tests, 96% line coverage)
 
 ```
 cd backend && pytest
-173 passed in ~45 s
-TOTAL  2230 statements  79 missed  96% coverage
+176 passed in ~45 s
+TOTAL  2244 statements  79 missed  96% coverage
 ```
 
 The suite used to take about 3.5 minutes. Tests now use Django's fast MD5 password hasher (real hashing is deliberately slow and every test creates users), and the seed tests create fewer issues where the count doesn't matter. Production hashing is unchanged. CI fails if coverage drops below 90%.
@@ -25,19 +25,19 @@ Shared API helpers (`new_issue`, `move`, `new_sprint`) are fixtures in `tests/co
 | `test_accounts.py` | Login ignores email case; weak passwords rejected (short, common, numeric, like the email); `/me` can't change the email; **refresh tokens rotate and the old one stops working**; logout and password change revoke tokens; **login is rate-limited**; Django admin's add-user form asks for an email |
 | `test_tenancy.py` | **Removed or departed members get no more notifications** and their open issues are unassigned; only the owner manages admins; the tenant comes from the header only; leaving; **ownership transfer**; duplicate workspace slugs retried; workspace renames audited; workspace list query count constant; admin keeps one owner |
 | `test_tracker_models.py` | **Database rules**: one active sprint, one default workflow, sprint end after start; hex colours and ASCII project keys; **attachment files deleted after commit** (also on cascade, kept on rollback); `clean()` rejects cross-tenant links; Django admin numbers issues and lists them in a constant number of queries |
-| `test_issues_api.py` | A status change in the issue form **moves the card like a drag** (bottom of column, `issue.moved`, notification); parents fixed after creation; no issues in closed sprints; priority sorts by severity; bad board filters → 400; moves re-check the workflow against the locked, current status; a workflow keeps one status |
+| `test_issues_api.py` | A status change in the issue form **moves the card like a drag** (bottom of column, `issue.moved`, notification); parents fixed after creation; no issues in closed sprints; priority sorts by severity; bad board filters → 400; moves re-check the workflow against the locked, current status; **a drop on a filtered board lands next to the card it was dropped by** (`after`/`before`), even with hidden cards in between; a workflow keeps one status |
 | `test_issue_deletion.py` | **Only the reporter or an admin can delete an issue**; `can_delete` per caller (detail and board); "ask an admin" notifies admins and the owner by bell and email, once per unread request |
 | `test_audit.py` | **Spoofed `X-Forwarded-For` can't fake the audit IP or dodge the login limit**; entries can't be edited or deleted (model, bulk, admin), but go with their workspace; the actor's email survives account deletion; filters by kind, person, search and date; paging; IPs hidden from the issue History tab; **CSV export** respects filters, neutralises formulas and is admin-only |
 | `test_webhooks.py` | **Internal URLs refused** (localhost, private ranges, cloud metadata, Docker service names), at save time and again before delivery when DNS points inside; redirects not followed; **retry policy** (5xx/408/429/network/DNS failure yes, 4xx and private addresses no, stop at 5 attempts); **the event list matches exactly what the app sends**; secret rotation (audited without the secret, new deliveries signed with it); webhook edits and deletes audited; failed deliveries show the response and can be redelivered; old delivery logs cleaned up; due-date reminders once a day |
 | `test_billing_events.py` | **A late "deleted" for an old subscription can't downgrade a paying workspace**; older events arriving late are ignored; checkout events never replace a different subscription; payment failures only count for the current subscription; **a failure while applying an event rolls back, and Stripe's retry is applied**; checkout refused while subscribed (no double billing); Stripe-driven plan and status changes audited; plan limits checked under a row lock, and only inside a transaction; billing endpoints fully described in the API schema; Stripe links and the event log read-only in Django admin |
 
-## Frontend: Vitest + Testing Library (34 tests)
+## Frontend: Vitest + Testing Library (47 tests)
 
 ```
 cd frontend && npm test
-Test Files 9 passed · Tests 34 passed
+Test Files 11 passed · Tests 47 passed
 ```
-`boardLogic.test.js` (transition rules, optimistic card move without mutating input), `IssueCard.test.jsx` (rendering + click), `api.test.js` (DRF error formatting; HTML 502 pages and an unreachable server give readable errors; parallel requests share one token refresh; a dead session signs out and announces it, a wrong password doesn't), `auth.test.jsx` (**back to the requested page after login**, busy button and error, session-expired notice, retry when the server is down at start-up, 404 page), `Modal.test.jsx` (labelled modal dialog, focus in and back out, Tab trapped, Escape and backdrop close), `Notifications.test.jsx` (**no polling while the tab is hidden**, immediate check when it's shown, Escape closes), `billingMessages.test.js` (the right message after mock subscribe, change and cancel), `DeleteIssueControls.test.jsx` (Delete vs. the "ask an admin" explanation, request sent, retry on failure), `auditFormat.test.js` (readable audit changes and badge colours).
+`boardLogic.test.js` (transition rules, optimistic card move without mutating input, the neighbour sent for a drop, overdue dates), `IssueCard.test.jsx` (rendering + click, overdue marking except in done columns), `Board.test.jsx` (**filters read from the URL**, search waits for typing to pause, Enter opens a card and puts it in the URL), `IssueModal.test.jsx` (**a double click creates one issue**, only allowed statuses offered, files over 10 MB refused before upload, deleted-issue message, unsaved-changes prompt), `api.test.js` (DRF error formatting; HTML 502 pages and an unreachable server give readable errors; parallel requests share one token refresh; a dead session signs out and announces it, a wrong password doesn't), `auth.test.jsx` (**back to the requested page after login**, busy button and error, session-expired notice, retry when the server is down at start-up, 404 page), `Modal.test.jsx` (labelled modal dialog, focus in and back out, Tab trapped, Escape and backdrop close), `Notifications.test.jsx` (**no polling while the tab is hidden**, immediate check when it's shown, Escape closes), `billingMessages.test.js` (the right message after mock subscribe, change and cancel), `DeleteIssueControls.test.jsx` (Delete vs. the "ask an admin" explanation, request sent, retry on failure), `auditFormat.test.js` (readable audit changes and badge colours).
 
 ## End-to-end smoke test (Playwright, manual run)
 Logged in as `owner@acme.test` → opened the WEB board → dragged a card from *To Do* to *In Progress* with the keyboard → reloaded and confirmed the move
@@ -50,7 +50,7 @@ persisted → opened the issue modal → visited billing, workflows, audit, memb
 | `GET /boards/{id}/columns/` with 60 issues | **7 SQL queries**, ~48 ms median once warm (Django test client inside the backend container, Docker Postgres). The first request in a fresh process takes ~200–600 ms while Python loads code. Query count doesn't grow with issue count (select_related + comment-count annotation). |
 | `GET /workspaces/` | Constant query count however many workspaces and members (only your own membership is loaded) |
 | Django admin issue list | Constant query count however many issues |
-| Production JS bundle | 323 kB (101 kB gzipped) |
+| Production JS bundle | 329 kB (103 kB gzipped) |
 
 The query count is an **assertion**, not just a printout: `test_board_query_count_does_not_grow_with_issues` fails if the board needs more than 7 queries, or more for 60 issues than for 20. To see the numbers: `pytest tests/test_seed_and_perf.py -s --no-cov` (prints the query count and a warm timing).
 
@@ -62,7 +62,7 @@ The query count is an **assertion**, not just a printout: `test_board_query_coun
 | Deleting a workspace (API or `seed_demo --reset`) failed with `ProtectedError`. Projects PROTECT their workflow and issues PROTECT their status. | Re-seeding during the end-to-end test. | `delete_workspace()` removes issues and projects first, inside one transaction. Regression tests added. |
 | After cancelling, the Free plan still showed a renewal date. | End-to-end browser run of mock billing. | Clear `current_period_end` when a subscription is canceled. |
 
-## Bugs found in code review (Days 2–10)
+## Bugs found in code review (Days 2–11)
 
 Each was fixed with a regression test in the suites above.
 
@@ -83,6 +83,10 @@ Each was fixed with a regression test in the suites above.
 | Web | A dead session left you on a page full of 401 errors; a server restart at start-up signed you out | Sign out with a notice on 401 only; Try again otherwise |
 | Web | Signing in always went to the workspace list, losing the link you had opened | Back to the requested page |
 | Web | The login and register cards overflowed on phones | `minmax(0, 1fr)` grid column |
+| Board | On a filtered board a dropped card could land far from where it was dropped, because the drop index ignored hidden cards | The move names the neighbouring card (`after`/`before`) |
+| Board | Double-clicking **Create issue** created the issue twice | Button disabled while saving |
+| Backlog | Projects with more than 100 issues showed only the first 100 in Backlog & sprints | `api.all()` loads every page |
+| Board | Fast typing in search could show results for an older query | Debounced search; late answers ignored |
 
 ## Mock billing end to end (Playwright)
 Free → **Upgrade** (simulated checkout) → **Subscribe** → Pro (sidebar badge updates) → **Manage** → Business → **Cancel** → Free. 0 console errors.

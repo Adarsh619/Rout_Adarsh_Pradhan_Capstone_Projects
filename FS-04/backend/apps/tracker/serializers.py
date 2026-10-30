@@ -209,6 +209,14 @@ class IssueSerializer(serializers.ModelSerializer):
 class IssueMoveSerializer(serializers.Serializer):
     status = TenantPKField(queryset=WorkflowStatus.objects.all())
     index = serializers.IntegerField(min_value=0, required=False)
+    # Neighbour issue ids; only looked up among the target column's issues, so other ids are just ignored.
+    after = serializers.IntegerField(required=False, help_text="Place the issue right after this issue.")
+    before = serializers.IntegerField(required=False, help_text="Place the issue right before this issue.")
+
+    def validate(self, attrs):
+        if "after" in attrs and "before" in attrs:
+            raise serializers.ValidationError("Send either 'after' or 'before', not both.")
+        return attrs
 
 
 class CommentSerializer(FixedParentMixin, serializers.ModelSerializer):

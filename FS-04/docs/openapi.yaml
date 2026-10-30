@@ -1199,8 +1199,8 @@ paths:
   /api/issues/{id}/move/:
     post:
       operationId: issues_move_create
-      description: 'Drag-and-drop endpoint: {"status": <status id>, "index": <position
-        in column>}.'
+      description: 'Drag-and-drop endpoint: {"status": <status id>, "after"/"before":
+        <neighbour issue id>, "index": <position>}.'
       parameters:
       - in: path
         name: id
@@ -1214,13 +1214,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Issue'
+              $ref: '#/components/schemas/IssueMove'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/Issue'
+              $ref: '#/components/schemas/IssueMove'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/Issue'
+              $ref: '#/components/schemas/IssueMove'
         required: true
       security:
       - jwtAuth: []
@@ -3585,6 +3585,22 @@ components:
       - status_name
       - title
       - updated_at
+    IssueMove:
+      type: object
+      properties:
+        status:
+          type: integer
+        index:
+          type: integer
+          minimum: 0
+        after:
+          type: integer
+          description: Place the issue right after this issue.
+        before:
+          type: integer
+          description: Place the issue right before this issue.
+      required:
+      - status
     KindEnum:
       enum:
       - kanban

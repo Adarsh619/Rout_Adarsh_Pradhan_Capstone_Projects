@@ -102,6 +102,16 @@ export const api = {
     const d = await request(p);
     return Array.isArray(d) ? d : d?.results ?? [];
   },
+  // Every page of a paginated list (lists return 100 rows per page), e.g. a project's whole backlog.
+  all: async (p) => {
+    const rows = [];
+    for (;;) {
+      const d = await request(`${p}${p.includes("?") ? "&" : "?"}limit=100&offset=${rows.length}`);
+      if (Array.isArray(d)) return d;
+      rows.push(...(d?.results ?? []));
+      if (!d?.next || !d.results?.length) return rows;
+    }
+  },
 };
 
 export async function download(path, filename) {

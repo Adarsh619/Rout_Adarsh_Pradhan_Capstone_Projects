@@ -155,3 +155,50 @@ def test_last_status_of_a_workflow_cannot_be_deleted(api):
     assert api.delete(f"/api/statuses/{s2['id']}/").status_code == 204
     r = api.delete(f"/api/statuses/{s1['id']}/")
     assert r.status_code == 400 and "at least one status" in str(r.data)
+
+
+# --- Day 11: drops on a filtered board land next to the card the user dropped them by -----
+
+
+def _column(status):
+    return list(Issue.objects.filter(status=status).order_by("rank", "id").values_list("id", flat=True))
+
+
+def test_move_after_a_neighbour_counts_cards_hidden_by_filters(api, project, statuses, new_issue, move):
+    doing = statuses[1]
+    # In Progress holds a, h1, h2, b; a filter (e.g. "assignee: me") hides h1 and h2.
+    a, h1, h2, b = (new_issue(api, project) for _ in range(4))
+    for issue in (a, h1, h2, b):
+        move(api, issue["id"], doing)
+    c = new_issue(api, project)
+    # Filtered to "my issues" the board shows [a, b]; dropping c between them reports index 1, which
+    # counted against the full column would put c before h1. The neighbour id puts it right after a.
+    r = api.post(f"/api/issues/{c['id']}/move/", {"status": doing.id, "index": 1, "after": a["id"]}, format="json")
+    assert r.status_code == 200, r.data
+    assert _column(doing) == [a["id"], c["id"], h1["id"], h2["id"], b["id"]]
+
+    # "before" is used for a drop at the top of a filtered column.
+    d = new_issue(api, project)
+    r = api.post(f"/api/issues/{d['id']}/move/", {"status": doing.id, "index": 0, "before": b["id"]}, format="json")
+    assert r.status_code == 200, r.data
+    assert _column(doing) == [a["id"], c["id"], h1["id"], h2["id"], d["id"], b["id"]]
+
+
+def test_move_neighbour_outside_the_column_falls_back_to_index(api, project, statuses, new_issue, move):
+    todo, doing = statuses[0], statuses[1]
+    a, b, stranger = new_issue(api, project), new_issue(api, project), new_issue(api, project)
+    move(api, a["id"], doing)
+    move(api, b["id"], doing)
+    c = new_issue(api, project)
+    # `stranger` is still in To Do, so the id says nothing about In Progress: use the index.
+    r = api.post(f"/api/issues/{c['id']}/move/", {"status": doing.id, "index": 1, "after": stranger["id"]}, format="json")
+    assert r.status_code == 200, r.data
+    assert _column(doing) == [a["id"], c["id"], b["id"]]
+    assert Issue.objects.get(pk=stranger["id"]).status == todo
+
+
+def test_move_rejects_after_and_before_together(api, project, statuses, new_issue):
+    a, b = new_issue(api, project), new_issue(api, project)
+    r = api.post(f"/api/issues/{a['id']}/move/", {"status": statuses[0].id, "after": b["id"], "before": b["id"]},
+                 format="json")
+    assert r.status_code == 400

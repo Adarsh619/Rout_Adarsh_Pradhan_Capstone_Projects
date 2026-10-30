@@ -2,6 +2,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import Case, Count, IntegerField, Q, Value, When
 from django.http import FileResponse
 from django_filters.rest_framework import DjangoFilterBackend
+from drf_spectacular.utils import extend_schema
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
@@ -299,10 +300,10 @@ class IssueViewSet(AuditedViewSet):
         if issue.assignee_id:
             notify_issue_event(issue, "assigned", self.request.user)
 
-    def _move(self, issue, to_status, index=None):
+    def _move(self, issue, to_status, index=None, after=None, before=None):
         """Every status change (drag on the board or the issue form) re-ranks, audits and notifies the same way."""
         old_status = issue.status
-        move_issue(issue, to_status, index)
+        move_issue(issue, to_status, index, after=after, before=before)
         if old_status != issue.status:
             record(self.request, "issue.moved", issue, {"status": [old_status.name, issue.status.name]})
             notify_issue_event(issue, "moved", self.request.user)
@@ -321,14 +322,16 @@ class IssueViewSet(AuditedViewSet):
         if issue.assignee_id and issue.assignee_id != old_assignee:
             notify_issue_event(issue, "assigned", self.request.user)
 
+    @extend_schema(request=IssueMoveSerializer, responses=IssueSerializer)
     @action(detail=True, methods=["post"])
     def move(self, request, pk=None):
-        """Drag-and-drop endpoint: {"status": <status id>, "index": <position in column>}."""
+        """Drag-and-drop endpoint: {"status": <status id>, "after"/"before": <neighbour issue id>, "index": <position>}."""
         issue = self.get_object()
         ser = IssueMoveSerializer(data=request.data, context=self.get_serializer_context())
         ser.is_valid(raise_exception=True)
         with transaction.atomic():
-            self._move(issue, ser.validated_data["status"], ser.validated_data.get("index"))
+            data = ser.validated_data
+            self._move(issue, data["status"], data.get("index"), after=data.get("after"), before=data.get("before"))
         issue = self.get_queryset().get(pk=issue.pk)
         return Response(self.get_serializer(issue).data)
 
