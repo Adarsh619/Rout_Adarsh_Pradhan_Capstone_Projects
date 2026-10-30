@@ -96,6 +96,20 @@ Why the neighbour and not just the index: a filtered board (search, assignee, sp
 
 Projects (`Projects.jsx`) checks the key format (`A–Z` and digits) in the browser and explains that the key prefixes issue numbers.
 
+## Admin pages
+
+The sidebar hides links a role can't use, but anyone can type an address. `RequireRole` (in `workspace.jsx`) wraps the admin pages (Workflows, Webhooks, Audit log) and Reports (member+), so a member opening `/w/acme/audit` sees "Admins only" and their role, not a page of 403 errors. The API still enforces the same rules.
+
+| Page | What it does well |
+|---|---|
+| Members | **Remove** asks first and says the person's open issues get unassigned; over the plan's member limit the message points to Billing; the table scrolls sideways on phones |
+| Workflows | Shows which projects use each workflow and offers **Delete workflow** only for unused, non-default ones. Columns can be reordered with ‹ ›. Deleting a status asks first. Adding the **first** transition warns that every other move becomes blocked. A move from a status to itself, or one that already exists, can't be added |
+| Webhooks | Deleting a webhook asks first (its delivery log goes too); load errors are shown |
+| Audit log | Filters, paging and CSV export (see [Security](10-security.md)) |
+| Reports | Each report shows the dates it covers and overdue work in red. **Generate now** waits for the Celery worker's report to appear (checks every 2 s, up to about 30 s) and says so if the worker seems stopped |
+| Billing | Plan, usage meters, Upgrade or Switch plan (see [Billing](09-billing.md)) |
+| Simulated checkout | Owner only; a link naming a plan that can't be bought falls back to Pro; **Cancel subscription** asks first; managing without a subscription, or checking out while subscribed, explains instead of failing |
+
 The library is `@hello-pangea/dnd`, a maintained fork of `react-beautiful-dnd`; it supports keyboard dragging too.
 
 ## Other design choices

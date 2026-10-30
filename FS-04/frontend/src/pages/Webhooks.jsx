@@ -22,7 +22,10 @@ export default function Webhooks() {
   const [revealed, setRevealed] = useState({});
   const [error, setError] = useState("");
   const load = () => api.list("/webhooks/").then(setHooks);
-  useEffect(() => { load(); api.get("/webhooks/events/").then(setEvents); }, []);
+  useEffect(() => {
+    load().catch((e) => setError(e.message));
+    api.get("/webhooks/events/").then(setEvents).catch(() => {});
+  }, []);
   const act = (fn) => async (...a) => { setError(""); try { await fn(...a); await load(); } catch (e) { setError(e.message); } };
   const showDeliveries = async (id) => setDeliveries({ ...deliveries, [id]: await api.get(`/webhooks/${id}/deliveries/`) });
   const rotate = (h) => act(async () => {
@@ -48,7 +51,9 @@ export default function Webhooks() {
               <button onClick={act(() => api.post(`/webhooks/${h.id}/ping/`))}>Send ping</button>
               <button onClick={() => showDeliveries(h.id)}>Deliveries</button>
               <button onClick={act(() => api.patch(`/webhooks/${h.id}/`, { is_active: !h.is_active }))}>{h.is_active ? "Pause" : "Resume"}</button>
-              <button className="danger" onClick={act(() => api.del(`/webhooks/${h.id}/`))}>Delete</button>
+              <button className="danger" onClick={act(async () => {
+                if (window.confirm(`Delete the webhook to ${h.url}? Its delivery log is deleted too.`)) await api.del(`/webhooks/${h.id}/`);
+              })}>Delete</button>
             </div>
           </div>
           <div className="small muted">

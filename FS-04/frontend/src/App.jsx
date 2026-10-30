@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { useAuth } from "./auth";
+import { RequireRole } from "./workspace";
 import Layout from "./components/Layout";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -43,10 +44,10 @@ export default function App() {
         <Route path="p/:projectId/board" element={<Board />} />
         <Route path="p/:projectId/sprints" element={<Sprints />} />
         <Route path="members" element={<Members />} />
-        <Route path="workflows" element={<Workflows />} />
-        <Route path="webhooks" element={<Webhooks />} />
-        <Route path="audit" element={<AuditLog />} />
-        <Route path="reports" element={<Reports />} />
+        <Route path="workflows" element={<RequireRole minimum="admin"><Workflows /></RequireRole>} />
+        <Route path="webhooks" element={<RequireRole minimum="admin"><Webhooks /></RequireRole>} />
+        <Route path="audit" element={<RequireRole minimum="admin"><AuditLog /></RequireRole>} />
+        <Route path="reports" element={<RequireRole minimum="member"><Reports /></RequireRole>} />
         <Route path="billing" element={<Billing />} />
         <Route path="billing/checkout" element={<MockCheckout />} />
         <Route path="*" element={<WorkspaceNotFound />} />

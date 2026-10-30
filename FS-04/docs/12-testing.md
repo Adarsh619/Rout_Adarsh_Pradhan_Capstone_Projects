@@ -31,13 +31,13 @@ Shared API helpers (`new_issue`, `move`, `new_sprint`) are fixtures in `tests/co
 | `test_webhooks.py` | **Internal URLs refused** (localhost, private ranges, cloud metadata, Docker service names), at save time and again before delivery when DNS points inside; redirects not followed; **retry policy** (5xx/408/429/network/DNS failure yes, 4xx and private addresses no, stop at 5 attempts); **the event list matches exactly what the app sends**; secret rotation (audited without the secret, new deliveries signed with it); webhook edits and deletes audited; failed deliveries show the response and can be redelivered; old delivery logs cleaned up; due-date reminders once a day |
 | `test_billing_events.py` | **A late "deleted" for an old subscription can't downgrade a paying workspace**; older events arriving late are ignored; checkout events never replace a different subscription; payment failures only count for the current subscription; **a failure while applying an event rolls back, and Stripe's retry is applied**; checkout refused while subscribed (no double billing); Stripe-driven plan and status changes audited; plan limits checked under a row lock, and only inside a transaction; billing endpoints fully described in the API schema; Stripe links and the event log read-only in Django admin |
 
-## Frontend: Vitest + Testing Library (47 tests)
+## Frontend: Vitest + Testing Library (57 tests)
 
 ```
 cd frontend && npm test
-Test Files 11 passed · Tests 47 passed
+Test Files 12 passed · Tests 57 passed
 ```
-`boardLogic.test.js` (transition rules, optimistic card move without mutating input, the neighbour sent for a drop, overdue dates), `IssueCard.test.jsx` (rendering + click, overdue marking except in done columns), `Board.test.jsx` (**filters read from the URL**, search waits for typing to pause, Enter opens a card and puts it in the URL), `IssueModal.test.jsx` (**a double click creates one issue**, only allowed statuses offered, files over 10 MB refused before upload, deleted-issue message, unsaved-changes prompt), `api.test.js` (DRF error formatting; HTML 502 pages and an unreachable server give readable errors; parallel requests share one token refresh; a dead session signs out and announces it, a wrong password doesn't), `auth.test.jsx` (**back to the requested page after login**, busy button and error, session-expired notice, retry when the server is down at start-up, 404 page), `Modal.test.jsx` (labelled modal dialog, focus in and back out, Tab trapped, Escape and backdrop close), `Notifications.test.jsx` (**no polling while the tab is hidden**, immediate check when it's shown, Escape closes), `billingMessages.test.js` (the right message after mock subscribe, change and cancel), `DeleteIssueControls.test.jsx` (Delete vs. the "ask an admin" explanation, request sent, retry on failure), `auditFormat.test.js` (readable audit changes and badge colours).
+`boardLogic.test.js` (transition rules, optimistic card move without mutating input, the neighbour sent for a drop, overdue dates), `IssueCard.test.jsx` (rendering + click, overdue marking except in done columns), `Board.test.jsx` (**filters read from the URL**, search waits for typing to pause, Enter opens a card and puts it in the URL), `IssueModal.test.jsx` (**a double click creates one issue**, only allowed statuses offered, files over 10 MB refused before upload, deleted-issue message, unsaved-changes prompt), `api.test.js` (DRF error formatting; HTML 502 pages and an unreachable server give readable errors; parallel requests share one token refresh; a dead session signs out and announces it, a wrong password doesn't), `auth.test.jsx` (**back to the requested page after login**, busy button and error, session-expired notice, retry when the server is down at start-up, 404 page), `Modal.test.jsx` (labelled modal dialog, focus in and back out, Tab trapped, Escape and backdrop close), `Notifications.test.jsx` (**no polling while the tab is hidden**, immediate check when it's shown, Escape closes), `adminPages.test.jsx` (**admin pages explain instead of failing for lower roles**; workflows warn before the first transition, refuse a status-to-itself move, name the projects using them and reorder columns; Reports waits for the worker's new report; simulated checkout falls back from an unbuyable plan, is owner-only and asks before cancelling), `billingMessages.test.js` (the right message after mock subscribe, change and cancel), `DeleteIssueControls.test.jsx` (Delete vs. the "ask an admin" explanation, request sent, retry on failure), `auditFormat.test.js` (readable audit changes and badge colours).
 
 ## End-to-end smoke test (Playwright, manual run)
 Logged in as `owner@acme.test` → opened the WEB board → dragged a card from *To Do* to *In Progress* with the keyboard → reloaded and confirmed the move
@@ -50,7 +50,7 @@ persisted → opened the issue modal → visited billing, workflows, audit, memb
 | `GET /boards/{id}/columns/` with 60 issues | **7 SQL queries**, ~48 ms median once warm (Django test client inside the backend container, Docker Postgres). The first request in a fresh process takes ~200–600 ms while Python loads code. Query count doesn't grow with issue count (select_related + comment-count annotation). |
 | `GET /workspaces/` | Constant query count however many workspaces and members (only your own membership is loaded) |
 | Django admin issue list | Constant query count however many issues |
-| Production JS bundle | 329 kB (103 kB gzipped) |
+| Production JS bundle | 334 kB (104 kB gzipped) |
 
 The query count is an **assertion**, not just a printout: `test_board_query_count_does_not_grow_with_issues` fails if the board needs more than 7 queries, or more for 60 issues than for 20. To see the numbers: `pytest tests/test_seed_and_perf.py -s --no-cov` (prints the query count and a warm timing).
 
@@ -62,7 +62,7 @@ The query count is an **assertion**, not just a printout: `test_board_query_coun
 | Deleting a workspace (API or `seed_demo --reset`) failed with `ProtectedError`. Projects PROTECT their workflow and issues PROTECT their status. | Re-seeding during the end-to-end test. | `delete_workspace()` removes issues and projects first, inside one transaction. Regression tests added. |
 | After cancelling, the Free plan still showed a renewal date. | End-to-end browser run of mock billing. | Clear `current_period_end` when a subscription is canceled. |
 
-## Bugs found in code review (Days 2–11)
+## Bugs found in code review (Days 2–12)
 
 Each was fixed with a regression test in the suites above.
 
@@ -87,6 +87,11 @@ Each was fixed with a regression test in the suites above.
 | Board | Double-clicking **Create issue** created the issue twice | Button disabled while saving |
 | Backlog | Projects with more than 100 issues showed only the first 100 in Backlog & sprints | `api.all()` loads every page |
 | Board | Fast typing in search could show results for an older query | Debounced search; late answers ignored |
+| Admin pages | Removing a member, deleting a webhook, workflow or status, and cancelling a subscription happened on one click | Each asks first and says what else is lost |
+| Admin pages | A member opening an admin page by URL got a blank page and 403 errors | `RequireRole` explains which role is needed |
+| Workflows | Adding the first transition silently blocked every other move on boards using the workflow | A warning first |
+| Reports | **Generate now** refreshed after a fixed 2.5 s, so a slower worker's report didn't appear | Checks until it appears, or says the worker seems stopped |
+| Checkout | A link with `?plan=free` or a mistyped plan crashed the simulated checkout | Falls back to Pro |
 
 ## Mock billing end to end (Playwright)
 Free → **Upgrade** (simulated checkout) → **Subscribe** → Pro (sidebar badge updates) → **Manage** → Business → **Cancel** → Free. 0 console errors.

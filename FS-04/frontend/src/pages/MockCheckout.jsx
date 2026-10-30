@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api } from "../api";
+import { useWorkspace } from "../workspace";
+
+const PAID_PLANS = ["pro", "business"];
 
 /**
  * Simulated Stripe Checkout / Customer Portal, used only when the server runs with STRIPE_MOCK=true.
@@ -11,8 +14,10 @@ export default function MockCheckout() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const manage = params.get("manage") === "1";
+  const { role } = useWorkspace();
   const [billing, setBilling] = useState(null);
-  const [plan, setPlan] = useState(params.get("plan") || "pro");
+  // An edited or stale link (?plan=free, ?plan=xyz) falls back to Pro instead of crashing the page.
+  const [plan, setPlan] = useState(PAID_PLANS.includes(params.get("plan")) ? params.get("plan") : "pro");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -20,6 +25,7 @@ export default function MockCheckout() {
 
   const submit = (body) => async (e) => {
     e?.preventDefault();
+    if (body.action === "cancel" && !window.confirm("Cancel the subscription? The workspace goes back to the Free plan and its limits.")) return;
     setBusy(true);
     setError("");
     // Tell the billing page what happened, so it doesn't say "payment received" after a cancellation.
@@ -31,7 +37,11 @@ export default function MockCheckout() {
   };
 
   if (!billing) return <p className="muted">{error || "Loading…"}</p>;
-  if (billing.mode !== "mock") return <p>Simulated checkout is only available in Stripe mock mode. <Link to={`/w/${slug}/billing`}>Back to billing</Link></p>;
+  const back = <Link to={`/w/${slug}/billing`}>Back to billing</Link>;
+  if (billing.mode !== "mock") return <p>Simulated checkout is only available in Stripe mock mode. {back}</p>;
+  if (role !== "owner") return <p>Only the workspace owner can change the plan. {back}</p>;
+  if (manage && !billing.has_subscription) return <p>This workspace has no subscription to manage. {back}</p>;
+  if (!manage && billing.has_subscription) return <p>This workspace already has a subscription; change plans with Manage subscription. {back}</p>;
   const p = billing.plans[plan];
 
   return (
