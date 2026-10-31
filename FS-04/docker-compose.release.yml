@@ -1,8 +1,10 @@
 # Runs a PUBLISHED release: the images GitHub Actions tested and pushed to GitHub Container Registry.
-# Nothing is built, so you only need this file and a .env (copy of .env.example):
+# Nothing is built, so you only need this file and a .env (copy of .env.example) in one folder:
 #   docker compose -f docker-compose.release.yml up -d
 #   docker compose -f docker-compose.release.yml exec backend python manage.py seed_demo   # optional demo data
-# TASKFLOW_TAG picks the version: latest (default), a release such as 1.0.0, or sha-<commit>.
+# Settings go in .env, which works the same on Windows, macOS and Linux:
+#   TASKFLOW_TAG   which version: latest (default), a release such as 1.0.0, or sha-<commit>
+#   FRONTEND_PORT  the app's port (default 3000); change it if something else already uses 3000
 # Mirrors docker-compose.yml except that the two app images are pulled instead of built.
 # Its own project name keeps its containers and database apart from a source-built stack on the same machine.
 name: taskflow-release

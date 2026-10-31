@@ -62,19 +62,40 @@ A second tenant, `owner@globex.test`, lets you check isolation. `seed_demo` refu
 
 ## Run the released version (no build)
 
-Every push to `main` publishes tested images to GitHub Container Registry, and GitHub Actions then **runs those exact images and smoke-tests them** before calling the release good. You can run the same release without cloning or building anything:
+Every push to `main` publishes tested images to GitHub Container Registry, and GitHub Actions then **runs those exact images and smoke-tests them** before calling the release good. You can run the same release without cloning or building anything.
 
-1. Download [`docker-compose.release.yml`](docker-compose.release.yml) and [`.env.example`](.env.example) (also attached to every [GitHub Release](https://github.com/Adarsh619/Rout_Adarsh_Pradhan_Capstone_Projects/releases)), and save `.env.example` as `.env`.
-2. Start it (Docker Desktop is the only requirement):
+> A [GitHub Release](https://github.com/Adarsh619/Rout_Adarsh_Pradhan_Capstone_Projects/releases) is a **download**, not a hosted website: `http://localhost:…` only opens after you start the release on your own computer as below. The only requirement is Docker Desktop (running).
 
-```bash
-docker compose -f docker-compose.release.yml up -d
-docker compose -f docker-compose.release.yml exec backend python manage.py seed_demo   # optional demo data
+**Windows (PowerShell)**
+
+```powershell
+mkdir C:\taskflow-release; cd C:\taskflow-release
+Invoke-WebRequest https://github.com/Adarsh619/Rout_Adarsh_Pradhan_Capstone_Projects/releases/latest/download/docker-compose.release.yml -OutFile docker-compose.release.yml
+Invoke-WebRequest https://github.com/Adarsh619/Rout_Adarsh_Pradhan_Capstone_Projects/releases/latest/download/taskflow.env.example -OutFile .env
+docker compose -f docker-compose.release.yml up -d --wait
+docker compose -f docker-compose.release.yml exec backend python manage.py seed_demo
 ```
 
-3. Open http://localhost:3000 and sign in as `owner@acme.test` / `demo12345`.
+**macOS / Linux**
 
-`TASKFLOW_TAG` picks the version: `latest` (default), a release such as `1.0.0`, or a commit such as `sha-74ac210`. Images are built for both `linux/amd64` and `linux/arm64` (Apple Silicon, ARM servers).
+```bash
+mkdir taskflow-release && cd taskflow-release
+curl -fLO https://github.com/Adarsh619/Rout_Adarsh_Pradhan_Capstone_Projects/releases/latest/download/docker-compose.release.yml
+curl -fL https://github.com/Adarsh619/Rout_Adarsh_Pradhan_Capstone_Projects/releases/latest/download/taskflow.env.example -o .env
+docker compose -f docker-compose.release.yml up -d --wait
+docker compose -f docker-compose.release.yml exec backend python manage.py seed_demo
+```
+
+Then open http://localhost:3000 and sign in as `owner@acme.test` / `demo12345`. Stop it with `docker compose -f docker-compose.release.yml down`.
+
+Settings are lines in `.env`, so they work the same on every system:
+
+| Setting | Use |
+|---|---|
+| `TASKFLOW_TAG` | Version to run: `latest` (default), a release such as `1.0.0`, or a commit such as `sha-f723be1` |
+| `FRONTEND_PORT` | The app's port. **If port 3000 is already used** (for example by a dev server), set `3002` and open http://localhost:3002 |
+
+If it doesn't start: make sure Docker Desktop is running, and stop a source-built TaskFlow stack first (`docker compose stop` in `FS-04`), because both use the API port 8000. Images are built for both `linux/amd64` and `linux/arm64` (Apple Silicon, ARM servers).
 
 ## Local development (without Docker)
 

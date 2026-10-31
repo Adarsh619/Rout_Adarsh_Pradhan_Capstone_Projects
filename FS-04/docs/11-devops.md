@@ -77,13 +77,13 @@ The project lives in the repo's `FS-04/` subfolder, so the workflow sits at the 
 | Proof the published images work | The **Verify published release** job; the repository's **Deployments** page lists each one under `release` |
 | Versioned releases | Push a tag such as `v1.0.0` → images tagged `1.0.0` and `1.0`, and a **GitHub Release** with run instructions, `docker-compose.release.yml` and `taskflow.env.example` |
 
-Running a release needs only Docker and two files:
+Running a release needs only Docker and two files in one folder: `docker-compose.release.yml` and `.env` (a copy of `.env.example`). The version and port are **lines in `.env`** (`TASKFLOW_TAG=1.0.0`, `FRONTEND_PORT=3002`), so the same command works in PowerShell, macOS Terminal and Linux shells:
 
 ```bash
-# .env = a copy of .env.example
-docker compose -f docker-compose.release.yml up -d                 # latest
-TASKFLOW_TAG=1.0.0 docker compose -f docker-compose.release.yml up -d   # a specific release
+docker compose -f docker-compose.release.yml up -d --wait
 ```
+
+Step-by-step Windows and macOS/Linux commands are in the [README](../README.md#run-the-released-version-no-build). A GitHub Release is a download; nothing is hosted, so `localhost` works only once it's running.
 
 `docker-compose.release.yml` mirrors `docker-compose.yml` but pulls the two app images instead of building them, and uses its own project name (`taskflow-release`) so it can't collide with a source-built stack on the same machine. It doesn't publish the database or stripe-mock ports at all.
 

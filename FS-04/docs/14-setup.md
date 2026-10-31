@@ -70,7 +70,7 @@ npm run dev        # http://localhost:5173
 | `WEBHOOK_ALLOW_PRIVATE_URLS` | `false` | `true` lets webhooks target internal addresses, only for testing against a receiver on your own machine |
 | `WEBHOOK_DELIVERY_RETENTION_DAYS` | `30` | How long webhook delivery logs are kept |
 | `FRONTEND_PORT` | `3000` | Host port for the app; change it if 3000 is in use |
-| `TASKFLOW_TAG` | `latest` | Only for `docker-compose.release.yml`: which published version to run (`latest`, `1.0.0`, `sha-<commit>`) |
+| `TASKFLOW_TAG` | `latest` | Only for `docker-compose.release.yml`: which published version to run (`latest`, `1.0.0`, `sha-<commit>`). Set it in `.env`, which works on every OS |
 | `WEB_CONCURRENCY` | `3` | Gunicorn web worker processes |
 | `VITE_DEMO_HINT` | `true` | Shows the demo login on the sign-in page; `false` hides it. Read when the frontend is built, so rebuild the `frontend` image after changing it |
 

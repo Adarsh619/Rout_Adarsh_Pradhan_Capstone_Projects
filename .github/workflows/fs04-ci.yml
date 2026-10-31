@@ -213,11 +213,17 @@ jobs:
           - \`${IMAGE}/fs04-backend:${VERSION}\`
           - \`${IMAGE}/fs04-frontend:${VERSION}\`
 
-          **Run this release** (Docker Desktop is the only requirement)
-          1. Download \`docker-compose.release.yml\` and \`taskflow.env.example\` below; rename \`taskflow.env.example\` to \`.env\`.
-          2. \`TASKFLOW_TAG=${VERSION} docker compose -f docker-compose.release.yml up -d\`
-          3. Optional demo data: \`docker compose -f docker-compose.release.yml exec backend python manage.py seed_demo\`
-          4. Open http://localhost:3000 and sign in as \`owner@acme.test\` / \`demo12345\`.
+          **Run this release on your computer** (Docker Desktop is the only requirement)
+
+          This page is a download, not a hosted website: http://localhost opens only after you start the release.
+
+          1. Put \`docker-compose.release.yml\` and \`taskflow.env.example\` (below) in one folder and rename \`taskflow.env.example\` to \`.env\`.
+          2. In \`.env\`, set \`TASKFLOW_TAG=${VERSION}\`. If port 3000 is already in use, also set \`FRONTEND_PORT=3002\`.
+          3. In that folder (PowerShell, Terminal or any shell): \`docker compose -f docker-compose.release.yml up -d --wait\`
+          4. Demo data: \`docker compose -f docker-compose.release.yml exec backend python manage.py seed_demo\`
+          5. Open http://localhost:3000 (or your \`FRONTEND_PORT\`) and sign in as \`owner@acme.test\` / \`demo12345\`.
+
+          Full Windows and macOS/Linux steps: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/tree/${GITHUB_REF_NAME}/FS-04#run-the-released-version-no-build
           NOTES
           # GitHub renames uploaded files that start with a dot, so the env template gets a plain name.
           cp FS-04/.env.example taskflow.env.example
