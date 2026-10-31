@@ -1,0 +1,96 @@
+# Runs a PUBLISHED release: the images GitHub Actions tested and pushed to GitHub Container Registry.
+# Nothing is built, so you only need this file and a .env (copy of .env.example):
+#   docker compose -f docker-compose.release.yml up -d
+#   docker compose -f docker-compose.release.yml exec backend python manage.py seed_demo   # optional demo data
+# TASKFLOW_TAG picks the version: latest (default), a release such as 1.0.0, or sha-<commit>.
+# Mirrors docker-compose.yml except that the two app images are pulled instead of built.
+# Its own project name keeps its containers and database apart from a source-built stack on the same machine.
+name: taskflow-release
+
+x-backend: &backend
+  image: ghcr.io/adarsh619/rout_adarsh_pradhan_capstone_projects/fs04-backend:${TASKFLOW_TAG:-latest}
+  env_file: .env
+  environment: &backend-env
+    DATABASE_URL: postgres://taskflow:taskflow@db:5432/taskflow
+    REDIS_URL: redis://redis:6379/0
+    STRIPE_API_BASE: http://stripe-mock:12111
+  volumes:
+    - media:/app/media
+  restart: unless-stopped
+  depends_on:
+    db:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: taskflow
+      POSTGRES_USER: taskflow
+      POSTGRES_PASSWORD: taskflow
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U taskflow"]
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+
+  stripe-mock:
+    image: stripe/stripe-mock:v0.206.0
+    restart: unless-stopped
+
+  backend:
+    <<: *backend
+    environment:
+      <<: *backend-env
+      RUN_MIGRATIONS: "1"
+      TRUSTED_PROXY_COUNT: "1"  # the frontend's nginx; see docs/10-security.md
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health/')"]
+      interval: 10s
+      start_period: 30s
+      retries: 10
+
+  worker:
+    <<: *backend
+    command: celery -A config worker -l info --concurrency 2
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  beat:
+    <<: *backend
+    command: celery -A config beat -l info --schedule /tmp/celerybeat-schedule
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  frontend:
+    image: ghcr.io/adarsh619/rout_adarsh_pradhan_capstone_projects/fs04-frontend:${TASKFLOW_TAG:-latest}
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"]
+      interval: 10s
+      retries: 5
+
+volumes:
+  pgdata:
+  media:

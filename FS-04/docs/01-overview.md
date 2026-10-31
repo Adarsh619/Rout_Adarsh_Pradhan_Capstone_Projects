@@ -30,7 +30,7 @@ Teams need one place to plan and track work. A SaaS product has to serve many co
 | 4. Workflows, comments, attachments, audit log | Custom statuses and transitions; tenant-checked downloads; field-level audit diffs | [02](02-features-and-roles.md), [05](05-data-model.md) |
 | 5. Webhooks + Celery jobs | HMAC-signed webhooks with retries; notifications; daily and weekly jobs | [08](08-background-jobs.md) |
 | 6. Stripe Billing + limits | Free / Pro / Business plans, HTTP 402 at limits, idempotent webhook sync | [09](09-billing.md) |
-| 7. Docker + GitHub Actions | 7-service Compose stack; lint, test, coverage gate, Compose smoke test, image build, optional deploy | [11](11-devops.md) |
+| 7. Docker + GitHub Actions | 7-service Compose stack; the pipeline tests (lint, 237 tests, coverage gate, Compose smoke test) and deploys (multi-arch images to GHCR, verified by running them, versioned GitHub Releases; optional server deploy) | [11](11-devops.md) |
 
 In numbers: **176 backend tests at 96% coverage**, **61 frontend tests**, the board answers in **7 SQL queries** whatever its size, and CI is green on `main`.
 

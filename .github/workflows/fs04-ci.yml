@@ -5,6 +5,9 @@ name: FS-04 CI/CD
 on:
   push:
     branches: [main]
+    # A version tag (v1.0.0) publishes and verifies that release, then creates a GitHub Release.
+    # GitHub doesn't apply the path filter to tag pushes.
+    tags: ["v*"]
     paths: ["FS-04/**", ".github/workflows/fs04-ci.yml"]
   pull_request:
     paths: ["FS-04/**", ".github/workflows/fs04-ci.yml"]
@@ -13,7 +16,7 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-# Least privilege by default; the image job asks for package writes itself.
+# Least privilege by default; the publish and release jobs ask for more themselves.
 permissions:
   contents: read
 
@@ -99,61 +102,134 @@ jobs:
         working-directory: FS-04
     steps:
       - uses: actions/checkout@v4
-      - name: Start the stack
+      - name: Start the stack (built from source)
         run: |
           cp .env.example .env
           docker compose up -d --build --wait --wait-timeout 300
-      - name: Check the app, API, proxy and admin
-        run: |
-          curl -fsS http://localhost:3000/ | grep -q '<div id="root">'
-          curl -fsS http://localhost:3000/api/health/
-          curl -fsS http://localhost:3000/api/schema/ -o /dev/null
-          curl -fsS -o /dev/null -w "admin login: %{http_code}\n" http://localhost:3000/admin/login/
-          curl -fsSI http://localhost:3000/ | grep -qi 'x-content-type-options: nosniff'
-          # Signing up through nginx exercises Django, PostgreSQL and the migrations end to end.
-          curl -fsS -X POST http://localhost:3000/api/auth/register/ -H 'Content-Type: application/json' \
-            -d '{"email":"smoke@example.com","password":"Smoke-test-123","workspace_name":"Smoke"}' | grep -q '"access"'
+      - name: Check the app, API, proxy, admin and a sign-up
+        run: bash scripts/smoke-test.sh http://localhost:3000
       - name: Show logs if anything failed
         if: failure()
         run: docker compose logs --no-color --tail 200
 
-  docker:
-    name: Build & push images
+  # Deploys the tested build as versioned images to GitHub Container Registry, for amd64 and arm64
+  # (Intel/AMD PCs and servers, Apple Silicon, ARM cloud servers).
+  publish:
+    name: Publish images to GHCR
     needs: [smoke]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     permissions:
       contents: read
       packages: write
+    strategy:
+      matrix:
+        image: [backend, frontend]
     steps:
       - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Lowercase repo name
-        run: echo "IMAGE_PREFIX=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+      - name: Image name (registry paths must be lowercase)
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}/fs04-${{ matrix.image }}" >> "$GITHUB_ENV"
+      # main → latest + sha-<commit>; tag v1.2.3 → 1.2.3 + 1.2 + latest + sha-<commit>
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=sha-,format=short
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+          labels: |
+            org.opencontainers.image.title=TaskFlow ${{ matrix.image }}
+            org.opencontainers.image.description=TaskFlow (FS-04) multi-tenant project management, ${{ matrix.image }}
       - uses: docker/build-push-action@v6
         with:
-          context: ./FS-04/backend
+          context: ./FS-04/${{ matrix.image }}
+          platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ env.IMAGE_PREFIX }}/fs04-backend:latest,${{ env.IMAGE_PREFIX }}/fs04-backend:${{ github.sha }}
-          cache-from: type=gha,scope=fs04-backend
-          cache-to: type=gha,mode=max,scope=fs04-backend
-      - uses: docker/build-push-action@v6
-        with:
-          context: ./FS-04/frontend
-          push: true
-          tags: ${{ env.IMAGE_PREFIX }}/fs04-frontend:latest,${{ env.IMAGE_PREFIX }}/fs04-frontend:${{ github.sha }}
-          cache-from: type=gha,scope=fs04-frontend
-          cache-to: type=gha,mode=max,scope=fs04-frontend
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=fs04-${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=fs04-${{ matrix.image }}
 
-  deploy:
-    name: Deploy
-    needs: docker
+  # Proves the deployed images work: pulls exactly what was just published (nothing is built here),
+  # starts it with docker-compose.release.yml and runs the same smoke test. This is the GitHub
+  # deployment record ("release" environment) shown on the repository's Deployments page.
+  verify-release:
+    name: Verify published release
+    needs: [publish]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: release
+      url: ${{ github.server_url }}/${{ github.repository }}/tree/main/FS-04#run-the-released-version-no-build
+    defaults:
+      run:
+        working-directory: FS-04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start the published images (no build)
+        run: |
+          cp .env.example .env
+          export TASKFLOW_TAG="sha-${GITHUB_SHA::7}"
+          echo "Running release images tagged $TASKFLOW_TAG"
+          docker compose -f docker-compose.release.yml pull
+          docker compose -f docker-compose.release.yml up -d --wait --wait-timeout 300
+      - name: Check the app, API, proxy, admin and a sign-up
+        run: bash scripts/smoke-test.sh http://localhost:3000
+      - name: Show logs if anything failed
+        if: failure()
+        run: docker compose -f docker-compose.release.yml logs --no-color --tail 200
+
+  # On a version tag (v1.0.0), creates the GitHub Release with the two files needed to run it.
+  release:
+    name: GitHub Release
+    needs: [verify-release]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}"
+          cat > notes.md <<NOTES
+          TaskFlow (FS-04) ${GITHUB_REF_NAME}: tested, smoke-tested and verified by GitHub Actions.
+
+          **Images** (linux/amd64 and linux/arm64)
+          - \`${IMAGE}/fs04-backend:${VERSION}\`
+          - \`${IMAGE}/fs04-frontend:${VERSION}\`
+
+          **Run this release** (Docker Desktop is the only requirement)
+          1. Download \`docker-compose.release.yml\` and \`taskflow.env.example\` below; rename \`taskflow.env.example\` to \`.env\`.
+          2. \`TASKFLOW_TAG=${VERSION} docker compose -f docker-compose.release.yml up -d\`
+          3. Optional demo data: \`docker compose -f docker-compose.release.yml exec backend python manage.py seed_demo\`
+          4. Open http://localhost:3000 and sign in as \`owner@acme.test\` / \`demo12345\`.
+          NOTES
+          # GitHub renames uploaded files that start with a dot, so the env template gets a plain name.
+          cp FS-04/.env.example taskflow.env.example
+          gh release create "$GITHUB_REF_NAME" FS-04/docker-compose.release.yml taskflow.env.example \
+            --title "TaskFlow ${GITHUB_REF_NAME}" --notes-file notes.md --verify-tag
+
+  # Optional live-server deploy (Level B). Switched off until a server exists: set the repository
+  # variable DEPLOY_ENABLED=true and the deploy secrets. Until then it is skipped and records nothing.
+  deploy-server:
+    name: Deploy to server
+    needs: [verify-release]
+    if: vars.DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: production
@@ -164,8 +240,8 @@ jobs:
           FRONTEND_DEPLOY_HOOK: ${{ secrets.FRONTEND_DEPLOY_HOOK }}
         run: |
           if [ -z "$BACKEND_DEPLOY_HOOK" ]; then
-            echo "::notice::No deploy hook secrets configured — images are pushed to GHCR; skipping deploy."
-            exit 0
+            echo "::error::DEPLOY_ENABLED is true but BACKEND_DEPLOY_HOOK isn't set."
+            exit 1
           fi
           curl -fsS -X POST "$BACKEND_DEPLOY_HOOK"
           # A configured frontend hook that fails must fail the job, not be swallowed.

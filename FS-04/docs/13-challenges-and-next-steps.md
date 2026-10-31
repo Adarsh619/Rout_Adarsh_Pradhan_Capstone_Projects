@@ -47,7 +47,8 @@ All code was first committed together, so instead of re-committing it file by fi
 | 12 | Admin pages | `6c09d55` | Destructive actions on one click; admin pages blank for members; first workflow rule silently blocked every move; report refresh guessed a delay |
 | 13 | Docker and CI | `7f58ebb` | Images never started in CI (now a Compose smoke test); `.venv` copied into the image; workers could start before migrations; database port open to the network; nginx caching and headers |
 | 14 | Docs | `74ac210` | README, index, overview, features and this log brought up to date with Days 2–13 |
-| 14+ | Account page | this commit | Password change was API-only: added an account page (name, password) and fixed password hints being read as part of the field's name |
+| 14+ | Account page | `73583a9` | Password change was API-only: added an account page (name, password) and fixed password hints being read as part of the field's name |
+| 14+ | Release pipeline | this commit | "Deploy" did nothing but print a notice: the pipeline now publishes multi-arch images, **verifies the published images by running them**, records the deployment, and turns `v*` tags into GitHub Releases; `docker-compose.release.yml` runs any release with one command |
 
 ## Known limits
 
@@ -59,6 +60,7 @@ All code was first committed together, so instead of re-committing it file by fi
 
 ## Next steps
 
+- A live public server (for example Oracle Cloud's free ARM tier) using the ready `deploy-server` job, with HTTPS and protected demo accounts
 - Email invitations for people who don't have an account yet
 - Real-time board updates with WebSockets
 - Attachment storage on S3-compatible object storage

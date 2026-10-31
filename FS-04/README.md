@@ -1,5 +1,7 @@
 # TaskFlow — Multi-Tenant SaaS Project Management
 
+[![FS-04 CI/CD](https://github.com/Adarsh619/Rout_Adarsh_Pradhan_Capstone_Projects/actions/workflows/fs04-ci.yml/badge.svg?branch=main)](https://github.com/Adarsh619/Rout_Adarsh_Pradhan_Capstone_Projects/actions/workflows/fs04-ci.yml)
+
 A Jira-style product where every company gets its own **isolated workspace** with projects, drag-and-drop
 Kanban boards, sprints, custom workflows, comments, attachments, an audit log, outgoing webhooks, background
 jobs and **Stripe subscription billing** (test mode).
@@ -11,7 +13,7 @@ jobs and **Stripe subscription billing** (test mode).
 | Background jobs | Celery 5 + Redis (worker + beat) |
 | Billing | Stripe Billing: Checkout, Customer Portal, signed webhooks. Runs on Stripe's official `stripe-mock` by default |
 | Frontend | React 18 · Vite · React Router · @hello-pangea/dnd |
-| Infra | Docker Compose · nginx · GitHub Actions (test → smoke-test the stack → build images → deploy) |
+| Infra | Docker Compose · nginx · GitHub Actions (test → smoke-test → publish images → verify the published release → GitHub Release) |
 
 **Status:** all seven steps of the brief are built, reviewed day by day and tested: **176 backend tests (96% coverage)**, **61 frontend tests**, and a CI smoke test that starts the whole Docker stack on every push.
 
@@ -57,6 +59,22 @@ Port 3000 taken? Set `FRONTEND_PORT=3001` in `.env`. The API, database and strip
 
 Demo logins (password `demo12345`): `owner@acme.test`, `admin1@acme.test`, `member2@acme.test`, `member3@acme.test`, `viewer4@acme.test`.
 A second tenant, `owner@globex.test`, lets you check isolation. `seed_demo` refuses to run unless `DJANGO_DEBUG=true` (or `--force`).
+
+## Run the released version (no build)
+
+Every push to `main` publishes tested images to GitHub Container Registry, and GitHub Actions then **runs those exact images and smoke-tests them** before calling the release good. You can run the same release without cloning or building anything:
+
+1. Download [`docker-compose.release.yml`](docker-compose.release.yml) and [`.env.example`](.env.example) (also attached to every [GitHub Release](https://github.com/Adarsh619/Rout_Adarsh_Pradhan_Capstone_Projects/releases)), and save `.env.example` as `.env`.
+2. Start it (Docker Desktop is the only requirement):
+
+```bash
+docker compose -f docker-compose.release.yml up -d
+docker compose -f docker-compose.release.yml exec backend python manage.py seed_demo   # optional demo data
+```
+
+3. Open http://localhost:3000 and sign in as `owner@acme.test` / `demo12345`.
+
+`TASKFLOW_TAG` picks the version: `latest` (default), a release such as `1.0.0`, or a commit such as `sha-74ac210`. Images are built for both `linux/amd64` and `linux/arm64` (Apple Silicon, ARM servers).
 
 ## Local development (without Docker)
 
@@ -112,9 +130,11 @@ Both modes are free. Mock mode needs no account, card or keys. Switching modes o
 
 1. **backend**: ruff lint, migration check, pytest on PostgreSQL + Redis + stripe-mock service containers; fails below 90% coverage (uploads JUnit + coverage)
 2. **frontend**: ESLint, Vitest, production build
-3. **smoke**: starts the real Docker Compose stack and checks the app, API, admin, security headers and a sign-up through nginx
-4. **docker** (only on `main`): builds both images and pushes them to GitHub Container Registry
-5. **deploy** (only on `main`): calls `BACKEND_DEPLOY_HOOK` / `FRONTEND_DEPLOY_HOOK` repository secrets (e.g. Render deploy hooks); skipped if they aren't set
+3. **smoke**: builds and starts the real Docker Compose stack and checks the app, API, admin, security headers and a sign-up through nginx (`scripts/smoke-test.sh`)
+4. **publish** (pushes to `main` and `v*` tags): builds both images for amd64 and arm64 and **deploys them to GitHub Container Registry** (`latest`, `sha-<commit>`, and `1.2.3` / `1.2` for version tags)
+5. **verify-release**: pulls the images it just published, starts them with `docker-compose.release.yml` and runs the same smoke test; recorded as a deployment to the `release` environment
+6. **release** (version tags only): creates a GitHub Release with the run instructions and the two files needed
+7. **deploy-server** (optional): deploys to a live server; skipped unless the repository variable `DEPLOY_ENABLED` is `true`
 
 ## Project layout
 
