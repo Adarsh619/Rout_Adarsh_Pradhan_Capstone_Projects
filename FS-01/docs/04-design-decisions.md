@@ -32,6 +32,7 @@ Each decision lists what was chosen, the alternatives, and why.
 
 - **Chosen:** a single-node replica set locally (Atlas is one already). Checkout creates the order and sub-orders and decrements stock in **one transaction**, with a conditional update `stock ≥ qty`.
 - **Why:** two customers buying the last item at the same moment must not both succeed. Standalone MongoDB doesn't support multi-document transactions.
+- **Version: MongoDB 7.0 in Docker and CI.** Every MongoDB 8.x release refuses to start on Linux kernels 6.19 and newer ([SERVER-121912](https://jira.mongodb.org/browse/SERVER-121912)), and GitHub's `ubuntu-latest` runners now run kernel 7.0, so the first CI runs failed. MongoDB's exemption for patched kernels misreads Ubuntu's version numbers ([SERVER-136848](https://jira.mongodb.org/browse/SERVER-136848), still open). 7.0 is a supported long-term release, has everything ShopSphere uses (transactions, aggregation), and the same code runs unchanged on MongoDB Atlas. Move back to 8.x once that fix ships.
 
 ## 6. Elasticsearch fed by a background job
 

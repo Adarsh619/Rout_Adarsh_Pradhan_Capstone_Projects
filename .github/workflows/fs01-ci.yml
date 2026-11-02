@@ -58,7 +58,7 @@ jobs:
           # On any failure below, show what MongoDB itself said before the job stops.
           trap 'echo "--- MongoDB container ---"; docker ps -a --filter name=mongo; docker logs mongo 2>&1 | tail -80' ERR
           uname -r
-          docker run -d --name mongo -p 27017:27017 mongo:8.0.34 --replSet rs0 --bind_ip_all
+          docker run -d --name mongo -p 27017:27017 mongo:7.0.45 --replSet rs0 --bind_ip_all
           for i in $(seq 1 60); do
             [ "$(docker inspect -f '{{.State.Running}}' mongo)" = true ] || { echo "MongoDB exited"; false; }
             docker exec mongo mongosh --quiet --eval "db.adminCommand('ping').ok" >/dev/null 2>&1 && break

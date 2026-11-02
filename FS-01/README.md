@@ -9,7 +9,7 @@ An Amazon-style marketplace where **many vendors sell**, **customers buy from se
 |---|---|
 | Frontend | React 19 · Vite · React Router · TanStack Query · Tailwind CSS |
 | API + worker | Node.js 24 · Express 5 · TypeScript · Zod · BullMQ |
-| Data | MongoDB 8 (replica set, transactions) · Redis 7.4 · Elasticsearch 8.19 |
+| Data | MongoDB 7.0 (replica set, transactions) · Redis 7.4 · Elasticsearch 8.19 |
 | Files | AWS S3 (Adobe S3Mock locally) |
 | Payments | Razorpay Route (test mode), with a built-in mock that needs no account |
 | Infra | Docker Compose · nginx · GitHub Actions |

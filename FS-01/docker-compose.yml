@@ -21,7 +21,9 @@ x-backend-env: &backend-env
 
 services:
   mongo:
-    image: mongo:8.0.34
+    # 7.0, not 8.x: every MongoDB 8 release refuses to start on Linux kernels 6.19 and newer
+    # (SERVER-121912), which GitHub's runners and new Ubuntu servers now use. 7.0 is a supported long-term release.
+    image: mongo:7.0.45
     # A single-node replica set: MongoDB only allows multi-document transactions on a replica set,
     # and checkout uses one to create the order and reserve stock together.
     command: ["--replSet", "rs0", "--bind_ip_all"]

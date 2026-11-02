@@ -18,7 +18,7 @@ ShopSphere builds all three sides, with real search, a real order lifecycle and 
 |---|---|---|
 | Frontend | React 19 · Vite · React Router · TanStack Query · Tailwind CSS | Fast builds, server-state caching, consistent styling |
 | API | Node.js 24 LTS · Express 5 · TypeScript · Zod | Typed code for money and order logic; validated input |
-| Database | MongoDB 8 (replica set) · Mongoose | Flexible product attributes; transactions for checkout |
+| Database | MongoDB 7.0 (replica set) · Mongoose | Flexible product attributes; transactions for checkout |
 | Search | Elasticsearch 8.19 | Typo-tolerant full-text search, filters, facets, sorting |
 | Cache, sessions, queues | Redis 7.4 · BullMQ | Carts, refresh sessions, caching, rate limits, background jobs |
 | Files | AWS S3 (Adobe S3Mock locally) | Product images and invoice PDFs through presigned URLs |
