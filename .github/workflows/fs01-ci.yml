@@ -55,8 +55,12 @@ jobs:
         # Waits until mongod answers, starts the replica set, then waits until it can take writes;
         # fails with the container's logs if any of that doesn't happen.
         run: |
+          # On any failure below, show what MongoDB itself said before the job stops.
+          trap 'echo "--- MongoDB container ---"; docker ps -a --filter name=mongo; docker logs mongo 2>&1 | tail -80' ERR
+          uname -r
           docker run -d --name mongo -p 27017:27017 mongo:8.0.34 --replSet rs0 --bind_ip_all
           for i in $(seq 1 60); do
+            [ "$(docker inspect -f '{{.State.Running}}' mongo)" = true ] || { echo "MongoDB exited"; false; }
             docker exec mongo mongosh --quiet --eval "db.adminCommand('ping').ok" >/dev/null 2>&1 && break
             sleep 2
           done
@@ -67,7 +71,7 @@ jobs:
             fi
             sleep 2
           done
-          echo "MongoDB did not become primary"; docker ps -a; docker logs mongo | tail -50; exit 1
+          echo "MongoDB did not become primary"; false
       - uses: actions/setup-node@v7
         with:
           node-version: 24
