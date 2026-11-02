@@ -2,7 +2,7 @@
 
 [← Features and roles](02-features-and-roles.md) · [Index](README.md) · [Next: Design decisions →](04-design-decisions.md)
 
-The browser loads the React app from a static host and calls one Express API. The API keeps its data in MongoDB, uses Redis for carts, sessions, caching and job queues, and asks Elasticsearch for search results. Slow work (search indexing, invoice PDFs, payouts, expiring reservations) runs in a separate worker. Files never pass through the API: the browser uploads and downloads them straight from S3 with short-lived presigned URLs. Razorpay takes the payment and tells the API about it with signed webhooks.
+The browser loads the React app from a static host and calls one Express API. The API keeps its data in MongoDB, uses Redis for carts, sessions, caching and job queues, and asks Elasticsearch for search results. Slow work (search indexing, invoice PDFs, payouts, expiring reservations) runs in a separate worker. Files never pass through the API: the browser uploads and downloads them straight from S3 with short-lived presigned URLs. Razorpay takes the payment and tells the API about it with signed webhooks; the split between vendors, the hold until delivery and the payouts happen in ShopSphere's own ledger.
 
 ![Architecture](assets/architecture.png)
 
@@ -19,7 +19,8 @@ Source: [`assets/architecture.mmd`](assets/architecture.mmd).
 | **Redis** | Carts, refresh sessions, product cache, rate-limit counters, job queues |
 | **Elasticsearch** | Search index of active products; rebuilt from MongoDB at any time with `npm run reindex` |
 | **S3** | Product images (public-read through the app) and invoices (private) |
-| **Razorpay Route** | Collects the payment; holds, releases and reverses per-vendor transfers |
+| **Razorpay** (test mode) | Collects the payment (Checkout popup), sends signed webhooks, issues refunds |
+| **Payout provider** | Pays released vendor shares; v1 uses the built-in simulated driver |
 
 ## A request, step by step
 
@@ -62,6 +63,6 @@ FS-01/
 | MongoDB | container, single-node replica set | MongoDB Atlas M0 |
 | Redis, Elasticsearch | containers | containers on the same VM |
 | S3 | Adobe S3Mock container | AWS S3, `ap-south-1` |
-| Payments | `mock` driver | Razorpay test mode |
+| Payments | `mock` driver | Razorpay test mode; payouts simulated |
 
 The same images and code run in both; only environment variables change.

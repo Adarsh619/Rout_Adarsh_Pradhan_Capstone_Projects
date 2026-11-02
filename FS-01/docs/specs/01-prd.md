@@ -23,10 +23,11 @@ The platform must then **split that single payment** between the vendors and kee
 | Vendors apply, get approved and sell their own products with photos | Live money (Razorpay **test mode** only) |
 | Customers find products fast with typo-tolerant search, filters and sorting | Shipping-carrier integration (vendor types the tracking number) |
 | One checkout for items from several vendors, paid with UPI or card | Product variants (size/colour); each variant is its own product |
-| Every vendor is paid their share minus commission, **only after delivery** | Returns after delivery, chat between buyer and seller |
+| Every vendor earns their share minus commission, **released only after delivery** | Returns after delivery, chat between buyer and seller |
 | Each order moves through placed → packed → shipped → delivered | Native mobile apps, multiple currencies (INR only) |
 | Reviews, coupons, PDF invoices and an admin analytics dashboard | Recommendation engine, ads for sellers |
 | Frontend and backend deployed separately and reachable 24/7 | Multi-region hosting |
+| | Real bank transfers to vendors: Razorpay Route needs ₹40 lakh+ business turnover and RazorpayX needs a registered business, so v1 simulates the final payout |
 
 ## 3. Personas
 
@@ -50,10 +51,10 @@ The platform must then **split that single payment** between the vendors and kee
 
 ### Vendor
 9. As a vendor I can **apply** with my store details and see whether I'm approved.
-10. Once approved I can set up **payouts** (Razorpay linked account).
+10. Once approved I can add my **payout details** (account holder, bank account, IFSC; only the last 4 digits are kept).
 11. I can **create, edit, hide and delete** my products and **upload photos**.
 12. I see only **my** part of each order and move it to **packed, shipped** (with tracking number) and **delivered**.
-13. I see my **earnings**: held, released and settled amounts, and the commission taken.
+13. I see my **earnings**: held, released and paid-out amounts, and the commission taken.
 14. I can create **coupons** for my own store.
 
 ### Admin
@@ -73,7 +74,8 @@ The platform must then **split that single payment** between the vendors and kee
 | Cart | Redis; guest carts merge on login; prices and stock re-checked at checkout |
 | Orders | One **order** per checkout, split into one **sub-order per vendor**; stock reserved at checkout and released if unpaid in 15 min |
 | Lifecycle | Sub-order `placed → packed → shipped → delivered`, or `cancelled` before shipping; every change recorded with who and when |
-| Payments | Razorpay order for the full amount; signature-verified webhooks, idempotent; one **on-hold transfer per vendor** (their share minus commission), released on delivery, reversed on cancellation |
+| Payments | **Real Razorpay test mode** for collection: a Razorpay order for the full amount, Checkout popup (UPI, cards), signature check, idempotent signed webhooks, partial **refunds** per sub-order |
+| Split and escrow | Each vendor's share (minus commission) is **held** in the platform ledger, **released** when their sub-order is delivered and **reversed** (with a Razorpay refund) if cancelled. Released amounts are **paid out** through a `PayoutProvider`; v1 uses a clearly labelled **simulated payout** (see [design decision 1](../04-design-decisions.md#1-real-razorpay-payments-our-own-split-and-escrow-engine)) |
 | Commission | Basis points (1000 = 10%); vendor rate overrides category rate, which overrides the platform default |
 | Coupons | Platform or vendor scope; percent (with cap) or flat; min order, date window, total and per-user limits |
 | Reviews | Only after delivery, one per customer per product; updates the product's average rating (and search) |
@@ -85,7 +87,7 @@ The platform must then **split that single payment** between the vendors and kee
 | Area | Target |
 |---|---|
 | Performance | Search p95 < 200 ms with 20 000 products; cached product page p95 < 50 ms |
-| Correctness | No overselling under parallel checkouts; money sums always balance (customer paid = vendor transfers + platform share) |
+| Correctness | No overselling under parallel checkouts; money sums always balance (customer paid = vendor shares + platform share) |
 | Security | OWASP basics: hashed passwords, rate-limited login, role and ownership checks, input validation, signed webhooks, private S3 bucket |
 | Availability | Live demo answers 24/7 without cold starts |
 | Quality | Lint + tests in CI on every push; Docker smoke test |
@@ -93,6 +95,6 @@ The platform must then **split that single payment** between the vendors and kee
 
 ## 7. Success metrics for the demo
 
-- A full journey works end to end: vendor approved → product listed → found in search → bought together with another vendor's product → paid by UPI → shipped → delivered → vendor's money released → reviewed.
-- Ledger check: for every paid order, `customer paid = Σ vendor transfers + platform commission − platform coupon discount`.
+- A full journey works end to end: vendor approved → product listed → found in search → bought together with another vendor's product → paid by UPI → shipped → delivered → vendor's share released and paid out → reviewed.
+- Ledger check: for every paid order, `customer paid = Σ vendor shares + platform commission − platform coupon discount`.
 - CI green; test and performance numbers recorded in the docs.

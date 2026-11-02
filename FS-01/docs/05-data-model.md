@@ -18,7 +18,7 @@ Source: [`assets/erd.mmd`](assets/erd.mmd).
 | `categories` | Two-level category tree with optional commission rates | `parentId → categories` |
 | `products` | Listings with price, stock, images, ratings | `vendorId → vendors`, `categoryId → categories` |
 | `orders` | What the customer bought and paid, with item snapshots | `customerId → users` |
-| `subOrders` | Each vendor's part of an order: status, tracking, commission, transfer | `orderId → orders`, `vendorId → vendors` |
+| `subOrders` | Each vendor's part of an order: status, tracking, commission, payout (held → released → paid) | `orderId → orders`, `vendorId → vendors` |
 | `ledgerEntries` | Append-only record of every money movement | order, sub-order, vendor |
 | `reviews` | Ratings from customers who received the product | product, user, sub-order |
 | `coupons`, `couponRedemptions` | Discount codes and who used them on which order | vendor (for vendor coupons), order |
@@ -43,7 +43,7 @@ Customer buys a ₹1 000 phone case from vendor A (10% commission) and a ₹500 
 | discount (platform coupon, split by value) | 10 000 | 6 667 | 3 333 |
 | payable (customer paid) | **140 000** | 93 333 | 46 667 |
 | commission (on itemsTotal) | | 10 000 | 4 000 |
-| vendorNet (transfer) | | **90 000** | **46 000** |
+| vendorNet (held, then paid out) | | **90 000** | **46 000** |
 
 Platform keeps 140 000 − 90 000 − 46 000 = **4 000 paise (₹40)** = commission ₹140 − coupon ₹100. The ledger balances.
 

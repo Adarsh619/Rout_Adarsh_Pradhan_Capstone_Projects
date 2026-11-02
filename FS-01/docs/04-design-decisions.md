@@ -4,29 +4,40 @@
 
 Each decision lists what was chosen, the alternatives, and why.
 
-## 1. Razorpay Route for split payments (not Stripe Connect)
+## 1. Real Razorpay payments, our own split and escrow engine
 
-- **Chosen:** Razorpay Route in test mode. The customer pays the full amount once; each vendor has a **linked account**; after the payment, the platform creates one **transfer** per vendor for their share minus commission. The commission simply stays with the platform.
-- **Alternative:** Stripe Connect. The brief allows either, but new Stripe Connect platforms in India are invite-only, and Stripe has no UPI.
-- **Why:** INR and UPI out of the box, and Route has **on-hold transfers**, which gives us escrow for free (see 3).
-- **Risk handled:** Route has to be enabled on the Razorpay account, and Razorpay has no official mock server. All payment code goes through a small `PaymentProvider` interface with two drivers, `razorpay` and `mock`. The mock signs its webhooks exactly like Razorpay, so the app, the tests and CI work without any account.
+- **Chosen:**
+  - **Collecting money is real Razorpay (test mode):** a Razorpay order for the full amount, the Checkout popup (UPI, cards, netbanking), payment-signature checks, signed webhooks and partial refunds.
+  - **Splitting it is our own code:** commission per sub-order, each vendor's share recorded in an append-only ledger, held until delivery (see 3).
+  - **The final transfer to a vendor's bank** goes through a `PayoutProvider` interface. v1 ships one driver, `mock`, which behaves like a real payouts API (reference ids, signed `payout.processed` webhooks, occasional failures in tests) and is labelled **"simulated payout"** everywhere it shows.
+- **What we tried first:**
+
+  | Option | Result |
+  |---|---|
+  | **Razorpay Route** (linked accounts + on-hold transfers) | Since September 2025 it requires **₹40 lakh+ domestic turnover** (or ₹5 lakh+ export) proven with GST-3B returns, plus a payer-payee declaration ([Route FAQs](https://razorpay.com/docs/payments/route/faqs)). Not possible for a student project, even in test mode. |
+  | **RazorpayX payouts** (Banking+) | "We only support registered businesses", test mode included. |
+  | **Stripe Connect** | New Stripe accounts in India are invite-only; opening one as another country would mean misstating details. |
+  | **Another gateway's split product** | Not in the required stack, and the same RBI rules apply in production. |
+
+- **Why this design:** everything a customer touches is genuine Razorpay, and everything that makes a *marketplace* (commission, per-vendor shares, escrow, refunds, payouts, reconciliation) is built and tested in our code instead of hidden inside a gateway. A business that qualifies can add a `route` or `razorpayx` payout driver without touching orders, the ledger or the UI.
+- **Offline and in CI:** Razorpay has no official mock server, so payment collection also has a `PaymentProvider` with `razorpay` and `mock` drivers. The mock signs webhooks exactly like Razorpay, so the app, the tests and CI run without any account; `PAYMENT_PROVIDER=razorpay` switches to real test mode.
 
 ## 2. One order, one sub-order per vendor
 
 - **Chosen:** checkout creates an `order` (what the customer paid) and one `subOrder` per vendor (what each vendor ships and is paid for).
 - **Alternative:** one order with a status per line item.
-- **Why:** each vendor packs and ships separately, so each needs its own status, tracking number, invoice, transfer and refund. A sub-order gives each vendor exactly the part they're allowed to see.
+- **Why:** each vendor packs and ships separately, so each needs its own status, tracking number, invoice, payout and refund. A sub-order gives each vendor exactly the part they're allowed to see.
 
-## 3. Pay vendors on delivery
+## 3. Pay vendors on delivery (escrow)
 
-- **Chosen:** each vendor's transfer is created **on hold** when the payment is captured, and released when that sub-order is delivered. Cancelling before shipping reverses the transfer and refunds that part.
-- **Why:** protects customers (no money leaves for an order that never ships) and shows the order lifecycle driving the money, the core of a marketplace.
+- **Chosen:** when the payment is captured, each vendor's share (minus commission) is **held** in the ledger. When that sub-order is delivered it is **released** and a `payout` job pays it out. Cancelling before shipping **reverses** the hold and refunds that part of the payment through Razorpay.
+- **Why:** protects customers (no money goes to a vendor for an order that never ships) and shows the order lifecycle driving the money, the core of a marketplace.
 
 ## 4. Money as integer paise, rates as basis points
 
 - **Chosen:** ₹499.00 is stored as `49900`; 10% commission is `1000` bp; rounding happens once, in one place.
 - **Why:** floating-point maths loses paise (`0.1 + 0.2 ≠ 0.3`), and across thousands of splits that would make the ledger stop balancing. Razorpay also expects paise.
-- **Rule:** every paid order must satisfy `customer paid = Σ vendor transfers + platform share`; a test checks it for every coupon scenario.
+- **Rule:** every paid order must satisfy `customer paid = Σ vendor shares + platform share`; a test checks it for every coupon scenario.
 
 ## 5. MongoDB as a replica set, with transactions at checkout
 

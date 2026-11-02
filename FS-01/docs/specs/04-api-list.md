@@ -35,7 +35,7 @@ The **Day** column says when each endpoint is built; ✓ means it exists now.
 | POST | `/vendors/apply` | V (any status) | Submit or resubmit the store application | 3 |
 | GET | `/vendors/me` | V (any status) | My store, status, payout status | 3 |
 | PATCH | `/vendors/me` | V | Edit store details | 3 |
-| POST | `/vendors/me/payout` | V | Create the Razorpay linked account | 6 |
+| PUT | `/vendors/me/payout` | V | Save payout details (account holder, account number, IFSC); registers the beneficiary with the payout provider and keeps only the last 4 digits | 6 |
 | GET | `/stores/:slug` | P | Public store page with products | 3 |
 | GET | `/admin/vendors?status=` | A | List applications and vendors | 3 |
 | POST | `/admin/vendors/:id/approve` · `/reject` · `/suspend` · `/restore` | A | Change vendor status | 3 |
@@ -76,7 +76,8 @@ The **Day** column says when each endpoint is built; ✓ means it exists now.
 | POST · DELETE | `/cart/coupon` | P | Apply or remove a coupon | 7 |
 | POST | `/checkout` | C | Create order + sub-orders, reserve stock, create the Razorpay order | 5 / 6 |
 | POST | `/checkout/verify` | C | Verify the payment signature returned by the popup | 6 |
-| POST | `/webhooks/razorpay` | P (signed) | Payment, transfer and refund events; HMAC-verified, idempotent | 6 |
+| POST | `/webhooks/razorpay` | P (signed) | Payment and refund events; HMAC-verified, idempotent | 6 |
+| POST | `/webhooks/payouts` | P (signed) | Payout events from the payout provider (the simulated one in v1); HMAC-verified, idempotent | 6 |
 
 Guests are identified by an httpOnly `guest_id` cookie; their cart merges into the account on login.
 
@@ -109,7 +110,7 @@ Guests are identified by an httpOnly `guest_id` cookie; their cart merges into t
 
 | Method | Path | Role | Purpose | Day |
 |---|---|---|---|---|
-| GET | `/vendor/earnings?from=&to=` | V | Held, released and settled totals, commission, per sub-order list | 8 |
+| GET | `/vendor/earnings?from=&to=` | V | Held, released and paid-out totals, commission, per sub-order list | 8 |
 | GET | `/admin/analytics?from=&to=` | A | GMV, commission, orders by status, daily sales, top vendors and products | 8 |
 | POST | `/admin/sub-orders/:subId/refund` | A | Cancel and refund a part of an order | 8 |
 

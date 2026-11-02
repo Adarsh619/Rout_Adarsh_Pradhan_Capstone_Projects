@@ -24,10 +24,10 @@ Every account has exactly one role. Sign-up creates **customers** or **vendors**
 - PDF invoice per vendor; reviews after delivery.
 
 ### Vendor
-- Store application, then admin approval; payout setup as a Razorpay linked account.
+- Store application, then admin approval; payout details (bank account + IFSC, only the last 4 digits stored).
 - Products: create, edit, hide, delete; up to 6 photos uploaded straight to S3.
 - Orders: only their own part of each order; mark packed, shipped (with tracking number) and delivered.
-- Earnings: held (until delivery), released and settled, after commission.
+- Earnings: held (until delivery), released and paid out, after commission. Payouts are simulated in v1 and labelled so.
 - Coupons for their own store.
 
 ### Admin

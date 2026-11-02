@@ -22,7 +22,7 @@ ShopSphere builds all three sides, with real search, a real order lifecycle and 
 | Search | Elasticsearch 8.19 | Typo-tolerant full-text search, filters, facets, sorting |
 | Cache, sessions, queues | Redis 7.4 · BullMQ | Carts, refresh sessions, caching, rate limits, background jobs |
 | Files | AWS S3 (Adobe S3Mock locally) | Product images and invoice PDFs through presigned URLs |
-| Payments | Razorpay Route (test mode) · built-in mock | INR + UPI; one payment split into per-vendor transfers |
+| Payments | Razorpay test mode (Orders, Checkout, webhooks, refunds) · own split-and-escrow engine · simulated vendor payouts | INR + UPI; one payment split into per-vendor shares, released on delivery |
 | Infra | Docker Compose · nginx · GitHub Actions | One-command local stack; CI on every push |
 | Live hosting | Vercel (frontend) · Oracle Cloud Always Free VM (backend) · MongoDB Atlas · AWS S3 | Frontend and backend deployed separately; always on |
 

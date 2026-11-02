@@ -19,13 +19,13 @@ flowchart LR
   B --> C{Admin review}
   C -- reject --> D[Rejected, with reason<br/>can re-apply]
   C -- approve --> E[Approved]
-  E --> F[Payout setup<br/>Razorpay linked account]
+  E --> F[Payout details<br/>bank account + IFSC]
   F --> G[List products]
   E -. admin suspends .-> H[Suspended<br/>products hidden]
   H -. admin restores .-> E
 ```
 
-A vendor can list products as soon as they are approved, but **orders for them can't be paid out until payout setup is done**, so the dashboard keeps reminding them.
+A vendor can list products as soon as they are approved, but **released earnings can't be paid out until payout details are added**, so the dashboard keeps reminding them.
 
 ## 3. Buying journey
 
@@ -46,10 +46,11 @@ sequenceDiagram
   RZ-->>UI: payment id + signature
   UI->>API: POST /checkout/verify
   RZ-->>API: Webhook payment.captured (signed)
-  API->>API: Mark paid (once), ledger entries
-  API->>RZ: Transfer to A and to B, both on hold
+  API->>API: Mark paid (once); ledger: payment, commission,<br/>vendor A share held, vendor B share held
   API-->>UI: Order confirmed
 ```
+
+The payment is real Razorpay (test mode). Vendor shares are held in the platform's own ledger, not at Razorpay (see [design decision 1](../04-design-decisions.md#1-real-razorpay-payments-our-own-split-and-escrow-engine)).
 
 If the customer never pays, the reservation expires after 15 minutes, the stock goes back and the order becomes `expired`.
 
@@ -69,9 +70,9 @@ stateDiagram-v2
 
 | Event | Money |
 |---|---|
-| `placed` | Vendor's transfer created **on hold** |
-| `delivered` | Hold **released**; vendor sees it as released, then settled |
-| `cancelled` | Transfer **reversed**, that part of the payment **refunded** to the customer, stock returned |
+| `placed` | Vendor's share (minus commission) **held** in the ledger |
+| `delivered` | Share **released**; a `payout` job pays it out through the `PayoutProvider` (simulated in v1) and it shows as **paid out** |
+| `cancelled` | Held share **reversed**, that part of the payment **refunded** to the customer through Razorpay, stock returned |
 
 Only allowed moves are accepted; for example a shipped sub-order can't be cancelled, and nothing moves backwards.
 

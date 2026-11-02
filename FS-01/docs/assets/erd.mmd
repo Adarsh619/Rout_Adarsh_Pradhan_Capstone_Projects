@@ -17,11 +17,11 @@ erDiagram
   ORDER ||--o| COUPON_REDEMPTION : applies
 
   USER { ObjectId _id string email string role string status }
-  VENDOR { ObjectId userId string slug string status int commissionRateBp string linkedAccountId }
+  VENDOR { ObjectId userId string slug string status int commissionRateBp string bankLast4 }
   CATEGORY { string slug ObjectId parentId int commissionRateBp }
   PRODUCT { ObjectId vendorId ObjectId categoryId int price int stock string status }
   ORDER { string orderNumber ObjectId customerId int grandTotal string status }
-  SUB_ORDER { ObjectId orderId ObjectId vendorId int payable int commission int vendorNet string status }
+  SUB_ORDER { ObjectId orderId ObjectId vendorId int payable int commission int vendorNet string payoutStatus }
   LEDGER_ENTRY { string type int amount string providerRef }
   INVOICE { string invoiceNumber string s3Key }
   REVIEW { int rating string status }

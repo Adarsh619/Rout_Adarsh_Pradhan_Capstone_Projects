@@ -35,7 +35,7 @@ Indexes: `email` unique.
 | status | `pending` \| `approved` \| `rejected` \| `suspended` | |
 | rejectionReason | string | Shown to the vendor |
 | commissionRateBp | int \| null | Overrides the category rate when set |
-| payout | object | `{ provider: "razorpay" \| "mock", linkedAccountId, status: "not_started" \| "pending" \| "active" }` |
+| payout | object | `{ accountHolder, bankLast4, ifsc, provider: "mock", beneficiaryRef, status: "not_started" \| "active" }`. The full account number goes only to the payout provider, never into our database |
 | ratingAvg, ratingCount | number | Average over the vendor's product reviews |
 | approvedAt, approvedBy | date, ObjectId | Audit |
 
@@ -101,11 +101,13 @@ Indexes: `orderNumber` unique, `{ customerId, createdAt: -1 }`, `payment.provide
 | status | `placed` \| `packed` \| `shipped` \| `delivered` \| `cancelled` | |
 | statusHistory | array | `{ status, at, byUserId, byRole, note }` |
 | tracking | object | `{ carrier, number }`, required for `shipped` |
-| transfer | object | `{ id, amount, status: "pending" \| "on_hold" \| "released" \| "reversed" \| "failed", releasedAt }` |
-| refund | object \| null | `{ id, amount, at }` |
+| payout | object | `{ amount, status: "held" \| "released" \| "paid" \| "reversed" \| "failed", provider, providerRef, releasedAt, paidAt }`. `amount` = `vendorNet` |
+| refund | object \| null | `{ id, amount, at }`; `id` is the Razorpay refund id |
 | deliveredAt, cancelledAt | date | |
 
-Indexes: `{ vendorId, status, createdAt: -1 }`, `orderId`, `transfer.id` (sparse).
+Indexes: `{ vendorId, status, createdAt: -1 }`, `orderId`, `{ "payout.status", vendorId }`, `payout.providerRef` (sparse).
+
+**Escrow states:** `held` (paid, not yet delivered) → `released` (delivered) → `paid` (payout done), or `held` → `reversed` (cancelled and refunded). A failed payout stays `failed` and is retried by the job.
 
 ### Money rules
 
@@ -113,15 +115,16 @@ Indexes: `{ vendorId, status, createdAt: -1 }`, `orderId`, `transfer.id` (sparse
 - **Platform coupon** (the platform pays for it): split across sub-orders in proportion to `itemsTotal` (remainder paise go to the largest). Commission is on `itemsTotal`, so `vendorNet = itemsTotal − commission`; the vendor isn't affected by the discount. The discount is capped so the platform never pays out more than it collected (`Σ vendorNet ≤ grandTotal`).
 - **Vendor coupon** (the vendor pays for it): applies only to that vendor's sub-order. Commission is on `payable`, so `vendorNet = payable − commission`.
 - **Check on every paid order:** `grandTotal = Σ vendorNet + platform share`, where `platform share = Σ commission − platform discount`. A test enforces this for every scenario.
+- **Cancelling one sub-order** refunds its `payable` through Razorpay and reverses its `vendorNet` hold; the platform gives up that sub-order's commission and, for a platform coupon, absorbs its discount share.
 
 ## ledgerEntries (append-only)
 
 | Field | Type | Notes |
 |---|---|---|
 | orderId, subOrderId, vendorId | ObjectId | `subOrderId`, `vendorId` empty for order-level entries |
-| type | `payment` \| `commission` \| `transfer_hold` \| `transfer_release` \| `transfer_reversal` \| `refund` \| `platform_discount` | |
+| type | `payment` \| `commission` \| `vendor_hold` \| `vendor_release` \| `vendor_reversal` \| `payout` \| `refund` \| `platform_discount` | |
 | amount | int (paise) | Positive = money in for the platform |
-| providerRef | string | Razorpay payment / transfer / refund id |
+| providerRef | string | Razorpay payment or refund id, or the payout reference |
 | note | string | |
 
 Never updated or deleted; corrections are new entries. Powers vendor earnings and admin analytics.
@@ -166,7 +169,7 @@ Indexes: `{ productId, userId }` **unique**, `{ productId, status, createdAt: -1
 |---|---|---|
 | provider | `razorpay` \| `mock` | |
 | eventId | string | **unique** with provider, so a repeated delivery is ignored |
-| type | string | e.g. `payment.captured`, `transfer.processed` |
+| type | string | e.g. `payment.captured`, `payment.failed`, `refund.processed`; `payout.processed` from the payout provider |
 | status | `processed` \| `ignored` \| `failed` | |
 | receivedAt, processedAt | date | |
 

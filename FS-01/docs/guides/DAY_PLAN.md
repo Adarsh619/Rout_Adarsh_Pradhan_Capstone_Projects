@@ -14,9 +14,9 @@ Dates assume you start **Tue 3 Nov 2026** and work every day; shift them if you 
 - [x] 🛠 `docker-compose.yml`: MongoDB (replica set), Redis, Elasticsearch, S3Mock, api, worker, web
 - [x] 🛠 `.env.example`, `/health` endpoint, CI `.github/workflows/fs01-ci.yml` (lint + test)
 - [x] 🛠 Docs 01–05 drafted (overview, features & roles, architecture, design decisions, data model)
-- [ ] 👤 Create Razorpay account, check that **Route** shows in test mode (ask support if not)
+- [x] 👤 Create Razorpay account (test mode). Route and RazorpayX checked: not available to unregistered businesses → own split engine + simulated payouts (design decision 1)
 - [ ] 👤 Try to create FS-01's own Oracle A1 VM (2 OCPU / 12 GB, its own network). Retry daily until it works
-- [ ] ✅ `docker compose up` → all services healthy, CI green
+- [x] ✅ `docker compose up` → all services healthy, CI green
 
 ## Day 2 · Wed 4 Nov · Authentication & roles (brief step 2)
 - [ ] 🛠 Register, login, refresh, logout, me, change password
@@ -56,15 +56,15 @@ Dates assume you start **Tue 3 Nov 2026** and work every day; shift them if you 
 - [ ] 👤 Oracle VM retry
 - [ ] ✅ Cart with items from 2 vendors → 1 order, 2 sub-orders
 
-## Day 6 · Sun 8 Nov · Razorpay split payments (brief step 6)
-- [ ] 🛠 Payment interface with `razorpay` and `mock` drivers
+## Day 6 · Sun 8 Nov · Razorpay payments + split engine (brief step 6)
+- [ ] 🛠 `PaymentProvider` (`razorpay`, `mock`) and `PayoutProvider` (`mock`, labelled "simulated payout")
 - [ ] 🛠 Razorpay Order at checkout, Checkout popup (UPI `success@razorpay`), signature check
 - [ ] 🛠 Webhook: signature verified, safe against repeats and out-of-order events
-- [ ] 🛠 After payment: one on-hold transfer per vendor (subtotal − commission), ledger entries
-- [ ] 🛠 Delivered → release that vendor's transfer; cancel → reverse transfer + refund
-- [ ] 🛠 Vendor payout setup (Route linked account); tests for split maths and webhooks; doc 09 (payments)
+- [ ] 🛠 After payment: ledger entries; each vendor's share (subtotal − commission) **held**
+- [ ] 🛠 Delivered → release that share → payout job pays it out; cancel → reverse the hold + real Razorpay test refund
+- [ ] 🛠 Vendor payout details (only last 4 digits stored); tests for split maths, escrow states and webhooks; doc 09 (payments)
 - [ ] 👤 Add Razorpay test keys to `.env`; Oracle VM retry
-- [ ] ✅ Pay → 2 transfers on hold → deliver → released (mock and Razorpay test dashboard)
+- [ ] ✅ Pay with real Razorpay test UPI → 2 vendor shares held → deliver → released → paid out (simulated); payment and refund visible in the Razorpay test dashboard
 
 ## Day 7 · Mon 9 Nov · Reviews, coupons, invoices (brief step 7, part 1)
 - [ ] 🛠 Reviews only from buyers whose order was delivered; rating updates product + search

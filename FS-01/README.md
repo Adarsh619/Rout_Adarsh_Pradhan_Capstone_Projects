@@ -3,7 +3,7 @@
 [![FS-01 CI](https://github.com/Adarsh619/Rout_Adarsh_Pradhan_Capstone_Projects/actions/workflows/fs01-ci.yml/badge.svg?branch=main)](https://github.com/Adarsh619/Rout_Adarsh_Pradhan_Capstone_Projects/actions/workflows/fs01-ci.yml)
 
 An Amazon-style marketplace where **many vendors sell**, **customers buy from several of them in one checkout**, and the platform
-**splits each payment** between the vendors and keeps a **commission** (Razorpay Route, test mode).
+**splits each payment** between the vendors and keeps a **commission** (Razorpay test mode for payments; vendor payouts simulated).
 
 | Layer | Tech |
 |---|---|
@@ -11,7 +11,7 @@ An Amazon-style marketplace where **many vendors sell**, **customers buy from se
 | API + worker | Node.js 24 · Express 5 · TypeScript · Zod · BullMQ |
 | Data | MongoDB 7.0 (replica set, transactions) · Redis 7.4 · Elasticsearch 8.19 |
 | Files | AWS S3 (Adobe S3Mock locally) |
-| Payments | Razorpay Route (test mode), with a built-in mock that needs no account |
+| Payments | Razorpay test mode (UPI, cards, webhooks, refunds) + own split-and-escrow ledger; built-in mock needs no account |
 | Infra | Docker Compose · nginx · GitHub Actions |
 
 **Status:** Day 1 of 10. Specs, architecture, database schema and API list are done; the stack runs end to end with health checks. Progress is tracked in the [10-day build tracker](docs/guides/DAY_PLAN.md).

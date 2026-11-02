@@ -17,7 +17,8 @@ flowchart TB
     direction LR
     M[("MongoDB Atlas<br/>users · products · orders · ledger")]
     S[("AWS S3<br/>images · invoice PDFs")]
-    P["Razorpay Route<br/>UPI · cards · split transfers"]
+    P["Razorpay (test mode)<br/>UPI · cards · refunds"]
+    X["Payout provider<br/>simulated in v1"]
   end
 
   B -->|"loads app"| V
@@ -26,7 +27,7 @@ flowchart TB
   B -->|"Checkout popup"| P
   A -->|"read / write"| M
   A -->|"presign"| S
-  A -->|"orders · transfers · refunds"| P
+  A -->|"orders · refunds"| P
   P -.->|"signed webhooks"| A
   W -->|"PDFs"| S
-  W -->|"release holds"| P
+  W -->|"vendor payouts"| X
