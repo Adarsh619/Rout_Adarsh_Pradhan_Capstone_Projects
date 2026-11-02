@@ -48,17 +48,27 @@ jobs:
       run:
         working-directory: FS-01/backend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # Service containers can't take a command, and MongoDB must run as a replica set for transactions.
       - name: Start MongoDB as a single-node replica set
         working-directory: .
+        # Waits until mongod answers, starts the replica set, then waits until it can take writes;
+        # fails with the container's logs if any of that doesn't happen.
         run: |
           docker run -d --name mongo -p 27017:27017 mongo:8.0.34 --replSet rs0 --bind_ip_all
-          for i in $(seq 1 30); do
-            docker exec mongo mongosh --quiet --eval "try { rs.status().ok } catch (e) { rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'localhost:27017' }] }).ok }" && break
+          for i in $(seq 1 60); do
+            docker exec mongo mongosh --quiet --eval "db.adminCommand('ping').ok" >/dev/null 2>&1 && break
             sleep 2
           done
-      - uses: actions/setup-node@v4
+          docker exec mongo mongosh --quiet --eval "rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'localhost:27017' }] })"
+          for i in $(seq 1 30); do
+            if docker exec mongo mongosh --quiet --eval "db.hello().isWritablePrimary" | grep -q true; then
+              echo "MongoDB replica set is ready"; exit 0
+            fi
+            sleep 2
+          done
+          echo "MongoDB did not become primary"; docker ps -a; docker logs mongo | tail -50; exit 1
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -71,7 +81,7 @@ jobs:
       - name: Integration tests (real MongoDB, Redis, Elasticsearch, S3)
         run: npm run test:integration
       - run: npm run build
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: fs01-backend-test-results
@@ -87,8 +97,8 @@ jobs:
       run:
         working-directory: FS-01/frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -108,7 +118,7 @@ jobs:
       run:
         working-directory: FS-01
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Start the stack
         run: |
           cp .env.example .env
