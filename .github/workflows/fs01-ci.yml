@@ -1,0 +1,120 @@
+# Lives at the REPO ROOT: .github/workflows/fs01-ci.yml (GitHub only reads workflows from there).
+# The project itself is in the FS-01/ subfolder, so every path below is prefixed with FS-01/.
+name: FS-01 CI
+
+on:
+  push:
+    branches: [main]
+    paths: ["FS-01/**", ".github/workflows/fs01-ci.yml"]
+  pull_request:
+    paths: ["FS-01/**", ".github/workflows/fs01-ci.yml"]
+
+concurrency:
+  group: fs01-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend · lint + unit + integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      redis:
+        image: redis:7.4.12-alpine
+        ports: ["6379:6379"]
+      elasticsearch:
+        image: docker.elastic.co/elasticsearch/elasticsearch:8.19.23
+        env:
+          discovery.type: single-node
+          xpack.security.enabled: "false"
+          ES_JAVA_OPTS: -Xms512m -Xmx512m
+        ports: ["9200:9200"]
+        options: >-
+          --health-cmd "curl -fs http://localhost:9200/_cluster/health || exit 1"
+          --health-interval 10s --health-timeout 10s --health-retries 30
+      s3:
+        image: adobe/s3mock:5.2
+        ports: ["9090:9090"]
+    env:
+      MONGO_URL: mongodb://localhost:27017/shopsphere_test?replicaSet=rs0&directConnection=true
+      REDIS_URL: redis://localhost:6379/0
+      ELASTICSEARCH_URL: http://localhost:9200
+      S3_ENDPOINT: http://localhost:9090
+      S3_BUCKET: shopsphere-ci
+    defaults:
+      run:
+        working-directory: FS-01/backend
+    steps:
+      - uses: actions/checkout@v4
+      # Service containers can't take a command, and MongoDB must run as a replica set for transactions.
+      - name: Start MongoDB as a single-node replica set
+        working-directory: .
+        run: |
+          docker run -d --name mongo -p 27017:27017 mongo:8.0.34 --replSet rs0 --bind_ip_all
+          for i in $(seq 1 30); do
+            docker exec mongo mongosh --quiet --eval "try { rs.status().ok } catch (e) { rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'localhost:27017' }] }).ok }" && break
+            sleep 2
+          done
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: FS-01/backend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - name: Unit tests with coverage
+        run: npx vitest run --coverage --reporter=default --reporter=junit --outputFile.junit=test-results.xml
+      - name: Integration tests (real MongoDB, Redis, Elasticsearch, S3)
+        run: npm run test:integration
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fs01-backend-test-results
+          path: |
+            FS-01/backend/test-results.xml
+            FS-01/backend/coverage/coverage-summary.json
+
+  frontend:
+    name: Frontend · lint + tests + build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: FS-01/frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: FS-01/frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+
+  # Starts the whole Docker Compose stack the way a user would and checks it answers.
+  smoke:
+    name: Docker Compose · smoke test
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: FS-01
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start the stack
+        run: |
+          cp .env.example .env
+          docker compose up -d --build --wait --wait-timeout 400
+      - name: Check the app, API and every backing service
+        run: bash scripts/smoke-test.sh http://localhost:3000
+      - name: Show logs if anything failed
+        if: failure()
+        run: docker compose logs --no-color --tail 200

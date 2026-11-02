@@ -1,0 +1,32 @@
+flowchart TB
+  B["Browser<br/>React SPA"]
+  V["Frontend host<br/>Vercel (live) · nginx (Docker)"]
+
+  subgraph SRV["Backend server (Docker Compose)"]
+    direction LR
+    A["Express API<br/>Node 24 · TypeScript<br/>JWT · roles · Zod"]
+    R[("Redis<br/>cart · sessions · cache<br/>rate limits · job queues")]
+    W["Worker<br/>BullMQ jobs"]
+    E[("Elasticsearch<br/>product search")]
+    A -->|enqueue| R -->|jobs| W
+    A -->|search| E
+    W -->|index| E
+  end
+
+  subgraph CLOUD["Managed services"]
+    direction LR
+    M[("MongoDB Atlas<br/>users · products · orders · ledger")]
+    S[("AWS S3<br/>images · invoice PDFs")]
+    P["Razorpay Route<br/>UPI · cards · split transfers"]
+  end
+
+  B -->|"loads app"| V
+  B -->|"/api/v1 JSON"| A
+  B -->|"presigned upload / download"| S
+  B -->|"Checkout popup"| P
+  A -->|"read / write"| M
+  A -->|"presign"| S
+  A -->|"orders · transfers · refunds"| P
+  P -.->|"signed webhooks"| A
+  W -->|"PDFs"| S
+  W -->|"release holds"| P

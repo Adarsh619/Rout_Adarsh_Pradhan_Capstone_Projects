@@ -1,0 +1,18 @@
+# Node
+node_modules/
+dist/
+coverage/
+*.log
+*.tsbuildinfo
+
+# Test output
+backend/test-results.xml
+frontend/test-results.xml
+
+# Env & editors
+.env
+.env.*
+!.env.example
+.idea/
+.DS_Store
+Thumbs.db

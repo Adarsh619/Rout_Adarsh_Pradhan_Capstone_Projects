@@ -1,0 +1,129 @@
+# ShopSphere local stack: `docker compose up --build`, then open http://localhost:3000.
+# Backing services publish their ports on 127.0.0.1 only, so they are reachable from this PC (for `npm run dev`
+# and the integration tests) but not from the network.
+name: shopsphere
+
+x-backend-env: &backend-env
+  NODE_ENV: production
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  MONGO_URL: mongodb://mongo:27017/shopsphere?replicaSet=rs0
+  REDIS_URL: redis://redis:6379/0
+  ELASTICSEARCH_URL: http://elasticsearch:9200
+  S3_ENDPOINT: http://s3:9090
+  S3_REGION: ${S3_REGION:-ap-south-1}
+  S3_BUCKET: ${S3_BUCKET:-shopsphere-local}
+  S3_ACCESS_KEY_ID: local
+  S3_SECRET_ACCESS_KEY: local
+  S3_FORCE_PATH_STYLE: "true"
+  S3_CREATE_BUCKET: "true"
+  CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+  PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-mock}
+
+services:
+  mongo:
+    image: mongo:8.0.34
+    # A single-node replica set: MongoDB only allows multi-document transactions on a replica set,
+    # and checkout uses one to create the order and reserve stock together.
+    command: ["--replSet", "rs0", "--bind_ip_all"]
+    ports: ["127.0.0.1:27017:27017"]
+    volumes: [mongo-data:/data/db]
+    # The health check also starts the replica set the first time (and is a no-op afterwards). The member is
+    # named mongo:27017 so other containers can reach it; tools on this PC connect with directConnection=true.
+    healthcheck:
+      test:
+        - CMD
+        - mongosh
+        - --quiet
+        - --eval
+        - "try { rs.status().ok } catch (e) { rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'mongo:27017' }] }).ok }"
+      interval: 5s
+      timeout: 10s
+      retries: 20
+      start_period: 10s
+
+  redis:
+    image: redis:7.4.12-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports: ["127.0.0.1:6379:6379"]
+    volumes: [redis-data:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.19.23
+    environment:
+      discovery.type: single-node
+      # Security is off locally only (ports bound to 127.0.0.1); the live server keeps it on a private network.
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: ${ES_JAVA_OPTS:--Xms512m -Xmx512m}
+    ports: ["127.0.0.1:9200:9200"]
+    volumes: [es-data:/usr/share/elasticsearch/data]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs 'http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s' || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 30s
+
+  # S3-compatible storage for local use (Adobe S3Mock). The live site uses real AWS S3 with the same code.
+  s3:
+    image: adobe/s3mock:5.2
+    environment:
+      COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS: ${S3_BUCKET:-shopsphere-local}
+      COM_ADOBE_TESTING_S3MOCK_STORE_ROOT: /s3mockroot
+      COM_ADOBE_TESTING_S3MOCK_STORE_RETAIN_FILES_ON_EXIT: "true"
+    ports: ["127.0.0.1:9090:9090"]
+    volumes: [s3-data:/s3mockroot]
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/favicon.ico"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build: ./backend
+    environment:
+      <<: *backend-env
+      PORT: "4000"
+    depends_on:
+      mongo: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      elasticsearch: { condition: service_healthy }
+      s3: { condition: service_healthy }
+    ports: ["127.0.0.1:4000:4000"]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:4000/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    restart: unless-stopped
+
+  worker:
+    build: ./backend
+    command: ["node", "dist/worker.js"]
+    environment: *backend-env
+    depends_on:
+      api: { condition: service_healthy }
+    restart: unless-stopped
+
+  web:
+    build: ./frontend
+    depends_on:
+      api: { condition: service_healthy }
+    ports: ["${FRONTEND_PORT:-3000}:80"]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  mongo-data:
+  redis-data:
+  es-data:
+  s3-data:

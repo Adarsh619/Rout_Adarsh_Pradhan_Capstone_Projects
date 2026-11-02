@@ -1,0 +1,29 @@
+erDiagram
+  USER ||--o| VENDOR : "owns store"
+  USER ||--o{ ORDER : places
+  USER ||--o{ REVIEW : writes
+  VENDOR ||--o{ PRODUCT : lists
+  VENDOR ||--o{ SUB_ORDER : fulfils
+  VENDOR ||--o{ COUPON : "vendor coupons"
+  CATEGORY ||--o{ PRODUCT : groups
+  CATEGORY ||--o{ CATEGORY : parent
+  ORDER ||--|{ SUB_ORDER : "split per vendor"
+  ORDER ||--o{ LEDGER_ENTRY : records
+  SUB_ORDER ||--o{ LEDGER_ENTRY : records
+  SUB_ORDER ||--o| INVOICE : has
+  SUB_ORDER ||--o{ REVIEW : "verifies purchase"
+  PRODUCT ||--o{ REVIEW : receives
+  COUPON ||--o{ COUPON_REDEMPTION : "used in"
+  ORDER ||--o| COUPON_REDEMPTION : applies
+
+  USER { ObjectId _id string email string role string status }
+  VENDOR { ObjectId userId string slug string status int commissionRateBp string linkedAccountId }
+  CATEGORY { string slug ObjectId parentId int commissionRateBp }
+  PRODUCT { ObjectId vendorId ObjectId categoryId int price int stock string status }
+  ORDER { string orderNumber ObjectId customerId int grandTotal string status }
+  SUB_ORDER { ObjectId orderId ObjectId vendorId int payable int commission int vendorNet string status }
+  LEDGER_ENTRY { string type int amount string providerRef }
+  INVOICE { string invoiceNumber string s3Key }
+  REVIEW { int rating string status }
+  COUPON { string code string scope string type int value }
+  COUPON_REDEMPTION { ObjectId couponId ObjectId userId ObjectId orderId }
