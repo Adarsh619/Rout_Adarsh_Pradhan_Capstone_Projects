@@ -1,8 +1,9 @@
 import mongoose from "mongoose";
 
-export async function connectMongo(url: string): Promise<typeof mongoose> {
+// dbName overrides the database in the URL (tests use their own database so they never touch real data).
+export async function connectMongo(url: string, dbName?: string): Promise<typeof mongoose> {
   mongoose.set("strictQuery", true);
-  return mongoose.connect(url, { serverSelectionTimeoutMS: 10_000 });
+  return mongoose.connect(url, { serverSelectionTimeoutMS: 10_000, ...(dbName && { dbName }) });
 }
 
 export async function pingMongo(): Promise<void> {

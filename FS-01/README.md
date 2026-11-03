@@ -14,7 +14,7 @@ An Amazon-style marketplace where **many vendors sell**, **customers buy from se
 | Payments | Razorpay test mode (UPI, cards, webhooks, refunds) + own split-and-escrow ledger; built-in mock needs no account |
 | Infra | Docker Compose · nginx · GitHub Actions |
 
-**Status:** Day 1 of 10. Specs, architecture, database schema and API list are done; the stack runs end to end with health checks. Progress is tracked in the [10-day build tracker](docs/guides/DAY_PLAN.md).
+**Status:** Day 2 of 10. Specs, architecture, schema and API list are done; sign-in with JWT and role-based access works end to end (customer, vendor, admin). Progress is tracked in the [10-day build tracker](docs/guides/DAY_PLAN.md).
 
 ![Architecture](docs/assets/architecture.png)
 
@@ -32,6 +32,18 @@ docker compose up --build
 | http://localhost:3000 | Web app (shows the status of every service) |
 | http://localhost:3000/api/v1/health | API health through nginx |
 | http://localhost:4000/api/v1/health | API health, direct |
+
+Create the demo accounts (one per role; the password is `DEMO_PASSWORD` in `.env`):
+
+```bash
+docker compose exec api node dist/scripts/seed-users.js
+```
+
+| Email | Role | Lands on |
+|---|---|---|
+| `customer@shopsphere.test` | Customer | /account |
+| `vendor@shopsphere.test` | Vendor | /vendor |
+| `admin@shopsphere.test` | Admin | /admin |
 
 Port 3000 taken? Set `FRONTEND_PORT=3001` in `.env`. MongoDB, Redis, Elasticsearch, S3Mock and the API publish their ports on `127.0.0.1` only.
 

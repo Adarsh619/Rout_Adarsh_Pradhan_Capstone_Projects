@@ -16,7 +16,9 @@ async function main(): Promise<void> {
   if (env.S3_CREATE_BUCKET) await ensureBucket(s3, env.S3_BUCKET);
 
   const app = createApp({
+    env,
     corsOrigins: corsOrigins(env),
+    redis,
     healthChecks: {
       mongo: pingMongo,
       redis: () => pingRedis(redis),

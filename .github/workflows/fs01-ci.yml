@@ -127,8 +127,12 @@ jobs:
         run: |
           cp .env.example .env
           docker compose up -d --build --wait --wait-timeout 400
-      - name: Check the app, API and every backing service
-        run: bash scripts/smoke-test.sh http://localhost:3000
+      - name: Create the demo accounts
+        run: docker compose exec -T api node dist/scripts/seed-users.js
+      - name: Check the app, API, sign-in and every backing service
+        run: |
+          export DEMO_PASSWORD="$(grep '^DEMO_PASSWORD=' .env | cut -d= -f2-)"
+          bash scripts/smoke-test.sh http://localhost:3000
       - name: Show logs if anything failed
         if: failure()
         run: docker compose logs --no-color --tail 200

@@ -1,8 +1,8 @@
 import request from "supertest";
 import { describe, expect, it } from "vitest";
-import { createApp } from "../src/app.js";
+import { unitApp } from "./helpers/app.js";
 
-const app = createApp({ corsOrigins: ["http://localhost:3000"], healthChecks: {} });
+const app = unitApp();
 
 describe("app basics", () => {
   it("answers unknown routes with a JSON 404", async () => {

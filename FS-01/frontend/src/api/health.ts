@@ -13,7 +13,8 @@ async function fetchHealth(): Promise<Health> {
   try {
     return await api<Health>("/health");
   } catch (err) {
-    if (err instanceof ApiError && err.status === 503 && err.body) return err.body as Health;
+    const body = err instanceof ApiError ? (err.body as Partial<Health> | undefined) : undefined;
+    if (err instanceof ApiError && err.status === 503 && body?.services) return body as Health;
     throw err;
   }
 }

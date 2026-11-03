@@ -15,17 +15,17 @@ Dates assume you start **Tue 3 Nov 2026** and work every day; shift them if you 
 - [x] 🛠 `.env.example`, `/health` endpoint, CI `.github/workflows/fs01-ci.yml` (lint + test)
 - [x] 🛠 Docs 01–05 drafted (overview, features & roles, architecture, design decisions, data model)
 - [x] 👤 Create Razorpay account (test mode). Route and RazorpayX checked: not available to unregistered businesses → own split engine + simulated payouts (design decision 1)
-- [ ] 👤 Try to create FS-01's own Oracle A1 VM (2 OCPU / 12 GB, its own network). Retry daily until it works
+- [ ] 👤 Create FS-01's own Oracle A1 VM (2 OCPU / 12 GB, its own network), following [ORACLE_SERVER_SETUP.md](ORACLE_SERVER_SETUP.md). Retry daily if out of capacity
 - [x] ✅ `docker compose up` → all services healthy, CI green
 
 ## Day 2 · Wed 4 Nov · Authentication & roles (brief step 2)
-- [ ] 🛠 Register, login, refresh, logout, me, change password
-- [ ] 🛠 bcrypt, short-lived access JWT, rotating refresh cookie stored in Redis
-- [ ] 🛠 `requireAuth` / `requireRole` middleware, login rate limit, Helmet, CORS
-- [ ] 🛠 React: login/register pages, role-based routes (customer, vendor, admin dashboards)
-- [ ] 🛠 Tests: auth flows, role checks, token rotation; doc 10 (security) started
+- [x] 🛠 Register, login, refresh, logout, me, change password
+- [x] 🛠 bcrypt, short-lived access JWT, rotating refresh cookie stored in Redis
+- [x] 🛠 `requireAuth` / `requireRole` middleware, login rate limit, Helmet, CORS
+- [x] 🛠 React: login/register pages, role-based routes (customer, vendor, admin dashboards)
+- [x] 🛠 Tests: auth flows, role checks, token rotation; doc 10 (security) started
 - [ ] 👤 Oracle VM retry
-- [ ] ✅ All three roles sign in and land on their own dashboard
+- [x] ✅ All three roles sign in and land on their own dashboard
 
 ## Day 3 · Thu 5 Nov · Vendors, products, S3 images (brief step 3)
 - [ ] 🛠 Vendor application → admin approval / suspension

@@ -20,13 +20,13 @@ The **Day** column says when each endpoint is built; ✓ means it exists now.
 
 | Method | Path | Role | Purpose | Day |
 |---|---|---|---|---|
-| POST | `/auth/register` | P | Create a customer or vendor account | 2 |
-| POST | `/auth/login` | P | Email + password → access token + refresh cookie (rate-limited) | 2 |
-| POST | `/auth/refresh` | P (cookie) | Rotate the refresh token, new access token; reuse of an old token revokes the session | 2 |
-| POST | `/auth/logout` | S | Revoke this session | 2 |
-| GET | `/auth/me` | S | Current user and, for vendors, store status | 2 |
-| PATCH | `/account` | S | Change name, addresses | 2 |
-| POST | `/account/password` | S | Change password (other sessions signed out) | 2 |
+| POST | `/auth/register` | P | Create a customer or vendor account | ✓ 2 |
+| POST | `/auth/login` | P | Email + password → access token + refresh cookie (rate-limited) | ✓ 2 |
+| POST | `/auth/refresh` | P (cookie + `X-Requested-With`) | Rotate the refresh token, new access token; reuse of an old token signs the user out everywhere | ✓ 2 |
+| POST | `/auth/logout` | P (cookie + `X-Requested-With`) | Revoke this session | ✓ 2 |
+| GET | `/auth/me` | S | Current user (store status added for vendors on Day 3) | ✓ 2 |
+| PATCH | `/account` | S | Change name (addresses on Day 5) | ✓ 2 |
+| POST | `/account/password` | S | Change password (other sessions signed out) | ✓ 2 |
 
 ## Vendors
 
@@ -119,10 +119,10 @@ Guests are identified by an httpOnly `guest_id` cookie; their cart merges into t
 | HTTP | code | When |
 |---|---|---|
 | 400 | `validation_error`, `invalid_json` | Bad input (Zod details in `details`) |
-| 401 | `unauthenticated`, `token_expired` | Missing or expired token |
-| 403 | `forbidden`, `vendor_not_approved` | Wrong role, not the owner, store not approved |
+| 401 | `unauthenticated`, `token_expired`, `session_ended`, `session_reused`, `invalid_credentials` | Not signed in, token expired (refresh), session revoked, stolen refresh token detected, wrong email or password |
+| 403 | `forbidden`, `vendor_not_approved`, `account_suspended`, `csrf_header_missing` | Wrong role (with `requiredRoles`), not the owner, store not approved, suspended account, cookie endpoint without the header |
 | 404 | `not_found` | Unknown id or route |
-| 409 | `out_of_stock`, `price_changed`, `invalid_transition`, `already_reviewed`, `coupon_exhausted` | State conflicts |
+| 409 | `email_taken`, `refresh_in_progress`, `out_of_stock`, `price_changed`, `invalid_transition`, `already_reviewed`, `coupon_exhausted` | State conflicts |
 | 413 | `payload_too_large` | Body over 100 kB |
 | 429 | `rate_limited` | Too many attempts |
 | 503 | (health) | A backing service is down |

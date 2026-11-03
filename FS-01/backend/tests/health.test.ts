@@ -1,6 +1,6 @@
 import request from "supertest";
 import { describe, expect, it } from "vitest";
-import { createApp } from "../src/app.js";
+import { unitApp } from "./helpers/app.js";
 import { runHealthChecks } from "../src/lib/health.js";
 
 const up = async () => {};
@@ -10,7 +10,7 @@ const down = async () => {
 const hang = () => new Promise<void>(() => {});
 
 const appWith = (checks: Record<string, () => Promise<void>>) =>
-  createApp({ corsOrigins: ["http://localhost:3000"], healthChecks: checks });
+  unitApp({ healthChecks: checks });
 
 describe("runHealthChecks", () => {
   it("reports ok when every service is up", async () => {

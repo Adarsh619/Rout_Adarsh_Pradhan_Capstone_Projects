@@ -31,15 +31,16 @@ ShopSphere builds all three sides, with real search, a real order lifecycle and 
 | Brief step | Where | Status |
 |---|---|---|
 | 1. Roles, database schema, API list | [Features and roles](02-features-and-roles.md), [Database schema](specs/03-database-schema.md), [API list](specs/04-api-list.md) | ✓ Day 1 |
-| 2. JWT authentication, role-based access | Auth module | Day 2 |
+| 2. JWT authentication, role-based access | [Security](10-security.md) | ✓ Day 2 |
 | 3. Vendor onboarding, product CRUD, S3 images | Vendors and products modules | Day 3 |
 | 4. Elasticsearch search with filters and sorting | Search module | Day 4 |
 | 5. Cart, checkout, order lifecycle, Redis caching | Cart and orders modules | Day 5 |
 | 6. Razorpay split payments and commission | Payments module | Day 6 |
 | 7. Reviews, coupons, PDF invoices, admin analytics, separate deployment | Several modules, live hosting | Days 7–9 |
 
-## What works today (Day 1)
+## What works today (Day 2)
 
 - `docker compose up --build` starts MongoDB, Redis, Elasticsearch, the S3 mock, the API, the worker and the web app.
 - `GET /api/v1/health` checks all four backing services; the home page shows their status.
-- CI runs lint, unit tests, integration tests against real services, and a Docker smoke test.
+- Sign-up (customer or vendor), sign-in, staying signed in across reloads, sign-out, name and password changes; each role lands on its own page and is kept out of the others.
+- CI runs lint, unit tests, integration tests against real services, and a Docker smoke test that signs up and signs in.

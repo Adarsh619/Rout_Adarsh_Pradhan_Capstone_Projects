@@ -66,6 +66,7 @@ Each decision lists what was chosen, the alternatives, and why.
 
 - **Chosen:** 15-minute access token in memory; 7-day refresh token in an httpOnly, `SameSite` cookie, **rotated on every use**; reusing an old one kills the whole session.
 - **Why:** a stolen access token expires quickly, JavaScript can't read the refresh token, and a stolen refresh token is detected the first time both copies are used.
+- **Details that matter in practice:** every request also checks the session still exists in Redis, so logout and password changes apply at once; two tabs refreshing together get a short grace period instead of being treated as theft; cookie endpoints require an `X-Requested-With` header against CSRF. See [Security](10-security.md).
 
 ## 10. Separate frontend and backend hosting, always on
 

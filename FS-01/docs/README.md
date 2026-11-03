@@ -16,7 +16,7 @@ Read the files in order, or jump to the topic you need. Topics without a link ar
 | 07 | Frontend | React structure, pages, state | Day 8 |
 | 08 | Background jobs | BullMQ queues, retries, schedules | Day 4 |
 | 09 | Payments | Razorpay checkout and webhooks, split and escrow ledger, payouts, mock mode | Day 6 |
-| 10 | Security | Auth, sessions, roles, validation, uploads | Day 2 |
+| 10 | [Security](10-security.md) | Passwords, tokens and sessions, roles, rate limits, CSRF | ✓ |
 | 11 | DevOps | Docker Compose, CI/CD, live hosting | Day 9 |
 | 12 | Testing and performance | Test counts, coverage, load-test numbers | Day 9 |
 | 13 | Challenges and next steps | Problems solved, known limits, future work | Day 10 |
@@ -36,6 +36,7 @@ Read the files in order, or jump to the topic you need. Topics without a link ar
 | File | Use |
 |---|---|
 | [10-day build tracker](guides/DAY_PLAN.md) | Day-by-day checklist |
+| [Oracle server setup](guides/ORACLE_SERVER_SETUP.md) | Click-by-click checklist to create the backend's Always Free ARM server |
 
 ## Other files
 

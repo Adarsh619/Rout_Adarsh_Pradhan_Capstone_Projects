@@ -28,12 +28,33 @@ const schema = z.object({
   S3_CREATE_BUCKET: bool.default(false),
 
   PAYMENT_PROVIDER: z.enum(["mock", "razorpay"]).default("mock"),
+
+  // Signs access tokens. Required (32+ characters) when NODE_ENV=production; a fixed value is used only in dev and tests.
+  JWT_ACCESS_SECRET: z.string().min(32, "must be at least 32 characters").optional(),
+  ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().min(60).max(3600).default(900),
+  REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).max(30).default(7),
+  // The live site runs the app and the API on different domains, which needs Secure + SameSite=None cookies.
+  COOKIE_SECURE: bool.default(false),
+  COOKIE_SAME_SITE: z.enum(["lax", "strict", "none"]).default("lax"),
+  BCRYPT_COST: z.coerce.number().int().min(4).max(15).default(12),
 });
 
-export type Env = z.infer<typeof schema>;
+const DEV_JWT_SECRET = "dev-only-insecure-jwt-secret-change-me-0123456789";
+
+export type Env = Omit<z.infer<typeof schema>, "JWT_ACCESS_SECRET"> & { JWT_ACCESS_SECRET: string };
 
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
-  const parsed = schema.safeParse(source);
+  const parsed = schema
+    .superRefine((env, ctx) => {
+      if (env.NODE_ENV === "production" && !env.JWT_ACCESS_SECRET) {
+        ctx.addIssue({ code: "custom", path: ["JWT_ACCESS_SECRET"], message: "is required in production" });
+      }
+      if (env.COOKIE_SAME_SITE === "none" && !env.COOKIE_SECURE) {
+        ctx.addIssue({ code: "custom", path: ["COOKIE_SECURE"], message: "must be true when COOKIE_SAME_SITE=none" });
+      }
+    })
+    .transform((env) => ({ ...env, JWT_ACCESS_SECRET: env.JWT_ACCESS_SECRET ?? DEV_JWT_SECRET }))
+    .safeParse(source);
   if (!parsed.success) {
     const problems = parsed.error.issues.map((i) => `  ${i.path.join(".")}: ${i.message}`).join("\n");
     throw new Error(`Invalid environment configuration:\n${problems}`);
