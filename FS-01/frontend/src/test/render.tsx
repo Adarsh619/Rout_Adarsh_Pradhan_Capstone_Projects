@@ -29,10 +29,14 @@ export const errorResponse = (status: number, code: string, message = code, deta
 type Handler = (init: RequestInit & { url: string }) => Response | Promise<Response>;
 
 // Fakes the API: "METHOD /path" → handler. Unlisted calls fail loudly. Returns the fetch spy to inspect calls.
-// By default nobody is signed in (the page-load refresh answers 401).
+// By default nobody is signed in (the page-load refresh answers 401), the catalogue is empty and a vendor has no store.
 export function mockApi(routes: Record<string, Handler>) {
   const all: Record<string, Handler> = {
     "POST /api/v1/auth/refresh": () => errorResponse(401, "session_ended"),
+    // Data most pages load in the background; tests that care override these.
+    "GET /api/v1/categories": () => jsonResponse({ items: [] }),
+    "GET /api/v1/products": () => jsonResponse({ items: [], page: 1, limit: 24, total: 0 }),
+    "GET /api/v1/vendors/me": () => jsonResponse({ store: null }),
     ...routes,
   };
   return vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init = {}) => {

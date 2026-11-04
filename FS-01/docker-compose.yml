@@ -16,6 +16,8 @@ x-backend-env: &backend-env
   S3_SECRET_ACCESS_KEY: local
   S3_FORCE_PATH_STYLE: "true"
   S3_CREATE_BUCKET: "true"
+  # The browser can't reach http://s3:9090 (a Docker-only name), so upload links and photo URLs use this PC's port.
+  S3_PUBLIC_ENDPOINT: http://localhost:9090
   CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
   PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-mock}
   JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?set JWT_ACCESS_SECRET in .env (copy .env.example)}
@@ -32,6 +34,7 @@ services:
     command: ["--replSet", "rs0", "--bind_ip_all"]
     ports: ["127.0.0.1:27017:27017"]
     volumes: [mongo-data:/data/db]
+    restart: unless-stopped
     # The health check also starts the replica set the first time (and is a no-op afterwards). The member is
     # named mongo:27017 so other containers can reach it; tools on this PC connect with directConnection=true.
     healthcheck:
@@ -51,6 +54,7 @@ services:
     command: ["redis-server", "--appendonly", "yes"]
     ports: ["127.0.0.1:6379:6379"]
     volumes: [redis-data:/data]
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -66,6 +70,7 @@ services:
       ES_JAVA_OPTS: ${ES_JAVA_OPTS:--Xms512m -Xmx512m}
     ports: ["127.0.0.1:9200:9200"]
     volumes: [es-data:/usr/share/elasticsearch/data]
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "curl -fs 'http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s' || exit 1"]
       interval: 10s
@@ -82,6 +87,7 @@ services:
       COM_ADOBE_TESTING_S3MOCK_STORE_RETAIN_FILES_ON_EXIT: "true"
     ports: ["127.0.0.1:9090:9090"]
     volumes: [s3-data:/s3mockroot]
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/favicon.ico"]
       interval: 5s

@@ -26,6 +26,11 @@ const schema = z.object({
   S3_FORCE_PATH_STYLE: bool.default(true),
   // Create the bucket on start-up if it is missing (local only; real buckets are created in AWS).
   S3_CREATE_BUCKET: bool.default(false),
+  // Where the *browser* reaches storage, when that differs from S3_ENDPOINT (in Docker the API uses http://s3:9090
+  // but the browser uses http://localhost:9090). Upload links are signed for this address. Empty = real AWS.
+  S3_PUBLIC_ENDPOINT: z.string().url().optional().or(z.literal("").transform(() => undefined)),
+  // Base URL for showing product photos and store logos. Empty = worked out from the endpoint or the AWS bucket URL.
+  S3_PUBLIC_URL: z.string().url().optional().or(z.literal("").transform(() => undefined)),
 
   PAYMENT_PROVIDER: z.enum(["mock", "razorpay"]).default("mock"),
 

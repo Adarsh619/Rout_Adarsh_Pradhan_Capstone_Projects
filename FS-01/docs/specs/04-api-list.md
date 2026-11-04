@@ -24,7 +24,7 @@ The **Day** column says when each endpoint is built; ✓ means it exists now.
 | POST | `/auth/login` | P | Email + password → access token + refresh cookie (rate-limited) | ✓ 2 |
 | POST | `/auth/refresh` | P (cookie + `X-Requested-With`) | Rotate the refresh token, new access token; reuse of an old token signs the user out everywhere | ✓ 2 |
 | POST | `/auth/logout` | P (cookie + `X-Requested-With`) | Revoke this session | ✓ 2 |
-| GET | `/auth/me` | S | Current user (store status added for vendors on Day 3) | ✓ 2 |
+| GET | `/auth/me` | S | Current user (a vendor's store status comes from `GET /vendors/me`) | ✓ 2 |
 | PATCH | `/account` | S | Change name (addresses on Day 5) | ✓ 2 |
 | POST | `/account/password` | S | Change password (other sessions signed out) | ✓ 2 |
 
@@ -32,32 +32,34 @@ The **Day** column says when each endpoint is built; ✓ means it exists now.
 
 | Method | Path | Role | Purpose | Day |
 |---|---|---|---|---|
-| POST | `/vendors/apply` | V (any status) | Submit or resubmit the store application | 3 |
-| GET | `/vendors/me` | V (any status) | My store, status, payout status | 3 |
-| PATCH | `/vendors/me` | V | Edit store details | 3 |
+| POST | `/vendors/apply` | V (any status) | Submit or resubmit the store application | ✓ 3 |
+| GET | `/vendors/me` | V (any status) | My store and its status (`null` before applying); payout status on Day 6 | ✓ 3 |
+| PATCH | `/vendors/me` | V | Edit store details and logo (not while suspended) | ✓ 3 |
 | PUT | `/vendors/me/payout` | V | Save payout details (account holder, account number, IFSC); registers the beneficiary with the payout provider and keeps only the last 4 digits | 6 |
-| GET | `/stores/:slug` | P | Public store page with products | 3 |
-| GET | `/admin/vendors?status=` | A | List applications and vendors | 3 |
-| POST | `/admin/vendors/:id/approve` · `/reject` · `/suspend` · `/restore` | A | Change vendor status | 3 |
+| GET | `/stores/:slug` | P | Public store page with products | ✓ 3 |
+| GET | `/admin/vendors?status=` | A | Applications and vendors, with owner, product count and counts per status | ✓ 3 |
+| POST | `/admin/vendors/:id/approve` · `/reject` · `/suspend` · `/restore` | A | Change vendor status (reject and suspend need a reason) | ✓ 3 |
 | PATCH | `/admin/vendors/:id/commission` | A | Set or clear the vendor's commission rate | 8 |
 
 ## Categories
 
 | Method | Path | Role | Purpose | Day |
 |---|---|---|---|---|
-| GET | `/categories` | P | Category tree (cached) | 3 |
-| POST · PATCH · DELETE | `/admin/categories[/:id]` | A | Manage categories and their commission | 3 / 8 |
+| GET | `/categories` | P | Category tree (cached) | ✓ 3 |
+| GET · POST · PATCH · DELETE | `/admin/categories[/:id]` | A | Manage categories (commission rates editable in the UI on Day 8) | ✓ 3 |
 
 ## Products and uploads
 
 | Method | Path | Role | Purpose | Day |
 |---|---|---|---|---|
-| GET | `/products/:id` | P | Product page (cached in Redis) | 3 |
-| GET | `/vendor/products` | V | My products, any status | 3 |
-| POST | `/vendor/products` | V | Create | 3 |
-| PATCH | `/vendor/products/:id` | V (owner) | Edit, change status | 3 |
-| DELETE | `/vendor/products/:id` | V (owner) | Delete (only if never ordered; otherwise set inactive) | 3 |
-| POST | `/uploads/presign` | V | Presigned S3 PUT URL for an image (JPEG/PNG/WebP, ≤ 5 MB) | 3 |
+| GET | `/products?category=&sort=&page=` | P | Browse active products by category (MongoDB; search moves to Elasticsearch on Day 4) | ✓ 3 |
+| GET | `/products/:id` | P | Product page (cached in Redis) | ✓ 3 |
+| GET | `/vendor/products` | V | My products, any status, with title search and counts | ✓ 3 |
+| GET | `/vendor/products/:id` | V (owner) | One product for the edit form | ✓ 3 |
+| POST | `/vendor/products` | V | Create | ✓ 3 |
+| PATCH | `/vendor/products/:id` | V (owner) | Edit, change status | ✓ 3 |
+| DELETE | `/vendor/products/:id` | V (owner) | Delete (only if never ordered; otherwise set inactive) | ✓ 3 |
+| POST | `/uploads/presign` | V | Presigned S3 PUT URL for an image (JPEG/PNG/WebP, ≤ 5 MB) | ✓ 3 |
 
 ## Search
 
@@ -122,9 +124,9 @@ Guests are identified by an httpOnly `guest_id` cookie; their cart merges into t
 | 401 | `unauthenticated`, `token_expired`, `session_ended`, `session_reused`, `invalid_credentials` | Not signed in, token expired (refresh), session revoked, stolen refresh token detected, wrong email or password |
 | 403 | `forbidden`, `vendor_not_approved`, `account_suspended`, `csrf_header_missing` | Wrong role (with `requiredRoles`), not the owner, store not approved, suspended account, cookie endpoint without the header |
 | 404 | `not_found` | Unknown id or route |
-| 409 | `email_taken`, `refresh_in_progress`, `out_of_stock`, `price_changed`, `invalid_transition`, `already_reviewed`, `coupon_exhausted` | State conflicts |
+| 409 | `email_taken`, `refresh_in_progress`, `already_applied`, `invalid_transition`, `sku_taken`, `category_in_use`, `product_has_orders`, `out_of_stock`, `price_changed`, `already_reviewed`, `coupon_exhausted` | State conflicts |
 | 413 | `payload_too_large` | Body over 100 kB |
 | 429 | `rate_limited` | Too many attempts |
 | 503 | (health) | A backing service is down |
 
-The full machine-readable reference will be `docs/openapi.yaml` (Day 10).
+Request and response examples for everything built so far: [API reference](../06-api-reference.md). The full machine-readable reference will be `docs/openapi.yaml` (Day 10).

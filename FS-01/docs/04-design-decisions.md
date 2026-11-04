@@ -56,6 +56,9 @@ Each decision lists what was chosen, the alternatives, and why.
 - **Chosen:** the API hands out a **presigned PUT URL** limited to one key, content type and size (≤ 5 MB); the browser uploads directly. Invoices are private and downloaded through a link that expires in minutes.
 - **Why:** the API never streams large files, and the bucket stays private.
 - **Locally:** Adobe S3Mock (S3-compatible, in Docker). MinIO stopped publishing free Docker images in 2025, so it's no longer a simple choice. Code is identical for AWS; only the endpoint changes.
+- **Two addresses for storage in Docker:** the API reaches S3Mock as `http://s3:9090`, but the browser can't resolve that name, so upload links are signed for `S3_PUBLIC_ENDPOINT` (`http://localhost:9090`). On AWS both are the same and the variable stays empty.
+- **What the mock doesn't check:** S3Mock accepts any signature and ignores checksums, so a broken upload link would only fail on AWS. Two safeguards: the API re-checks every uploaded object (type, size, prefix) before using it, and a unit test asserts the link's signed headers and that it carries no precomputed checksum (the SDK's default would make AWS reject every browser upload).
+- **Seed photos are copied into our bucket**, not hot-linked from DummyJSON's CDN, so the live demo doesn't depend on someone else's server.
 
 ## 8. Redis for carts, sessions, cache and queues
 

@@ -129,7 +129,11 @@ jobs:
           docker compose up -d --build --wait --wait-timeout 400
       - name: Create the demo accounts
         run: docker compose exec -T api node dist/scripts/seed-users.js
-      - name: Check the app, API, sign-in and every backing service
+      # Proves the catalogue snapshot ships in the image and seeds cleanly. Photos are skipped so CI never
+      # depends on the DummyJSON / Fake Store CDNs (products are saved as drafts without them).
+      - name: Seed the demo catalogue (no photos)
+        run: docker compose exec -T api node dist/scripts/seed-catalog.js --no-images
+      - name: Check the app, API, sign-in, store approval, photo uploads and every backing service
         run: |
           export DEMO_PASSWORD="$(grep '^DEMO_PASSWORD=' .env | cut -d= -f2-)"
           bash scripts/smoke-test.sh http://localhost:3000

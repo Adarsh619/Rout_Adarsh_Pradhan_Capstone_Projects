@@ -34,8 +34,44 @@ json -X POST "$BASE/api/v1/auth/logout" -o /dev/null && check "logout"
   && check "access token stops working after logout"
 
 if [ -n "${DEMO_PASSWORD:-}" ]; then
-  json -X POST "$BASE/api/v1/auth/login" -d "{\"email\":\"admin@shopsphere.test\",\"password\":\"$DEMO_PASSWORD\"}" \
-    | grep -q '"role":"admin"' && check "seeded admin can sign in"
+  ADMIN_LOGIN="$(json -X POST "$BASE/api/v1/auth/login" -d "{\"email\":\"admin@shopsphere.test\",\"password\":\"$DEMO_PASSWORD\"}")"
+  echo "$ADMIN_LOGIN" | grep -q '"role":"admin"' && check "seeded admin can sign in"
+  ADMIN="$(echo "$ADMIN_LOGIN" | field accessToken)"
+  as_admin() { curl -fsS -H 'Content-Type: application/json' -H "Authorization: Bearer $ADMIN" "$@"; }
+
+  # A new vendor applies, the admin approves, a photo goes straight to S3 and the product goes on sale.
+  VENDOR_EMAIL="smoke-vendor-$(date +%s)-$RANDOM@example.com"
+  VENDOR="$(json -X POST "$BASE/api/v1/auth/register" \
+    -d "{\"name\":\"Smoke Vendor\",\"email\":\"$VENDOR_EMAIL\",\"password\":\"Smoke-test-123\",\"role\":\"vendor\"}" | field accessToken)"
+  as_vendor() { curl -fsS -H 'Content-Type: application/json' -H "Authorization: Bearer $VENDOR" "$@"; }
+  STORE="$(as_vendor -X POST "$BASE/api/v1/vendors/apply" \
+    -d '{"storeName":"Smoke Test Store","contactEmail":"smoke@example.com","phone":"9876543210"}')"
+  STORE_ID="$(echo "$STORE" | field id)"
+  STORE_SLUG="$(echo "$STORE" | field slug)"
+  echo "$STORE" | grep -q '"status":"pending"' && check "vendor applies for a store"
+  as_admin -X POST "$BASE/api/v1/admin/vendors/$STORE_ID/approve" | grep -q '"status":"approved"' && check "admin approves it"
+
+  DEPT="$(as_admin -X POST "$BASE/api/v1/admin/categories" -d '{"name":"Smoke Department"}' | field id)"
+  CATEGORY="$(as_admin -X POST "$BASE/api/v1/admin/categories" -d "{\"name\":\"Smoke Category\",\"parentId\":\"$DEPT\"}" | field id)"
+  [ -n "$CATEGORY" ] && check "admin adds categories"
+
+  PHOTO="$(mktemp)"
+  printf '\x89PNG\r\n\x1a\nsmoke-test-image' > "$PHOTO"
+  SIZE="$(wc -c < "$PHOTO" | tr -d ' ')"
+  SIGNED="$(as_vendor -X POST "$BASE/api/v1/uploads/presign" -d "{\"purpose\":\"product-image\",\"contentType\":\"image/png\",\"size\":$SIZE}")"
+  KEY="$(echo "$SIGNED" | field key)"
+  curl -fsS -X PUT -H 'Content-Type: image/png' --data-binary "@$PHOTO" "$(echo "$SIGNED" | field uploadUrl)" -o /dev/null \
+    && check "photo uploads straight to storage with a signed link"
+  rm -f "$PHOTO"
+
+  PRODUCT="$(as_vendor -X POST "$BASE/api/v1/vendor/products" -d "{\"title\":\"Smoke Test Phone\",\"categoryId\":\"$CATEGORY\",\
+\"price\":1999900,\"mrp\":2499900,\"stock\":5,\"status\":\"active\",\"images\":[{\"key\":\"$KEY\",\"alt\":\"Front\"}]}")"
+  PRODUCT_ID="$(echo "$PRODUCT" | field id)"
+  [ -n "$PRODUCT_ID" ] && check "vendor publishes a product"
+  PAGE="$(curl -fsS "$BASE/api/v1/products/$PRODUCT_ID")"
+  echo "$PAGE" | grep -q '"discountPercent":20' && check "product page shows it with its discount"
+  curl -fsS -o /dev/null "$(echo "$PAGE" | field url)" && check "its photo is served from storage"
+  curl -fsS "$BASE/api/v1/stores/$STORE_SLUG" | grep -q "\"id\":\"$PRODUCT_ID\"" && check "it's listed on the store page"
 fi
 
 echo "Smoke test passed for $BASE"

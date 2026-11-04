@@ -28,13 +28,13 @@ Dates assume you start **Tue 3 Nov 2026** and work every day; shift them if you 
 - [x] ✅ All three roles sign in and land on their own dashboard
 
 ## Day 3 · Thu 5 Nov · Vendors, products, S3 images (brief step 3)
-- [ ] 🛠 Vendor application → admin approval / suspension
-- [ ] 🛠 Categories; product create / edit / delete (vendor owns only their products)
-- [ ] 🛠 Image upload straight from the browser to S3 (S3Mock locally), type and size limits
-- [ ] 🛠 Seed script: DummyJSON + Fake Store → ~200 products, 5 vendors, reviews, demo users
-- [ ] 🛠 Tests: ownership, validation, approval flow; doc 06 (API) started
+- [x] 🛠 Vendor application → admin approval / suspension
+- [x] 🛠 Categories; product create / edit / delete (vendor owns only their products)
+- [x] 🛠 Image upload straight from the browser to S3 (S3Mock locally), type and size limits
+- [x] 🛠 Seed script: DummyJSON + Fake Store → 214 products, 5 vendors (+1 pending), 27 categories, photos copied to S3 (sample reviews kept for Day 7)
+- [x] 🛠 Tests: ownership, validation, approval flow; doc 06 (API) started
 - [ ] 👤 Oracle VM retry
-- [ ] ✅ A vendor adds a product with images and it shows on the store page
+- [x] ✅ A vendor adds a product with images and it shows on the store page
 
 ## Day 4 · Fri 6 Nov · Elasticsearch search (brief step 4)
 - [ ] 🛠 Index + mappings, background job keeps it in sync, `npm run reindex`

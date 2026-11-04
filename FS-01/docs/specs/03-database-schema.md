@@ -37,7 +37,9 @@ Indexes: `email` unique.
 | commissionRateBp | int \| null | Overrides the category rate when set |
 | payout | object | `{ accountHolder, bankLast4, ifsc, provider: "mock", beneficiaryRef, status: "not_started" \| "active" }`. The full account number goes only to the payout provider, never into our database |
 | ratingAvg, ratingCount | number | Average over the vendor's product reviews |
+| submittedAt | date | Last time the application was sent; pending applications are reviewed oldest first |
 | approvedAt, approvedBy | date, ObjectId | Audit |
+| statusChangedAt, statusChangedBy | date, ObjectId | Who last approved, rejected, suspended or restored the store |
 
 Indexes: `userId` unique, `slug` unique, `status`.
 
@@ -48,7 +50,8 @@ Indexes: `userId` unique, `slug` unique, `status`.
 | name, slug | string | `slug` **unique** |
 | parentId | ObjectId \| null | Two levels (e.g. Electronics → Phones) |
 | commissionRateBp | int \| null | Falls back to the platform default (1000) |
-| isActive | bool | |
+| isActive | bool | Hidden categories disappear from the shop; a category in use can be hidden but not deleted |
+| sortOrder | int | Display order within its level |
 
 ## products
 
@@ -59,7 +62,7 @@ Indexes: `userId` unique, `slug` unique, `status`.
 | title, slug | string | `slug` **unique** per vendor |
 | description | string | Up to 5 000 chars |
 | brand | string | Used for filters |
-| images | array | `{ key, alt }`, max 6, S3 keys under `products/<vendorId>/` |
+| images | array | `{ key, alt }`, max 6, S3 keys under `products/<vendorId>/`; each new key is checked in S3 (type, size) before saving; the first is the cover |
 | price, mrp | int (paise) | `price ≤ mrp`; MRP shows the discount |
 | stock | int | `≥ 0`, decremented inside the checkout transaction |
 | sku | string | Optional, unique per vendor |
@@ -67,7 +70,7 @@ Indexes: `userId` unique, `slug` unique, `status`.
 | ratingAvg, ratingCount, soldCount | number | Denormalised for sorting |
 | status | `draft` \| `active` \| `inactive` | Only `active` products of `approved` vendors are searchable |
 
-Indexes: `{ vendorId, status }`, `{ vendorId, slug }` unique, `categoryId`.
+Indexes: `{ vendorId, status }`, `{ vendorId, slug }` unique, `{ vendorId, sku }` unique (when set), `categoryId`, `{ status, createdAt: -1 }` (browsing).
 Search itself runs on Elasticsearch (index `products`), which holds a flattened copy: title, description, brand, category path, vendor name, price, rating, stock, status, createdAt.
 
 ## orders
@@ -150,7 +153,8 @@ Indexes: `{ productId, userId }` **unique**, `{ productId, status, createdAt: -1
 | maxDiscount, minOrder | int (paise) | |
 | startsAt, endsAt | date | |
 | usageLimit, perUserLimit, usedCount | int | `usedCount` incremented atomically with a limit check |
-| isActive | bool | |
+| isActive | bool | Hidden categories disappear from the shop; a category in use can be hidden but not deleted |
+| sortOrder | int | Display order within its level |
 
 `couponRedemptions`: `{ couponId, userId, orderId }`, unique `{ couponId, orderId }`, used for the per-user limit and released if the order expires or is cancelled in full.
 

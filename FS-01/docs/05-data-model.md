@@ -1,6 +1,6 @@
 # 05 · Data model
 
-[← Design decisions](04-design-decisions.md) · [Index](README.md) · [Next: Security →](10-security.md)
+[← Design decisions](04-design-decisions.md) · [Index](README.md) · [Next: API reference →](06-api-reference.md)
 
 ShopSphere keeps permanent data in **MongoDB** (11 collections), short-lived data in **Redis**, and a search copy of products in **Elasticsearch**.
 Every field, type and index is listed in the [database schema spec](specs/03-database-schema.md); this page explains how the pieces fit together.

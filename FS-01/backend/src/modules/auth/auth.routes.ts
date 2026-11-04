@@ -247,7 +247,7 @@ export function authRouter(cfg: AuthConfig): { auth: Router; account: Router } {
       const user = await User.findByIdAndUpdate(
         req.auth!.id,
         { name: (req.body as z.infer<typeof updateAccountSchema>).name },
-        { new: true, runValidators: true },
+        { returnDocument: "after", runValidators: true },
       );
       if (!user) throw new AppError(404, "not_found", "Account not found");
       res.json({ user: toPublicUser(user) });

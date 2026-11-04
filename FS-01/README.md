@@ -14,7 +14,7 @@ An Amazon-style marketplace where **many vendors sell**, **customers buy from se
 | Payments | Razorpay test mode (UPI, cards, webhooks, refunds) + own split-and-escrow ledger; built-in mock needs no account |
 | Infra | Docker Compose · nginx · GitHub Actions |
 
-**Status:** Day 2 of 10. Specs, architecture, schema and API list are done; sign-in with JWT and role-based access works end to end (customer, vendor, admin). Progress is tracked in the [10-day build tracker](docs/guides/DAY_PLAN.md).
+**Status:** Day 3 of 10. Sign-in and roles work end to end; vendors apply for a store, admins approve or suspend it, vendors list products with photos uploaded straight to S3, and shoppers browse 214 seeded products across 5 stores. Progress is tracked in the [10-day build tracker](docs/guides/DAY_PLAN.md).
 
 ![Architecture](docs/assets/architecture.png)
 
@@ -33,19 +33,26 @@ docker compose up --build
 | http://localhost:3000/api/v1/health | API health through nginx |
 | http://localhost:4000/api/v1/health | API health, direct |
 
-Create the demo accounts (one per role; the password is `DEMO_PASSWORD` in `.env`):
+Create the demo accounts, then the demo catalogue (27 categories, 5 stores, 214 products from DummyJSON and Fake Store,
+438 photos copied into S3; about a minute the first time, a few seconds after that). Every password is `DEMO_PASSWORD` in `.env`.
 
 ```bash
 docker compose exec api node dist/scripts/seed-users.js
+docker compose exec api node dist/scripts/seed-catalog.js
 ```
 
-| Email | Role | Lands on |
+| Email | Role | What to try |
 |---|---|---|
-| `customer@shopsphere.test` | Customer | /account |
-| `vendor@shopsphere.test` | Vendor | /vendor |
-| `admin@shopsphere.test` | Admin | /admin |
+| `customer@shopsphere.test` | Customer | Browse departments, stores and product pages |
+| `vendor@shopsphere.test` | Vendor | Vikram Electronics: add a product with photos, edit, publish |
+| `admin@shopsphere.test` | Admin | Review the waiting application from Kavya Handicrafts; manage categories |
+| `meera@`, `arjun@`, `sana@`, `rohan@shopsphere.test` | Vendor | The other four approved stores |
+| `kavya@shopsphere.test` | Vendor | A store application waiting for approval |
 
-Port 3000 taken? Set `FRONTEND_PORT=3001` in `.env`. MongoDB, Redis, Elasticsearch, S3Mock and the API publish their ports on `127.0.0.1` only.
+The catalogue comes from a committed snapshot ([`backend/seed/catalog.json`](backend/seed/catalog.json)), so seeding never
+depends on those sites being up; refresh it with `npm run seed:snapshot`. Prices are converted to rupees.
+
+Port 3000 taken? Set `FRONTEND_PORT=3001` (and `CORS_ORIGINS=http://localhost:3001`) in `.env`. MongoDB, Redis, Elasticsearch, S3Mock and the API publish their ports on `127.0.0.1` only. The browser loads photos and uploads new ones straight from S3Mock on port 9090, the same way it talks to AWS S3 on the live site.
 
 ## Developing without rebuilding images
 
@@ -72,4 +79,4 @@ CI ([`.github/workflows/fs01-ci.yml`](../.github/workflows/fs01-ci.yml)) runs al
 
 ## Documentation
 
-Everything is in [`docs/`](docs/README.md): overview, features and roles, architecture, design decisions, data model, PRD, app flow, database schema and API list. More topics are added as each part is built.
+Everything is in [`docs/`](docs/README.md): overview, features and roles, architecture, design decisions, data model, API reference, security, PRD, app flow, database schema and API list. More topics are added as each part is built.

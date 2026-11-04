@@ -13,6 +13,8 @@ ENV NODE_ENV=production
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/dist ./dist
+# The demo catalogue snapshot used by dist/scripts/seed-catalog.js.
+COPY seed ./seed
 ARG APP_VERSION=dev
 ENV APP_VERSION=$APP_VERSION
 USER node

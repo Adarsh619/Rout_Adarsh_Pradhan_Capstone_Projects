@@ -12,7 +12,7 @@ Read the files in order, or jump to the topic you need. Topics without a link ar
 | 03 | [System architecture](03-architecture.md) | Components, request flow, diagram, local vs live | ✓ |
 | 04 | [Design decisions](04-design-decisions.md) | Razorpay + own split engine (and why not Route), sub-orders, escrow, paise, Elasticsearch sync, S3 uploads | ✓ |
 | 05 | [Data model](05-data-model.md) | Collections, relationships, ER diagram, money rules | ✓ |
-| 06 | API reference | Endpoints, auth, errors | Day 3 |
+| 06 | [API reference](06-api-reference.md) | Conventions, errors, vendors, categories, products, uploads (with examples) | ✓ |
 | 07 | Frontend | React structure, pages, state | Day 8 |
 | 08 | Background jobs | BullMQ queues, retries, schedules | Day 4 |
 | 09 | Payments | Razorpay checkout and webhooks, split and escrow ledger, payouts, mock mode | Day 6 |

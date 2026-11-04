@@ -7,8 +7,15 @@ import { pinoHttp } from "pino-http";
 import type { Env } from "./config/env.js";
 import type { HealthCheck } from "./lib/health.js";
 import { logger } from "./lib/logger.js";
+import type { Storage } from "./lib/s3.js";
+import { requireAuth } from "./middleware/auth.js";
 import { errorHandler, notFound } from "./middleware/errors.js";
 import { authRouter, CSRF_HEADER } from "./modules/auth/auth.routes.js";
+import { categoryRouter } from "./modules/catalog/category.routes.js";
+import { productRouter } from "./modules/catalog/product.routes.js";
+import type { RouteContext } from "./modules/context.js";
+import { uploadRouter } from "./modules/uploads/upload.routes.js";
+import { vendorRouter } from "./modules/vendors/vendor.routes.js";
 import { SessionStore } from "./modules/auth/sessions.js";
 import { AccessTokens } from "./modules/auth/tokens.js";
 import { healthRouter } from "./routes/health.js";
@@ -17,6 +24,7 @@ export interface AppDeps {
   env: Env;
   corsOrigins: string[];
   redis: Redis;
+  storage: Storage;
   healthChecks: Record<string, HealthCheck>;
 }
 
@@ -57,6 +65,11 @@ export function createApp(deps: AppDeps): Express {
   app.use("/api/v1/health", healthRouter(deps.healthChecks));
   app.use("/api/v1/auth", auth);
   app.use("/api/v1/account", account);
+
+  // Feature routers use full paths under /api/v1. Their handlers are plain async functions:
+  // Express 5 passes a rejected promise to the error handler by itself.
+  const ctx: RouteContext = { redis: deps.redis, storage: deps.storage, signedIn: requireAuth(tokens, sessions) };
+  app.use("/api/v1", vendorRouter(ctx), categoryRouter(ctx), productRouter(ctx), uploadRouter(ctx));
 
   app.use(notFound);
   app.use(errorHandler);

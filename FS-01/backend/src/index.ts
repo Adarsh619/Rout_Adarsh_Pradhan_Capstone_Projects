@@ -4,7 +4,7 @@ import { createElasticsearch, pingElasticsearch } from "./lib/elasticsearch.js";
 import { logger } from "./lib/logger.js";
 import { connectMongo, disconnectMongo, pingMongo } from "./lib/mongo.js";
 import { createRedis, pingRedis } from "./lib/redis.js";
-import { createS3, ensureBucket, pingS3 } from "./lib/s3.js";
+import { createS3, createStorage, ensureBucket, pingS3 } from "./lib/s3.js";
 
 async function main(): Promise<void> {
   const env = loadEnv();
@@ -19,6 +19,7 @@ async function main(): Promise<void> {
     env,
     corsOrigins: corsOrigins(env),
     redis,
+    storage: createStorage(env, s3),
     healthChecks: {
       mongo: pingMongo,
       redis: () => pingRedis(redis),
