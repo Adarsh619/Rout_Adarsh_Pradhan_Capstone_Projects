@@ -1,7 +1,7 @@
 # FS-01 · ShopSphere: 10-Day Build Tracker
 
 Tick a box (`[x]`) when an item is done. Each day ends with something that works, a commit (approved first), and the matching doc.
-Dates assume you start **Tue 3 Nov 2026** and work every day; shift them if you start later. Final deadline: **20 Nov 2026**.
+Started **Tue 3 Nov 2026**. Day 4 finished a day early (Thu 5 Nov), so Days 5–10 were re-dated on 5 Nov. Final deadline: **20 Nov 2026**.
 
 **Legend:** 🛠 build (Claude + you) · 👤 your own task (accounts, recording, writing) · ✅ end-of-day proof
 
@@ -46,52 +46,51 @@ Dates assume you start **Tue 3 Nov 2026** and work every day; shift them if you 
 - [ ] 👤 Oracle VM retry
 - [x] ✅ Search "iphne" finds iPhones, filters show live counts
 
-## Day 5 · Sat 7 Nov · Cart, checkout, order lifecycle (brief step 5)
+## Day 5 · Fri 6 Nov · Cart, checkout, order lifecycle (brief step 5)
 - [ ] 🛠 Redis cart (guest cart merged on login), Redis product cache
 - [ ] 🛠 Checkout re-checks prices and stock; one transaction creates the order + one sub-order per vendor
 - [ ] 🛠 Stock reservation that expires if payment never happens
 - [ ] 🛠 Sub-order status: placed → packed → shipped → delivered; customer can cancel before shipping
 - [ ] 🛠 Customer "My orders" page with timeline; vendor orders page
 - [ ] 🛠 Tests: status rules, parallel checkouts never oversell
-- [ ] 👤 Oracle VM retry
+- [ ] 👤 Oracle VM retry; AWS: check plan type, credits and end date, turn on root MFA, add a zero-spend budget
 - [ ] ✅ Cart with items from 2 vendors → 1 order, 2 sub-orders
 
-## Day 6 · Sun 8 Nov · Razorpay payments + split engine (brief step 6)
+## Day 6 · Sat 7 Nov · Razorpay payments + split engine (brief step 6)
 - [ ] 🛠 `PaymentProvider` (`razorpay`, `mock`) and `PayoutProvider` (`mock`, labelled "simulated payout")
 - [ ] 🛠 Razorpay Order at checkout, Checkout popup (UPI `success@razorpay`), signature check
-- [ ] 🛠 Webhook: signature verified, safe against repeats and out-of-order events
+- [ ] 🛠 Webhook: signature verified, safe against repeats and out-of-order events (tested locally with signed sample events; the real webhook is connected once the site is live on Day 9)
 - [ ] 🛠 After payment: ledger entries; each vendor's share (subtotal − commission) **held**
 - [ ] 🛠 Delivered → release that share → payout job pays it out; cancel → reverse the hold + real Razorpay test refund
 - [ ] 🛠 Vendor payout details (only last 4 digits stored); tests for split maths, escrow states and webhooks; doc 09 (payments)
-- [ ] 👤 Add Razorpay test keys to `.env`; Oracle VM retry
+- [ ] 👤 Generate Razorpay **test** keys and put them in `.env` yourself (never in chat or Git); Oracle VM retry
 - [ ] ✅ Pay with real Razorpay test UPI → 2 vendor shares held → deliver → released → paid out (simulated); payment and refund visible in the Razorpay test dashboard
 
-## Day 7 · Mon 9 Nov · Reviews, coupons, invoices (brief step 7, part 1)
+## Day 7 · Sun 8 Nov · Reviews, coupons, invoices (brief step 7, part 1)
 - [ ] 🛠 Reviews only from buyers whose order was delivered; rating updates product + search
 - [ ] 🛠 Coupons: platform or vendor, % or flat, minimum order, usage limits, expiry
 - [ ] 🛠 PDF invoice per sub-order, generated in the background, stored in S3, download link
 - [ ] 🛠 Tests for review rules, coupon maths, invoices
-- [ ] 👤 Oracle VM retry
+- [ ] 👤 Oracle VM retry; create MongoDB Atlas M0 (Mumbai), DuckDNS name, Vercel and UptimeRobot accounts
 - [ ] ✅ Buy with a coupon → invoice PDF downloads → leave a review
 
-## Day 8 · Tue 10 Nov · Admin analytics & polish (brief step 7, part 2)
+## Day 8 · Mon 9 Nov · Admin analytics & polish (brief step 7, part 2)
 - [ ] 🛠 Admin analytics: sales total (GMV), commission earned, orders by status, daily sales chart, top vendors/products
 - [ ] 🛠 Vendor earnings page (held / released / settled)
 - [ ] 🛠 Admin pages: vendors, commission rates, refunds, review moderation
 - [ ] 🛠 UI polish: loading, empty and error states; mobile layout; doc 07 (frontend)
-- [ ] 👤 Create accounts: AWS (S3 bucket in Mumbai + limited access key), MongoDB Atlas M0, DuckDNS name, Vercel, UptimeRobot
+- [ ] 👤 **Hosting decision:** Oracle VM if it was created by now, otherwise the AWS fallback (EC2 t4g.small in Mumbai on free-plan credits). Create the S3 bucket and a limited access key
 - [ ] ✅ Dashboards show correct numbers for the seeded data
 
-## Day 9 · Wed 11 Nov · Live deployment & performance (brief step 7, part 3)
+## Day 9 · Tue 10 Nov · Live deployment & performance (brief step 7, part 3)
 - [ ] 🛠 `docker-compose.prod.yml`, `deploy/Caddyfile`, `deploy/server-setup.sh`
-- [ ] 🛠 Oracle VM: Docker, Elasticsearch setting, ports 80/443, HTTPS via Caddy + DuckDNS
-- [ ] 🛠 Backend live on Oracle; frontend live on Vercel; Atlas, S3, Razorpay webhook connected
+- [ ] 🛠 Server (Oracle VM or AWS EC2): Docker, swap, Elasticsearch setting, ports 80/443, HTTPS via Caddy + DuckDNS
+- [ ] 🛠 Backend live on the server; frontend live on Vercel; Atlas, S3, Razorpay test webhook connected
 - [ ] 🛠 CI: Docker smoke test + automatic deploy job; UptimeRobot on `/health`; nightly demo reset (03:00 IST)
 - [ ] 🛠 Performance: k6 search speed (with ~20k Amazon products), cache hit vs miss; one Playwright end-to-end test
-- [ ] 👤 If Oracle still has no capacity → fallback B (Render + keep-alive ping), else C (recording)
 - [ ] ✅ Live links run the full demo; results recorded
 
-## Day 10 · Thu 12 Nov · Deliverables
+## Day 10 · Wed 11 Nov · Deliverables
 - [ ] 🛠 Finish docs 01–14 + `openapi.yaml`, README with setup instructions, root README row
 - [ ] 🛠 Test and coverage report, performance numbers in doc 12
 - [ ] 🛠 Presentation outline (10 min: problem, design, challenges, results, next steps) and reflection template
@@ -114,6 +113,11 @@ Dates assume you start **Tue 3 Nov 2026** and work every day; shift them if you 
 1. 20k Amazon dataset → DummyJSON-only performance numbers
 2. Playwright test → manual demo script
 3. Vendor coupons → platform coupons only
-4. Oracle VM unavailable → fallback B (Render), then C (recording)
+4. Neither Oracle nor AWS works out → fallback C (recorded demo, run locally)
 
-Spare time: Days 8 and 10 have some slack, and 13–20 Nov is buffer before the deadline.
+## Buffer · Thu 12 – Fri 20 Nov
+- [ ] Thu 12 – Fri 13: catch up on anything that slipped, then put back whatever was cut above (20k dataset first)
+- [ ] Sat 14 – Sun 15: watch the live site for two nights (uptime, nightly reset, credits used); fix what shows up
+- [ ] Mon 16 – Tue 17: rehearse the 10-minute presentation twice; write the reflection
+- [ ] Wed 18 – Thu 19: final read of the docs and README; re-record the demo if the app changed
+- [ ] Fri 20 Nov: submit

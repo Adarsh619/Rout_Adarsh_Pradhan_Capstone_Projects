@@ -290,7 +290,7 @@ This is common for free ARM servers and isn't your mistake. Try in this order:
   4. If the resize also says out of capacity, keep 1 OCPU / 6 GB for now. That's enough until Day 9; try the resize again another day.
 - [ ] **E3.** Try at a different time of day; early morning or late night India time is often better.
 - [ ] **E4.** Don't upgrade to **Pay As You Go** just to get capacity unless you're comfortable with a card on file. If you ever do, first set a budget alert: **☰ → Billing & Cost Management → Budgets → Create Budget**.
-- [ ] **E5.** If it still fails by **Day 8**, tell me and we'll use the fallback (Render free tier with a keep-alive ping).
+- [ ] **E5.** If it still fails by **Day 8 (Mon 9 Nov)**, tell me and we'll use the fallback: the same Docker setup on an AWS EC2 t4g.small in Mumbai (design decision 10).
 
 ---
 
