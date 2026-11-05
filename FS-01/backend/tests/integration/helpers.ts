@@ -7,6 +7,8 @@ import { connectMongo } from "../../src/lib/mongo.js";
 import { createElasticsearch } from "../../src/lib/elasticsearch.js";
 import { createS3, createStorage, ensureBucket } from "../../src/lib/s3.js";
 import { SearchIndexer } from "../../src/modules/search/search-indexer.js";
+import { noReservations } from "../../src/modules/orders/reservations.js";
+import { createPaymentProvider } from "../../src/modules/payments/payment-provider.js";
 import { directSearchSync } from "../../src/modules/search/search-sync.js";
 import { hashPassword } from "../../src/modules/auth/password.js";
 import { User } from "../../src/modules/users/user.model.js";
@@ -44,8 +46,20 @@ export async function startTestServices() {
   // A fresh index on every run, so tests always use the current mapping and synonyms.
   await indexer.reindexAll();
   // Search updates run inside the request here, so a test can search straight after a change.
-  const app = createApp({ env, corsOrigins: ["http://localhost:3000"], redis, storage, es, searchSync: directSearchSync(indexer), healthChecks: {} });
-  return { app, redis, storage, es, indexer };
+  const searchSync = directSearchSync(indexer);
+  // Expiry is driven by the tests themselves (releaseReservation / expireDueOrders), not by a queue.
+  const app = createApp({
+    env,
+    corsOrigins: ["http://localhost:3000"],
+    redis,
+    storage,
+    es,
+    searchSync,
+    payments: createPaymentProvider("mock", env.JWT_ACCESS_SECRET),
+    reservations: noReservations,
+    healthChecks: {},
+  });
+  return { app, redis, storage, es, indexer, searchSync };
 }
 
 // Empties every collection but keeps them and their indexes (dropping the whole database between tests

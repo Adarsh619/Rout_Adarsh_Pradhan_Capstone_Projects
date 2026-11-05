@@ -1,7 +1,58 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router";
-import { useProduct } from "../api/catalog";
+import { MAX_LINE_QTY, useAddToCart } from "../api/cart";
+import { useProduct, type Product } from "../api/catalog";
+import { ApiError } from "../api/client";
+import { useAuth } from "../auth/AuthContext";
 import { LoadError, Loading, Price, Rating } from "../components/Catalog";
+
+function AddToCart({ product }: { product: Product }) {
+  const { user } = useAuth();
+  const add = useAddToCart();
+  const [qty, setQty] = useState(1);
+  if (user && user.role !== "customer") {
+    return <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">Only customer accounts can buy.</p>;
+  }
+  if (!product.inStock) return null;
+  const max = Math.min(MAX_LINE_QTY, product.stock);
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-3">
+        <label className="flex items-center gap-2 text-sm">
+          Qty
+          <select value={qty} onChange={(e) => setQty(Number(e.target.value))} className="rounded-lg border border-slate-300 bg-white px-2 py-2">
+            {Array.from({ length: max }, (_, i) => i + 1).map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="button"
+          onClick={() => add.mutate({ productId: product.id, qty })}
+          disabled={add.isPending}
+          className="rounded-lg bg-brand-600 px-6 py-2 font-medium text-white hover:bg-brand-700 disabled:opacity-60"
+        >
+          {add.isPending ? "Adding…" : "Add to cart"}
+        </button>
+      </div>
+      {add.isSuccess && (
+        <p role="status" className="text-sm text-emerald-700">
+          Added to your cart.{" "}
+          <Link to="/cart" className="font-medium underline">
+            Go to cart
+          </Link>
+        </p>
+      )}
+      {add.isError && (
+        <p role="alert" className="text-sm text-red-700">
+          {add.error instanceof ApiError ? add.error.message : "Couldn't add it to your cart. Try again."}
+        </p>
+      )}
+    </div>
+  );
+}
 
 export function ProductPage() {
   const { id = "" } = useParams();
@@ -69,9 +120,7 @@ export function ProductPage() {
               {product.vendor.storeName}
             </Link>
           </p>
-          <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-            The cart and checkout open soon. For now you can browse every store.
-          </p>
+          <AddToCart product={product} />
           {product.description && <p className="whitespace-pre-line text-slate-700">{product.description}</p>}
           {specs.length > 0 && (
             <section>

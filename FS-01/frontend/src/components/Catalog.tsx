@@ -129,11 +129,21 @@ const BADGE: Record<string, string> = {
   suspended: "bg-red-100 text-red-800",
   draft: "bg-slate-200 text-slate-700",
   inactive: "bg-slate-200 text-slate-700",
+  pending_payment: "bg-amber-100 text-amber-800",
+  awaiting_payment: "bg-amber-100 text-amber-800",
+  confirmed: "bg-sky-100 text-sky-800",
+  placed: "bg-sky-100 text-sky-800",
+  packed: "bg-indigo-100 text-indigo-800",
+  shipped: "bg-violet-100 text-violet-800",
+  delivered: "bg-emerald-100 text-emerald-800",
+  completed: "bg-emerald-100 text-emerald-800",
+  cancelled: "bg-slate-200 text-slate-700",
+  expired: "bg-slate-200 text-slate-700",
 };
 
 export function StatusBadge({ status, label }: { status: string; label?: string }) {
   return (
-    <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${BADGE[status] ?? "bg-slate-100 text-slate-700"}`}>
+    <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${label ? "" : "capitalize"} ${BADGE[status] ?? "bg-slate-100 text-slate-700"}`}>
       {label ?? status}
     </span>
   );

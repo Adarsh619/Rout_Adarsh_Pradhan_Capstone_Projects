@@ -9,12 +9,19 @@ import type { Env } from "./config/env.js";
 import type { HealthCheck } from "./lib/health.js";
 import { logger } from "./lib/logger.js";
 import type { Storage } from "./lib/s3.js";
-import { requireAuth } from "./middleware/auth.js";
+import { optionalAuth, requireAuth } from "./middleware/auth.js";
 import { errorHandler, notFound } from "./middleware/errors.js";
-import { authRouter, CSRF_HEADER } from "./modules/auth/auth.routes.js";
+import { CSRF_HEADER } from "./middleware/csrf.js";
+import { authRouter } from "./modules/auth/auth.routes.js";
+import { addressRouter } from "./modules/account/address.routes.js";
+import { CartStore } from "./modules/cart/cart-store.js";
+import { cartRouter, mergeGuestCartOnSignIn } from "./modules/cart/cart.routes.js";
 import { categoryRouter } from "./modules/catalog/category.routes.js";
 import { productRouter } from "./modules/catalog/product.routes.js";
 import type { RouteContext } from "./modules/context.js";
+import { orderRouter } from "./modules/orders/order.routes.js";
+import type { ReservationScheduler } from "./modules/orders/reservations.js";
+import type { PaymentProvider } from "./modules/payments/payment-provider.js";
 import { searchRouter } from "./modules/search/search.routes.js";
 import type { SearchSync } from "./modules/search/search-sync.js";
 import { uploadRouter } from "./modules/uploads/upload.routes.js";
@@ -30,6 +37,8 @@ export interface AppDeps {
   storage: Storage;
   es: Client;
   searchSync: SearchSync;
+  payments: PaymentProvider;
+  reservations: ReservationScheduler;
   healthChecks: Record<string, HealthCheck>;
 }
 
@@ -56,6 +65,7 @@ export function createApp(deps: AppDeps): Express {
 
   const tokens = new AccessTokens(env.JWT_ACCESS_SECRET, env.ACCESS_TOKEN_TTL_SECONDS);
   const sessions = new SessionStore(deps.redis, env.REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60);
+  const cookies = { secure: env.COOKIE_SECURE, sameSite: env.COOKIE_SAME_SITE };
   const { auth, account } = authRouter({
     redis: deps.redis,
     tokens,
@@ -65,6 +75,7 @@ export function createApp(deps: AppDeps): Express {
     cookieSecure: env.COOKIE_SECURE,
     cookieSameSite: env.COOKIE_SAME_SITE,
     bcryptCost: env.BCRYPT_COST,
+    afterSignIn: mergeGuestCartOnSignIn(new CartStore(deps.redis), cookies),
   });
 
   app.use("/api/v1/health", healthRouter(deps.healthChecks));
@@ -80,8 +91,23 @@ export function createApp(deps: AppDeps): Express {
     searchIndex: env.ES_INDEX,
     searchSync: deps.searchSync,
     signedIn: requireAuth(tokens, sessions),
+    maybeSignedIn: optionalAuth(tokens, sessions),
+    cookies,
+    payments: deps.payments,
+    reservations: deps.reservations,
+    reservationMinutes: env.RESERVATION_MINUTES,
   };
-  app.use("/api/v1", vendorRouter(ctx), categoryRouter(ctx), productRouter(ctx), uploadRouter(ctx), searchRouter(ctx));
+  app.use(
+    "/api/v1",
+    addressRouter(ctx),
+    vendorRouter(ctx),
+    categoryRouter(ctx),
+    productRouter(ctx),
+    uploadRouter(ctx),
+    searchRouter(ctx),
+    cartRouter(ctx),
+    orderRouter(ctx),
+  );
 
   app.use(notFound);
   app.use(errorHandler);

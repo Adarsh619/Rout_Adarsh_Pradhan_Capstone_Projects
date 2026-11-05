@@ -25,7 +25,8 @@ The **Day** column says when each endpoint is built; ✓ means it exists now.
 | POST | `/auth/refresh` | P (cookie + `X-Requested-With`) | Rotate the refresh token, new access token; reuse of an old token signs the user out everywhere | ✓ 2 |
 | POST | `/auth/logout` | P (cookie + `X-Requested-With`) | Revoke this session | ✓ 2 |
 | GET | `/auth/me` | S | Current user (a vendor's store status comes from `GET /vendors/me`) | ✓ 2 |
-| PATCH | `/account` | S | Change name (addresses on Day 5) | ✓ 2 |
+| PATCH | `/account` | S | Change name | ✓ 2 |
+| GET · POST · PATCH · DELETE | `/account/addresses[/:id]` | S | Saved delivery addresses (up to 5, one default) | ✓ 5 |
 | POST | `/account/password` | S | Change password (other sessions signed out) | ✓ 2 |
 
 ## Vendors
@@ -72,25 +73,27 @@ The **Day** column says when each endpoint is built; ✓ means it exists now.
 
 | Method | Path | Role | Purpose | Day |
 |---|---|---|---|---|
-| GET | `/cart` | P | Cart with live prices, stock warnings, grouped by vendor | 5 |
-| POST | `/cart/items` | P | Add `{ productId, qty }` | 5 |
-| PATCH · DELETE | `/cart/items/:productId` | P | Change quantity or remove | 5 |
+| GET | `/cart` | P | Cart with live prices, stock warnings, grouped by vendor | ✓ 5 |
+| POST | `/cart/items` | P | Add `{ productId, qty }` | ✓ 5 |
+| PATCH · DELETE | `/cart/items/:productId` | P | Change quantity or remove | ✓ 5 |
 | POST · DELETE | `/cart/coupon` | P | Apply or remove a coupon | 7 |
-| POST | `/checkout` | C | Create order + sub-orders, reserve stock, create the Razorpay order | 5 / 6 |
-| POST | `/checkout/verify` | C | Verify the payment signature returned by the popup | 6 |
+| POST | `/checkout` | C | Create order + sub-orders, reserve stock, create the payment order (mock now, Razorpay on Day 6) | ✓ 5 |
+| POST | `/checkout/verify` | C | Verify the payment signature returned by the popup | ✓ 5 |
+| POST | `/payments/mock/pay` | C | Test payment gateway (only with `PAYMENT_PROVIDER=mock`): signs a payment like Razorpay | ✓ 5 |
 | POST | `/webhooks/razorpay` | P (signed) | Payment and refund events; HMAC-verified, idempotent | 6 |
 | POST | `/webhooks/payouts` | P (signed) | Payout events from the payout provider (the simulated one in v1); HMAC-verified, idempotent | 6 |
 
-Guests are identified by an httpOnly `guest_id` cookie; their cart merges into the account on login.
+Guests are identified by an httpOnly `ss_guest` cookie; their cart merges into the account on sign-in or sign-up.
 
 ## Orders
 
 | Method | Path | Role | Purpose | Day |
 |---|---|---|---|---|
-| GET | `/orders` · `/orders/:id` | C | My orders with each vendor's part and timeline | 5 |
-| POST | `/orders/:id/sub-orders/:subId/cancel` | C | Cancel a part that hasn't shipped | 5 / 6 |
-| GET | `/vendor/orders?status=` | V | My sub-orders | 5 |
-| POST | `/vendor/orders/:subId/status` | V | `{ status: "packed" \| "shipped" \| "delivered", tracking? }` | 5 |
+| GET | `/orders` · `/orders/:id` | C | My orders with each vendor's part and timeline | ✓ 5 |
+| POST | `/orders/:id/cancel` | C | Cancel an unpaid order (stock returned at once) | ✓ 5 |
+| POST | `/orders/:id/sub-orders/:subId/cancel` | C | Cancel a part that hasn't shipped (refund added on Day 6) | ✓ 5 |
+| GET | `/vendor/orders?status=` | V (any status) | My paid sub-orders, with counts per status | ✓ 5 |
+| POST | `/vendor/orders/:subId/status` | V (any status) | `{ status: "packed" \| "shipped" \| "delivered", tracking? }` | ✓ 5 |
 | GET | `/invoices/:subId` | C (buyer) · V (seller) · A | Short-lived download link for the PDF | 7 |
 
 ## Reviews
@@ -125,7 +128,9 @@ Guests are identified by an httpOnly `guest_id` cookie; their cart merges into t
 | 403 | `forbidden`, `vendor_not_approved`, `account_suspended`, `csrf_header_missing` | Wrong role (with `requiredRoles`), not the owner, store not approved, suspended account, cookie endpoint without the header |
 | 404 | `not_found` | Unknown id or route |
 | 503 | `search_unavailable` | Elasticsearch is down (only search is affected) |
-| 409 | `email_taken`, `refresh_in_progress`, `already_applied`, `invalid_transition`, `sku_taken`, `category_in_use`, `product_has_orders`, `out_of_stock`, `price_changed`, `already_reviewed`, `coupon_exhausted` | State conflicts |
+| 402 | `payment_failed` | Test payment declined |
+| 409 | `email_taken`, `refresh_in_progress`, `already_applied`, `invalid_transition`, `sku_taken`, `category_in_use`, `product_has_orders`, `out_of_stock`, `cart_full`, `cart_empty`, `cart_changed`, `price_changed`, `order_not_payable`, `too_many_addresses`, `already_reviewed`, `coupon_exhausted` | State conflicts |
+| 502 | `payment_unavailable` | Payment provider unreachable; nothing charged |
 | 413 | `payload_too_large` | Body over 100 kB |
 | 429 | `rate_limited` | Too many attempts |
 | 503 | (health) | A backing service is down |

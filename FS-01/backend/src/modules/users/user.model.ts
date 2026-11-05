@@ -3,6 +3,21 @@ import { model, Schema, type HydratedDocument, type InferSchemaType } from "mong
 export const ROLES = ["customer", "vendor", "admin"] as const;
 export type Role = (typeof ROLES)[number];
 
+export const MAX_ADDRESSES = 5;
+
+// A delivery address. Checkout copies it into the order, so later edits never change a placed order.
+const addressSchema = new Schema({
+  label: { type: String, trim: true, maxlength: 30 },
+  name: { type: String, required: true, trim: true, maxlength: 80 },
+  phone: { type: String, required: true },
+  line1: { type: String, required: true, trim: true, maxlength: 120 },
+  line2: { type: String, trim: true, maxlength: 120 },
+  city: { type: String, required: true, trim: true, maxlength: 60 },
+  state: { type: String, required: true, trim: true, maxlength: 60 },
+  pincode: { type: String, required: true },
+  isDefault: { type: Boolean, default: false },
+});
+
 const userSchema = new Schema(
   {
     name: { type: String, required: true, trim: true, minlength: 2, maxlength: 80 },
@@ -14,6 +29,7 @@ const userSchema = new Schema(
     status: { type: String, enum: ["active", "suspended"], default: "active" },
     passwordChangedAt: { type: Date },
     lastLoginAt: { type: Date },
+    addresses: { type: [addressSchema], default: [] },
   },
   { timestamps: true },
 );
@@ -38,4 +54,32 @@ export const toPublicUser = (u: UserDoc): PublicUser => ({
   role: u.role as Role,
   status: u.status as "active" | "suspended",
   createdAt: (u.createdAt as Date).toISOString(),
+});
+
+export type AddressDoc = UserDoc["addresses"][number];
+
+export interface Address {
+  id: string;
+  label: string | null;
+  name: string;
+  phone: string;
+  line1: string;
+  line2: string | null;
+  city: string;
+  state: string;
+  pincode: string;
+  isDefault: boolean;
+}
+
+export const toAddress = (a: AddressDoc): Address => ({
+  id: a._id.toString(),
+  label: a.label ?? null,
+  name: a.name,
+  phone: a.phone,
+  line1: a.line1,
+  line2: a.line2 ?? null,
+  city: a.city,
+  state: a.state,
+  pincode: a.pincode,
+  isDefault: a.isDefault,
 });

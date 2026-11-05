@@ -77,7 +77,8 @@ On the server, `requireAuth` (signed in, session active) and `requireRole(...)` 
 **Ownership.** Every vendor product query includes the vendor's own store id, so another store's product answers
 `404` (not `403`, which would confirm it exists). Store status is checked on every seller request: a pending, rejected or
 suspended store gets `403 vendor_not_approved`, and suspending a store hides all its products from shoppers at once.
-Customers' own orders get the same treatment on Day 5.
+Customers' own orders get the same treatment: every order query includes the signed-in customer's id, so someone
+else's order answers `404`, and a vendor only ever sees their own store's paid parts. Only customer accounts can check out.
 
 The frontend's `RequireAuth` mirrors this for a good experience, but **the API is the real gate**: hiding a page
 in React is never treated as security.
@@ -99,7 +100,8 @@ client can't fake its IP by sending the header itself.
 The refresh cookie is sent automatically by the browser, so the two endpoints that act on it (`/auth/refresh`,
 `/auth/logout`) also require the header `X-Requested-With: ShopSphere`. Another website can only send a custom
 header after a CORS preflight, and CORS allows only ShopSphere's own origins (`CORS_ORIGINS`), so a malicious page
-can't trigger them. Every other endpoint needs the `Authorization` header, which browsers never add on their own.
+can't trigger them. A guest's cart is also tied to a cookie (`ss_guest`, httpOnly, a random 128-bit id), so cart writes
+need the same header. Every other endpoint needs the `Authorization` header, which browsers never add on their own.
 
 ## File uploads (product photos, store logos)
 
@@ -124,6 +126,8 @@ sequence in the [API reference](06-api-reference.md#uploads).
 | Headers | Helmet (nosniff, frame denial, HSTS behind HTTPS, …); `X-Powered-By` removed; nginx adds the same on the static site |
 | Input | Every body and query string parsed with Zod; one error per field; JSON bodies capped at 100 kB; unknown routes return JSON 404. `PATCH` bodies never fill in defaults, so a partial update can't reset fields it didn't mention |
 | Search | Search words are passed to Elasticsearch as query *values*, never as query syntax; filters are checked slugs and numbers; Elasticsearch is only reachable by the API and worker |
+| Checkout | Prices, stock and totals always come from the database, never from the browser (`expectedTotal` is only compared); stock is taken with a conditional update inside a transaction, so it can't go negative |
+| Payments | An order is marked paid only after the payment signature verifies (HMAC-SHA256, compared in constant time) and its provider order id matches; repeating a proof changes nothing; the mock gateway exists only when `PAYMENT_PROVIDER=mock` |
 | Errors | Unexpected errors return a generic 500; details only in server logs |
 | Logs | Authorization and cookie headers and password fields are redacted |
 | Redirects | `?next=` after sign-in only accepts same-site paths (`/…`, not `//…` or `https://…`) |
@@ -134,6 +138,7 @@ sequence in the [API reference](06-api-reference.md#uploads).
 
 - Unit (`backend/tests/auth-units.test.ts`): password rules incl. the 72-byte limit, JWT expiry vs tampering vs `alg: none`, refresh-token parsing, `requireAuth` / `requireRole`, production secret rules.
 - Integration against real MongoDB and Redis (`backend/tests/integration/auth.test.ts`): sign-up, case-insensitive sign-in, identical errors for unknown email and wrong password, the 5-failure lock, suspended accounts, rotation, the two-tab race, reuse detection signing out every device, CSRF header, logout killing the access token at once, password change signing out other devices.
+- Integration (`orders.test.ts`): another customer's order is 404, vendors and admins can't check out, guest cart writes need the CSRF header, a forged payment signature is refused, a vendor can't move another store's part.
 - Integration (`vendors.test.ts`, `catalog.test.ts`): admin-only routes, vendor ownership (404 for another store's product), unapproved stores blocked, photos from another store or never uploaded refused, a file stored as HTML refused, suspension hiding products straight away.
 - Smoke test through nginx: sign-up, `/me`, refresh, logout, the token failing afterwards, seeded admin sign-in, store approval, a real presigned upload and the product it belongs to.
 

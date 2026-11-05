@@ -5,7 +5,7 @@
 Slow or retryable work runs in a separate **worker** process (`backend/src/worker.ts`), not inside API requests.
 The API puts a job on a **BullMQ** queue in Redis and answers straight away; the worker picks the job up, and retries
 it if it fails. This page covers the queues, and in detail the first one built: keeping **Elasticsearch search** in step
-with MongoDB. Later days add invoice PDFs, payouts and stock reservations here.
+with MongoDB, and handing back stock from unpaid orders. Later days add invoice PDFs and payouts here.
 
 ## Queues
 
@@ -14,7 +14,7 @@ with MongoDB. Later days add invoice PDFs, payouts and stock reservations here.
 | `search-index` | Add, update or remove products in the search index | Day 4 | ✓ |
 | `invoice-pdf` | Generate a sub-order's invoice PDF and store it in S3 | Day 7 | planned |
 | `payout` | Pay a released vendor share through the payout provider | Day 6 | planned |
-| `reservation-expiry` | Return reserved stock when an order is never paid | Day 5 | planned |
+| `reservation-expiry` | Return reserved stock when an order is never paid | Day 5 | ✓ |
 
 Every queue lives in the same Redis as the cache and sessions. Jobs survive an API or worker restart, because they're
 stored in Redis (with append-only persistence on), not in memory.
@@ -67,6 +67,25 @@ MongoDB, so:
 
 Finished jobs are kept for an hour and failed ones for a week, for debugging. The worker runs 4 search jobs at a time.
 In the smoke test, a product published through the API is searchable **about 1 second later**.
+
+## Unpaid orders: giving the stock back
+
+Checkout takes the stock straight away (so two shoppers can't both buy the last unit) and gives the customer 15 minutes
+to pay. If they don't, the stock must go back on sale.
+
+| Mechanism | When it runs | Why |
+|---|---|---|
+| A **delayed job** per order (`expire-<orderId>`) | Exactly when that order's reservation ends | Stock comes back on time, not up to a minute late |
+| A **sweep** every minute (BullMQ job scheduler) | Always | Catches any order whose job was lost; harmless when there's nothing to do |
+| Paying or cancelling first | | Removes the job; if it runs anyway it finds the order paid and does nothing |
+
+Releasing an order is one transaction: the order becomes `expired` only if it is **still** waiting for payment, its parts
+are cancelled with the reason "Not paid in time", and every line's stock is added back. Payment and expiry both start
+with that same "still waiting for payment?" check, so whichever comes first wins and the other does nothing. Afterwards
+the product cache is cleared and search is updated, so the product shows as in stock again.
+
+Checked against the running stack: an unpaid order whose deadline was moved into the past was expired by the worker's
+sweep within 30 seconds, and the product's stock went from 1 back to 2.
 
 ## Rebuilding the index with no downtime
 

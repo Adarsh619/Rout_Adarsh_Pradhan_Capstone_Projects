@@ -83,3 +83,14 @@ Each decision lists what was chosen, the alternatives, and why.
 
 - **Chosen:** strict TypeScript; every request body, query and environment variable parsed with Zod.
 - **Why:** order and payment code has many shapes (paise, statuses, ids); type errors there are expensive. Invalid input is rejected at the edge with a clear `validation_error`.
+
+## 12. Reserve stock at checkout, give it back if unpaid
+
+- **Chosen:** checkout takes the stock in the same MongoDB transaction that creates the order, using a conditional update (`stock ≥ qty`). The order then has 15 minutes to be paid; a delayed job (plus a sweep every minute) gives the stock back if it isn't.
+- **Alternatives:** take the stock only after payment, which lets two people pay for the last unit and forces a refund; or a "reserved" counter beside the stock, which every read has to subtract.
+- **Why:** nobody can pay for something that's gone. The conditional update can never take stock below zero, and two checkouts touching the same product conflict inside MongoDB, so one is retried and then refused. A test runs six shoppers at once for three units: exactly three orders succeed.
+
+## 13. A test payment gateway that plays Razorpay's part
+
+- **Chosen:** `PaymentProvider` has a `mock` driver for local work, tests and CI. Its "popup" is an API endpoint that signs a payment exactly the way Razorpay does (HMAC-SHA256 of `order id|payment id`), and the app verifies it through the same `/checkout/verify` used for Razorpay.
+- **Why:** the whole buying flow, including the signature check, runs with no account, no internet and no keys, so CI and reviewers can try it. The mock endpoint only exists when `PAYMENT_PROVIDER=mock`; the live site uses Razorpay test mode (Day 6).

@@ -2,7 +2,7 @@
 
 [← Data model](05-data-model.md) · [Index](README.md) · [Next: Background jobs and search →](08-background-jobs.md)
 
-This page documents the endpoints that exist today, with real request and response shapes. The full plan, including
+This page documents the endpoints that exist today, with real request and response shapes (Days 1–5). The full plan, including
 endpoints still to come, is the [API list](specs/04-api-list.md). A machine-readable `openapi.yaml` follows on Day 10.
 
 ## Conventions
@@ -11,7 +11,7 @@ endpoints still to come, is the [API list](specs/04-api-list.md). A machine-read
 |---|---|
 | Base URL | `/api/v1` (locally `http://localhost:3000/api/v1` through nginx) |
 | Format | JSON in and out; request bodies up to 100 kB |
-| Auth | `Authorization: Bearer <accessToken>` from sign-in (15 min). The refresh cookie is only for `/auth/refresh` and `/auth/logout`, which also need `X-Requested-With: ShopSphere` ([Security](10-security.md)) |
+| Auth | `Authorization: Bearer <accessToken>` from sign-in (15 min). The refresh cookie is only for `/auth/refresh` and `/auth/logout`; those and guest cart writes also need `X-Requested-With: ShopSphere` ([Security](10-security.md)) |
 | Money | **Integer paise**: `price: 1999900` is ₹19,999. Fractions are rejected |
 | Lists | `?page=1&limit=20` (limit ≤ 50) → `{ items, page, limit, total }`; some lists add `counts` per status |
 | Ids | 24-hex MongoDB ids. An id that can't exist answers 404, the same as one that doesn't |
@@ -39,14 +39,19 @@ Every error has the same shape. Form errors list **one message per field**, so t
 | 403 | `forbidden` | Wrong role; `details.requiredRoles` lists the right ones |
 | 403 | `vendor_not_approved` | The vendor's store isn't approved; `details.storeStatus` is `none`, `pending`, `rejected` or `suspended` |
 | 404 | `not_found`, `store_not_found` | Unknown id, another vendor's product, a store that isn't public |
+| 402 | `payment_failed` | The (test) payment was declined; the order can still be paid |
 | 409 | `already_applied`, `invalid_transition`, `sku_taken`, `category_in_use`, `product_has_orders` | The action doesn't fit the current state |
+| 409 | `out_of_stock`, `cart_full`, `cart_empty`, `cart_changed`, `price_changed`, `order_not_payable`, `too_many_addresses` | Cart and checkout conflicts, explained below |
+| 400 | `invalid_signature` | A payment proof that doesn't verify |
+| 502 | `payment_unavailable` | The payment provider can't be reached; nothing was charged |
 | 429 | `rate_limited` | Too many attempts; `Retry-After` header |
 | 503 | `search_unavailable` | Elasticsearch is down; browsing, store and product pages still work |
 
 ## Auth and account
 
 Built on Day 2 and described in [Security](10-security.md): `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`,
-`POST /auth/logout`, `GET /auth/me`, `PATCH /account`, `POST /account/password`.
+`POST /auth/logout`, `GET /auth/me`, `PATCH /account`, `POST /account/password`. Signing in or up also moves a guest's cart
+into the account (below).
 
 ## Vendors and stores
 
@@ -186,6 +191,140 @@ Served by Elasticsearch, kept in step with MongoDB by a background job ([how](08
 Up to 8 product titles for autocomplete, from 2 characters: `{ "items": [{ "id": "…", "title": "Galaxy S24" }] }`.
 Matches word beginnings ("gal" → Galaxy) and whole words with a typo ("macbok" → MacBook).
 
+## Addresses (signed in)
+
+`GET /account/addresses` · `POST /account/addresses` · `PATCH /account/addresses/:id` · `DELETE /account/addresses/:id`
+
+```json
+POST /api/v1/account/addresses
+{ "name": "Priya Sharma", "phone": "+91 98765 43210", "line1": "12 MG Road", "line2": "",
+  "city": "Bengaluru", "state": "Karnataka", "pincode": "560001", "label": "Home", "isDefault": true }
+
+201 { "address": { "id": "…", "phone": "9876543210", "line2": null, "isDefault": true, … }, "items": [ … ] }
+```
+
+- Up to 5 per account (`409 too_many_addresses`). Exactly one is the default whenever any exist; the first is the default automatically.
+- Phones are 10-digit Indian mobiles (`+91`, spaces and dashes are removed); PIN codes are 6 digits.
+- Checkout copies the address into the order, so editing or deleting it later never changes a placed order.
+
+## Cart (guests too)
+
+| Method | Path | Body | Notes |
+|---|---|---|---|
+| GET | `/cart` | | The cart with today's prices and stock |
+| POST | `/cart/items` | `{ productId, qty }` | Adds to what's already there (up to 10 of a product, at most the stock); `201` for a new line |
+| PATCH | `/cart/items/:productId` | `{ qty }` | Sets the quantity |
+| DELETE | `/cart/items/:productId` | | Removes the line |
+
+A signed-in user's cart belongs to the account. A guest's cart is tied to an httpOnly `ss_guest` cookie (random id, 7 days);
+writes then also need `X-Requested-With: ShopSphere` like the other cookie endpoints. **Signing in or signing up moves the
+guest cart into the account**: quantities of the same product add up (max 10) and the cookie is cleared.
+
+```json
+{ "cart": {
+    "groups": [{ "vendor": { "id": "…", "storeName": "Vikram Electronics", "slug": "vikram-electronics" },
+                 "items": [{ "productId": "…", "title": "Galaxy Phone", "image": { "url": "…", "alt": "…" },
+                             "price": 2000000, "mrp": 2000000, "qty": 1, "stock": 5, "lineTotal": 2000000, "problem": null }],
+                 "subtotal": 2000000 }],
+    "itemCount": 1, "itemsTotal": 2000000, "problems": 0, "canCheckout": true } }
+```
+
+Each group is one store, and becomes one part of the order at checkout. A line whose product changed stays in the cart
+with a `problem` (`unavailable`, `out_of_stock` or `not_enough_stock`), its amount leaves the totals and `canCheckout`
+is false until it's fixed. Products a vendor deleted simply disappear.
+
+| Error | When |
+|---|---|
+| `404 not_found` | The product isn't on sale (draft, inactive, or its store isn't approved) |
+| `409 out_of_stock` | More than the stock; `details: { available, inCart }` |
+| `409 cart_full` | 50 different products already |
+
+## Checkout and payment (customers)
+
+### `POST /checkout`
+
+```json
+{ "addressId": "…", "expectedTotal": 2059800 }
+```
+
+Re-reads every price and stock level, then in **one MongoDB transaction** takes the stock and creates the order plus one
+part (sub-order) per store. The order waits for payment for 15 minutes (`RESERVATION_MINUTES`); after that its stock goes
+back on sale. The bought lines leave the cart.
+
+```json
+201 { "order": { "id": "…", "orderNumber": "SS-2026-000001", "status": "pending_payment", "grandTotal": 2059800,
+                 "reservationExpiresAt": "…", "parts": [{ "vendor": { "storeName": "Vikram Electronics" }, "status": "awaiting_payment", … },
+                                                        { "vendor": { "storeName": "Meera Gadgets" }, … }], … },
+      "payment": { "provider": "mock", "providerOrderId": "order_mock_…", "amount": 2059800, "currency": "INR", "expiresAt": "…" } }
+```
+
+| Error | When |
+|---|---|
+| `409 cart_empty` | Nothing to buy |
+| `409 cart_changed` | A line became unavailable or short of stock; `details.items` lists them |
+| `409 price_changed` | `expectedTotal` (what the shopper saw) differs from today's total; `details.itemsTotal` is the new one |
+| `409 out_of_stock` | Someone else bought the last units a moment earlier (the transaction lost the race) |
+| `400 validation_error` | `addressId` isn't one of the shopper's addresses |
+| `502 payment_unavailable` | The payment provider couldn't be reached; the stock was released and nothing was charged |
+| `403 forbidden` | Vendors and admins can't buy |
+
+### Paying: `POST /payments/mock/pay`, then `POST /checkout/verify`
+
+With `PAYMENT_PROVIDER=mock` (local, tests, CI) the API also plays the payment gateway, the way Razorpay's popup does:
+
+```json
+POST /payments/mock/pay   { "providerOrderId": "order_mock_…", "outcome": "success" }
+200 { "providerOrderId": "order_mock_…", "providerPaymentId": "pay_mock_…", "signature": "9f2c…" }
+```
+
+`outcome: "failure"` answers `402 payment_failed` and the order stays payable. The browser then sends the result to be verified:
+
+```json
+POST /checkout/verify   { "orderId": "…", "providerOrderId": "order_mock_…", "providerPaymentId": "pay_mock_…", "signature": "9f2c…" }
+200 { "order": { "status": "confirmed", "payment": { "status": "paid", … }, "parts": [{ "status": "placed", … }, …] } }
+```
+
+The signature is HMAC-SHA256 of `order id|payment id`, Razorpay's own scheme, so on Day 6 the real Razorpay popup replaces
+the mock gateway and `/checkout/verify` stays the same. A wrong signature is `400 invalid_signature`; verifying the same
+payment twice changes nothing; paying an order that already expired is `409 order_not_payable`.
+
+## Orders (customers)
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/orders?page=` | Newest first: number, status, total, first item's photo and title, each store's status |
+| GET | `/orders/:id` | The order, its parts with their timelines and tracking, and `payment` (the payment step) while it waits for payment |
+| POST | `/orders/:id/cancel` | Cancels an **unpaid** order; its stock goes back at once |
+| POST | `/orders/:id/sub-orders/:subId/cancel` | `{ reason? }` Cancels one store's part while it's `placed` or `packed`; stock goes back (the refund is added on Day 6) |
+
+Another customer's order answers `404`. Customers never see commission or vendor shares.
+
+| Order status | Meaning |
+|---|---|
+| `pending_payment` | Stock held, waiting for payment |
+| `confirmed` | Paid; stores are working on their parts |
+| `completed` | Every part is delivered or cancelled (at least one delivered) |
+| `cancelled` | Cancelled before payment, or every part cancelled |
+| `expired` | Not paid in time; stock went back on sale |
+
+## Orders (vendors)
+
+### `GET /vendor/orders?status=&page=`
+
+The store's **paid** parts only (an order waiting for payment isn't the vendor's business yet), newest first, with what to
+pack, where to send it and the money: `payable` (what the customer paid for this part), `commission` and `vendorNet`
+(what the store receives). `counts` gives the number per status for the filter tabs. `nextStatus` is the one step allowed next.
+
+### `POST /vendor/orders/:subId/status`
+
+```json
+{ "status": "shipped", "tracking": { "carrier": "Delhivery", "number": "DL123456" } }
+200 { "part": { "status": "shipped", "tracking": { … }, "nextStatus": "delivered", "timeline": [ … ] } }
+```
+
+One step at a time: `placed → packed → shipped → delivered`. Shipping needs tracking. Anything else is
+`409 invalid_transition` with `details.allowed`; another store's part is `404`. Delivering the last open part completes the order.
+
 ## Products (the vendor's own)
 
 All need a vendor whose store is **approved** (`403 vendor_not_approved` otherwise). A vendor only ever sees their own
@@ -270,4 +409,6 @@ the product save re-checks the stored object, which matters because the local S3
 | Categories, product rules, ownership, photo checks, cache, suspension hiding products, upload links | `backend/tests/integration/catalog.test.ts` |
 | Slugs, money, category tree, upload checks, file URLs, signed-link format | `backend/tests/catalog-units.test.ts` |
 | Search parameters, query rules, facet counts, autocomplete | `backend/tests/search-units.test.ts`, `backend/tests/integration/search.test.ts` |
-| The whole flow through nginx, S3 included | `scripts/smoke-test.sh` (CI) |
+| Addresses, cart (guest cookie, merge on sign-in, stock checks), checkout, the overselling race, payment verification, expiry, cancelling, vendor status steps | `backend/tests/integration/orders.test.ts` |
+| Commission and splitting, status rules, payment signatures | `backend/tests/order-units.test.ts` |
+| The whole flow through nginx, S3 included, from guest cart to the vendor packing a paid order | `scripts/smoke-test.sh` (CI) |

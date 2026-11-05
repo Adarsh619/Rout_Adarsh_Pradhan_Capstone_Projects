@@ -1,11 +1,37 @@
-import { Link, NavLink, Outlet, useNavigate } from "react-router";
+import { useEffect } from "react";
+import { Link, NavLink, Outlet, useLocation, useNavigate, useNavigationType } from "react-router";
+import { useCart } from "../api/cart";
 import { useAuth } from "../auth/AuthContext";
 import { HOME_BY_ROLE, ROLE_LABEL } from "../auth/types";
 import { SearchBox } from "./SearchBox";
 
+function CartLink() {
+  const { data } = useCart();
+  const count = data?.itemCount ?? 0;
+  return (
+    <NavLink to="/cart" aria-label={count ? `Cart, ${count} ${count === 1 ? "item" : "items"}` : "Cart"} className="relative font-medium text-slate-700 hover:text-brand-700">
+      Cart
+      {count > 0 && (
+        <span className="ml-1 rounded-full bg-brand-600 px-1.5 py-0.5 text-xs text-white">
+          {count}
+          <span className="sr-only"> items</span>
+        </span>
+      )}
+    </NavLink>
+  );
+}
+
 export function Layout() {
   const { status, user, logout } = useAuth();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const navigationType = useNavigationType();
+
+  // A new page starts at the top. Only the path counts, so changing search filters (the query string) keeps the
+  // shopper where they are; Back and Forward ("POP") are left alone so the browser restores the old position.
+  useEffect(() => {
+    if (navigationType !== "POP") window.scrollTo(0, 0);
+  }, [pathname, navigationType]);
 
   // Leave the (possibly protected) page first, so it doesn't redirect to sign-in as the session ends.
   const signOut = async () => {
@@ -26,8 +52,14 @@ export function Layout() {
             <SearchBox />
           </div>
           <nav aria-label="Account" className="flex items-center gap-3 text-sm">
+            {(status === "signedOut" || user?.role === "customer") && <CartLink />}
             {status === "signedIn" && user ? (
               <>
+                {user.role === "customer" && (
+                  <NavLink to="/orders" className="font-medium text-slate-700 hover:text-brand-700">
+                    Orders
+                  </NavLink>
+                )}
                 <NavLink to={HOME_BY_ROLE[user.role]} className="font-medium text-slate-700 hover:text-brand-700">
                   {user.role === "customer" ? "My account" : "Dashboard"}
                 </NavLink>

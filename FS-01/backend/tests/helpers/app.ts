@@ -2,6 +2,8 @@ import { Redis } from "ioredis";
 import { createApp, type AppDeps } from "../../src/app.js";
 import { loadEnv } from "../../src/config/env.js";
 import { createElasticsearch } from "../../src/lib/elasticsearch.js";
+import { noReservations } from "../../src/modules/orders/reservations.js";
+import { createPaymentProvider } from "../../src/modules/payments/payment-provider.js";
 import { noSearchSync } from "../../src/modules/search/search-sync.js";
 import { memoryStorage } from "./memory-storage.js";
 
@@ -15,6 +17,8 @@ export function unitApp(overrides: Partial<AppDeps> = {}) {
     // Never contacted unless a test searches.
     es: createElasticsearch("http://localhost:9200"),
     searchSync: noSearchSync,
+    payments: createPaymentProvider("mock", "unit-test-secret"),
+    reservations: noReservations,
     healthChecks: {},
     ...overrides,
   });

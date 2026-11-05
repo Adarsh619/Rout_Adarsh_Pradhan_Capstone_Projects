@@ -35,6 +35,8 @@ const schema = z.object({
   S3_PUBLIC_URL: z.string().url().optional().or(z.literal("").transform(() => undefined)),
 
   PAYMENT_PROVIDER: z.enum(["mock", "razorpay"]).default("mock"),
+  // How long checkout holds the stock for an unpaid order before it goes back on sale.
+  RESERVATION_MINUTES: z.coerce.number().int().min(1).max(120).default(15),
 
   // Signs access tokens. Required (32+ characters) when NODE_ENV=production; a fixed value is used only in dev and tests.
   JWT_ACCESS_SECRET: z.string().min(32, "must be at least 32 characters").optional(),

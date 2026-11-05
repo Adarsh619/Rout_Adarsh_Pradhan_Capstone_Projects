@@ -79,7 +79,7 @@ Search itself runs on Elasticsearch (index `products`), which holds a flattened 
 |---|---|---|
 | orderNumber | string | **unique**, `SS-2026-000123` |
 | customerId | ObjectId → users | |
-| items | array | Snapshot at purchase: `{ productId, vendorId, title, image, price, qty }` (later price changes don't affect it) |
+| items | array | Snapshot at purchase: `{ productId, vendorId, title, imageKey, price, qty, commissionRateBp }` (later price or rate changes don't affect it) |
 | shippingAddress | object | Copied from the user's address |
 | itemsTotal, discount, shipping, grandTotal | int (paise) | `grandTotal = itemsTotal − discount + shipping`; shipping is 0 in v1 |
 | coupon | object \| null | `{ couponId, code, scope, vendorId, discount }` |
@@ -87,7 +87,9 @@ Search itself runs on Elasticsearch (index `products`), which holds a flattened 
 | status | `pending_payment` \| `confirmed` \| `completed` \| `cancelled` \| `expired` | `completed` when every sub-order is delivered or cancelled |
 | reservationExpiresAt | date | Stock is returned if unpaid by then |
 
-Indexes: `orderNumber` unique, `{ customerId, createdAt: -1 }`, `payment.providerOrderId` unique (sparse), `{ status, reservationExpiresAt }`.
+Indexes: `orderNumber` unique, `{ customerId, createdAt: -1 }`, `payment.providerOrderId` unique (when set), `{ status, reservationExpiresAt }`, `items.productId` (an ordered product can't be deleted).
+
+Order numbers come from `counters` (`{ _id: "order-2026", seq }`), incremented outside the checkout transaction so checkouts don't queue on one document; a failed checkout leaves a gap.
 
 ## subOrders (one per vendor per order)
 
@@ -95,20 +97,22 @@ Indexes: `orderNumber` unique, `{ customerId, createdAt: -1 }`, `payment.provide
 |---|---|---|
 | orderId, orderNumber | ObjectId, string | |
 | customerId, vendorId | ObjectId | |
+| vendorName, vendorSlug | string | Snapshot, so the order reads the same if the store is renamed |
 | items | array | This vendor's lines from the order |
 | itemsTotal | int | Sum of this vendor's lines |
 | discountShare | int | This sub-order's part of the order discount |
 | payable | int | `itemsTotal − discountShare`: what the customer paid for this part |
-| commissionRateBp, commission | int | Rate frozen at purchase time |
+| commission | int | Sum of the lines' commissions (each line keeps its own frozen rate) |
 | vendorNet | int | What the vendor receives (rules below) |
-| status | `placed` \| `packed` \| `shipped` \| `delivered` \| `cancelled` | |
+| status | `awaiting_payment` \| `placed` \| `packed` \| `shipped` \| `delivered` \| `cancelled` | `awaiting_payment` until the order is paid |
 | statusHistory | array | `{ status, at, byUserId, byRole, note }` |
 | tracking | object | `{ carrier, number }`, required for `shipped` |
 | payout | object | `{ amount, status: "held" \| "released" \| "paid" \| "reversed" \| "failed", provider, providerRef, releasedAt, paidAt }`. `amount` = `vendorNet` |
 | refund | object \| null | `{ id, amount, at }`; `id` is the Razorpay refund id |
-| deliveredAt, cancelledAt | date | |
+| placedAt | date | When the order was paid; vendors only see parts that have it |
+| deliveredAt, cancelledAt, cancelReason | date, date, string | |
 
-Indexes: `{ vendorId, status, createdAt: -1 }`, `orderId`, `{ "payout.status", vendorId }`, `payout.providerRef` (sparse).
+Indexes: `{ vendorId, status, createdAt: -1 }`, `{ vendorId, placedAt: -1 }`, `orderId`; from Day 6 `{ "payout.status", vendorId }`, `payout.providerRef` (sparse).
 
 **Escrow states:** `held` (paid, not yet delivered) → `released` (delivered) → `paid` (payout done), or `held` → `reversed` (cancelled and refunded). A failed payout stays `failed` and is retried by the job.
 

@@ -47,14 +47,15 @@ Started **Tue 3 Nov 2026**. Day 4 finished a day early (Thu 5 Nov), so Days 5–
 - [x] ✅ Search "iphne" finds iPhones, filters show live counts
 
 ## Day 5 · Fri 6 Nov · Cart, checkout, order lifecycle (brief step 5)
-- [ ] 🛠 Redis cart (guest cart merged on login), Redis product cache
-- [ ] 🛠 Checkout re-checks prices and stock; one transaction creates the order + one sub-order per vendor
-- [ ] 🛠 Stock reservation that expires if payment never happens
-- [ ] 🛠 Sub-order status: placed → packed → shipped → delivered; customer can cancel before shipping
-- [ ] 🛠 Customer "My orders" page with timeline; vendor orders page
-- [ ] 🛠 Tests: status rules, parallel checkouts never oversell
-- [ ] 👤 Oracle VM retry; AWS: check plan type, credits and end date, turn on root MFA, add a zero-spend budget
-- [ ] ✅ Cart with items from 2 vendors → 1 order, 2 sub-orders
+- [x] 🛠 Redis cart (guest cart merged on login), Redis product cache
+- [x] 🛠 Checkout re-checks prices and stock; one transaction creates the order + one sub-order per vendor
+- [x] 🛠 Stock reservation that expires if payment never happens (delayed job + minute sweep)
+- [x] 🛠 Sub-order status: placed → packed → shipped → delivered; customer can cancel before shipping
+- [x] 🛠 Customer "My orders" page with timeline; vendor orders page (plus addresses and a test payment screen)
+- [x] 🛠 Tests: status rules, parallel checkouts never oversell
+- [x] 👤 AWS: free plan with $100 credits (unused), root MFA on, zero-spend budget set
+- [ ] 👤 Oracle VM retry
+- [x] ✅ Cart with items from 2 vendors → 1 order, 2 sub-orders
 
 ## Day 6 · Sat 7 Nov · Razorpay payments + split engine (brief step 6)
 - [ ] 🛠 `PaymentProvider` (`razorpay`, `mock`) and `PayoutProvider` (`mock`, labelled "simulated payout")

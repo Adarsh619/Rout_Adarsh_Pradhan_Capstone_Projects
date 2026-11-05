@@ -62,7 +62,6 @@ if [ -n "${DEMO_PASSWORD:-}" ]; then
   KEY="$(echo "$SIGNED" | field key)"
   curl -fsS -X PUT -H 'Content-Type: image/png' --data-binary "@$PHOTO" "$(echo "$SIGNED" | field uploadUrl)" -o /dev/null \
     && check "photo uploads straight to storage with a signed link"
-  rm -f "$PHOTO"
 
   PRODUCT="$(as_vendor -X POST "$BASE/api/v1/vendor/products" -d "{\"title\":\"Smoke Test Phone\",\"categoryId\":\"$CATEGORY\",\
 \"price\":1999900,\"mrp\":2499900,\"stock\":5,\"status\":\"active\",\"images\":[{\"key\":\"$KEY\",\"alt\":\"Front\"}]}")"
@@ -81,6 +80,45 @@ if [ -n "${DEMO_PASSWORD:-}" ]; then
   done
   check "the worker indexes it and search finds it (typo included) after ${i}s"
   curl -fsS "$BASE/api/v1/search/suggest?q=smoke%20te" | grep -q '"title":"Smoke Test Phone"' && check "autocomplete suggests it"
+
+  # A guest fills a cart from two stores, signs up (the cart follows), checks out and pays on the test gateway.
+  GUEST_JAR="$(mktemp)"
+  as_guest() { curl -fsS -H 'Content-Type: application/json' -H 'X-Requested-With: ShopSphere' -b "$GUEST_JAR" -c "$GUEST_JAR" "$@"; }
+  # A second store (CI's seeded products have no photos, so they stay drafts), so the cart spans two sellers.
+  VENDOR2="$(json -X POST "$BASE/api/v1/auth/register" \
+    -d "{\"name\":\"Smoke Vendor Two\",\"email\":\"smoke-vendor2-$(date +%s)-$RANDOM@example.com\",\"password\":\"Smoke-test-123\",\"role\":\"vendor\"}" | field accessToken)"
+  as_vendor2() { curl -fsS -H 'Content-Type: application/json' -H "Authorization: Bearer $VENDOR2" "$@"; }
+  STORE2_ID="$(as_vendor2 -X POST "$BASE/api/v1/vendors/apply" \
+    -d '{"storeName":"Smoke Second Store","contactEmail":"smoke2@example.com","phone":"9876543210"}' | field id)"
+  as_admin -X POST "$BASE/api/v1/admin/vendors/$STORE2_ID/approve" -o /dev/null
+  SIGNED2="$(as_vendor2 -X POST "$BASE/api/v1/uploads/presign" -d "{\"purpose\":\"product-image\",\"contentType\":\"image/png\",\"size\":$SIZE}")"
+  curl -fsS -X PUT -H 'Content-Type: image/png' --data-binary "@$PHOTO" "$(echo "$SIGNED2" | field uploadUrl)" -o /dev/null
+  OTHER_ID="$(as_vendor2 -X POST "$BASE/api/v1/vendor/products" -d "{\"title\":\"Smoke Test Cable\",\"categoryId\":\"$CATEGORY\",\
+\"price\":29900,\"stock\":3,\"status\":\"active\",\"images\":[{\"key\":\"$(echo "$SIGNED2" | field key)\",\"alt\":\"Cable\"}]}" | field id)"
+  rm -f "$PHOTO"
+  as_guest -X POST "$BASE/api/v1/cart/items" -d "{\"productId\":\"$PRODUCT_ID\",\"qty\":1}" -o /dev/null
+  as_guest -X POST "$BASE/api/v1/cart/items" -d "{\"productId\":\"$OTHER_ID\",\"qty\":1}" | grep -q '"itemCount":2' \
+    && check "a guest adds products from two stores to the cart"
+  SHOPPER="$(as_guest -X POST "$BASE/api/v1/auth/register" \
+    -d "{\"name\":\"Smoke Shopper\",\"email\":\"smoke-shopper-$(date +%s)-$RANDOM@example.com\",\"password\":\"Smoke-test-123\"}" | field accessToken)"
+  as_shopper() { curl -fsS -H 'Content-Type: application/json' -H 'X-Requested-With: ShopSphere' -H "Authorization: Bearer $SHOPPER" "$@"; }
+  as_shopper "$BASE/api/v1/cart" | grep -q '"itemCount":2' && check "signing up keeps the guest's cart"
+  ADDRESS_ID="$(as_shopper -X POST "$BASE/api/v1/account/addresses" -d '{"name":"Smoke Shopper","phone":"9876543210",
+"line1":"1 Test Street","city":"Bengaluru","state":"Karnataka","pincode":"560001"}' | sed -n 's/.*"address":{"id":"\([^"]*\)".*/\1/p')"
+  CHECKOUT="$(as_shopper -X POST "$BASE/api/v1/checkout" -d "{\"addressId\":\"$ADDRESS_ID\"}")"
+  ORDER_ID="$(echo "$CHECKOUT" | sed -n 's/.*"order":{"id":"\([^"]*\)".*/\1/p')"
+  [ "$(echo "$CHECKOUT" | grep -o '"vendor":{"storeName"' | wc -l | tr -d ' ')" = 2 ] && check "checkout makes one order with a part per store"
+  curl -fsS "$BASE/api/v1/products/$PRODUCT_ID" | grep -q '"stock":4' && check "the stock is reserved"
+  PROVIDER_ORDER="$(echo "$CHECKOUT" | field providerOrderId)"
+  PAID="$(as_shopper -X POST "$BASE/api/v1/payments/mock/pay" -d "{\"providerOrderId\":\"$PROVIDER_ORDER\"}")"
+  as_shopper -X POST "$BASE/api/v1/checkout/verify" -d "{\"orderId\":\"$ORDER_ID\",\"providerOrderId\":\"$PROVIDER_ORDER\",\
+\"providerPaymentId\":\"$(echo "$PAID" | field providerPaymentId)\",\"signature\":\"$(echo "$PAID" | field signature)\"}" \
+    | grep -q '"status":"confirmed"' && check "the signed test payment is verified and the order confirmed"
+  PART_ID="$(as_vendor "$BASE/api/v1/vendor/orders" | sed -n 's/^{"items":\[{"id":"\([^"]*\)".*/\1/p')"
+  as_vendor -X POST "$BASE/api/v1/vendor/orders/$PART_ID/status" -d '{"status":"packed"}' | grep -q '"status":"packed"' \
+    && check "the vendor sees the paid order and packs it"
+  as_shopper "$BASE/api/v1/orders/$ORDER_ID" | grep -q '"status":"packed"' && check "the customer sees it packed"
+  rm -f "$GUEST_JAR"
 fi
 
 echo "Smoke test passed for $BASE"

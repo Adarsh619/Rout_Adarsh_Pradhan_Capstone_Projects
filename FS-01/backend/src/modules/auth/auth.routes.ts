@@ -3,6 +3,7 @@ import type { Redis } from "ioredis";
 import { z } from "zod";
 import { hit, peek, reset } from "../../lib/rate-limit.js";
 import { requireAuth } from "../../middleware/auth.js";
+import { requireCsrfHeader } from "../../middleware/csrf.js";
 import { AppError } from "../../middleware/errors.js";
 import { validateBody } from "../../middleware/validate.js";
 import { User, toPublicUser, type Role, type UserDoc } from "../users/user.model.js";
@@ -19,15 +20,13 @@ export interface AuthConfig {
   cookieSecure: boolean;
   cookieSameSite: "lax" | "strict" | "none";
   bcryptCost: number;
+  // Runs after every successful sign-in or sign-up (moves a guest's cart into the account).
+  afterSignIn?: (req: Request, res: Response, userId: string) => Promise<void>;
 }
 
 export const REFRESH_COOKIE = "ss_refresh";
 // The refresh cookie is only ever sent to the auth endpoints, never with ordinary API calls.
 const COOKIE_PATH = "/api/v1/auth";
-// Endpoints that act on the cookie require this header. Browsers only let another site send a custom header
-// after a CORS preflight, which our CORS policy refuses, so a malicious page can't trigger them (CSRF).
-export const CSRF_HEADER = "x-requested-with";
-
 const LIMITS = {
   registerPerIp: { limit: 10, window: 60 * 60 },
   loginPerIp: { limit: 30, window: 15 * 60 },
@@ -77,10 +76,11 @@ export function authRouter(cfg: AuthConfig): { auth: Router; account: Router } {
   };
 
   // Starts a session and answers with the access token; the refresh token goes into the httpOnly cookie.
-  const signIn = async (res: Response, user: UserDoc, status: number) => {
+  const signIn = async (req: Request, res: Response, user: UserDoc, status: number) => {
     const { sid, token } = await cfg.sessions.create(user.id as string, user.role as Role);
     const accessToken = await cfg.tokens.sign({ sub: user.id as string, role: user.role as Role, sid });
     res.cookie(REFRESH_COOKIE, token, cookieOptions());
+    await cfg.afterSignIn?.(req, res, user.id as string);
     res.status(status).json({ user: toPublicUser(user), accessToken, expiresIn: cfg.accessTtlSeconds });
   };
 
@@ -101,13 +101,6 @@ export function authRouter(cfg: AuthConfig): { auth: Router; account: Router } {
         next(err);
       }
     };
-
-  const requireCsrfHeader: RequestHandler = (req, _res, next) => {
-    if (req.get(CSRF_HEADER) !== "ShopSphere") {
-      return next(new AppError(403, "csrf_header_missing", "Missing X-Requested-With header"));
-    }
-    next();
-  };
 
   auth.post(
     "/register",
@@ -130,7 +123,7 @@ export function authRouter(cfg: AuthConfig): { auth: Router; account: Router } {
           }
           throw err;
         });
-        await signIn(res, user, 201);
+        await signIn(req, res, user, 201);
       } catch (err) {
         next(err);
       }
@@ -172,7 +165,7 @@ export function authRouter(cfg: AuthConfig): { auth: Router; account: Router } {
         await reset(cfg.redis, failKey);
         user.lastLoginAt = new Date();
         await user.save();
-        await signIn(res, user, 200);
+        await signIn(req, res, user, 200);
       } catch (err) {
         next(err);
       }

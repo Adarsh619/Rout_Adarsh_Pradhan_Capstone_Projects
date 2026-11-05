@@ -58,7 +58,9 @@ If the customer never pays, the reservation expires after 15 minutes, the stock 
 
 ```mermaid
 stateDiagram-v2
-  [*] --> placed: payment captured
+  [*] --> awaiting_payment: checkout (stock reserved)
+  awaiting_payment --> placed: payment verified
+  awaiting_payment --> cancelled: not paid in 15 min, or customer cancels
   placed --> packed: vendor
   packed --> shipped: vendor adds tracking no.
   shipped --> delivered: vendor (or admin)

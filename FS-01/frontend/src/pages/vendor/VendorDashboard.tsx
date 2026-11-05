@@ -44,11 +44,14 @@ function ApprovedStore({ store }: { store: OwnStore }) {
         <Link to="/vendor/products" className="rounded-lg border border-slate-300 bg-white px-4 py-2 font-medium hover:bg-slate-50">
           Manage products
         </Link>
+        <Link to="/vendor/orders" className="rounded-lg border border-slate-300 bg-white px-4 py-2 font-medium hover:bg-slate-50">
+          Orders to ship
+        </Link>
         <Link to={`/stores/${store.slug}`} className="rounded-lg border border-slate-300 bg-white px-4 py-2 font-medium hover:bg-slate-50">
           View your store page
         </Link>
       </div>
-      <p className="text-sm text-slate-500">Orders and earnings appear here once checkout opens.</p>
+      <p className="text-sm text-slate-500">Earnings (held, released and paid out) arrive with payments.</p>
     </div>
   );
 }

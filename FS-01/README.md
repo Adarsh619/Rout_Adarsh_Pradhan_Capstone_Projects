@@ -14,7 +14,7 @@ An Amazon-style marketplace where **many vendors sell**, **customers buy from se
 | Payments | Razorpay test mode (UPI, cards, webhooks, refunds) + own split-and-escrow ledger; built-in mock needs no account |
 | Infra | Docker Compose · nginx · GitHub Actions |
 
-**Status:** Day 4 of 10. Sign-in and roles work end to end; vendors apply for a store, admins approve or suspend it, vendors list products with photos uploaded straight to S3, and shoppers search 214 seeded products across 5 stores with typo-tolerant Elasticsearch search, live filter counts and autocomplete. Progress is tracked in the [10-day build tracker](docs/guides/DAY_PLAN.md).
+**Status:** Day 5 of 10. Sign-in and roles work end to end; vendors apply for a store, admins approve or suspend it, vendors list products with photos uploaded straight to S3, and shoppers search 214 seeded products across 5 stores with typo-tolerant Elasticsearch search. Shoppers fill one cart from several stores (as guests too), check out once with stock held for 15 minutes, pay on a test payment screen, and follow each store's part from placed to delivered while vendors pack and ship their own part. Progress is tracked in the [10-day build tracker](docs/guides/DAY_PLAN.md).
 
 ![Architecture](docs/assets/architecture.png)
 
@@ -43,8 +43,8 @@ docker compose exec api node dist/scripts/seed-catalog.js
 
 | Email | Role | What to try |
 |---|---|---|
-| `customer@shopsphere.test` | Customer | Browse departments, stores and product pages |
-| `vendor@shopsphere.test` | Vendor | Vikram Electronics: add a product with photos, edit, publish |
+| `customer@shopsphere.test` | Customer | Fill a cart from two stores, check out, pay on the test payment screen, follow the order |
+| `vendor@shopsphere.test` | Vendor | Vikram Electronics: add a product with photos; pack and ship paid orders under **Orders to ship** |
 | `admin@shopsphere.test` | Admin | Review the waiting application from Kavya Handicrafts; manage categories |
 | `meera@`, `arjun@`, `sana@`, `rohan@shopsphere.test` | Vendor | The other four approved stores |
 | `kavya@shopsphere.test` | Vendor | A store application waiting for approval |
@@ -80,4 +80,4 @@ CI ([`.github/workflows/fs01-ci.yml`](../.github/workflows/fs01-ci.yml)) runs al
 
 ## Documentation
 
-Everything is in [`docs/`](docs/README.md): overview, features and roles, architecture, design decisions, data model, API reference, background jobs and search, security, PRD, app flow, database schema and API list. More topics are added as each part is built.
+Everything is in [`docs/`](docs/README.md): overview, features and roles, architecture, design decisions, data model, API reference (including cart, checkout and orders), background jobs and search, security, PRD, app flow, database schema and API list. More topics are added as each part is built.

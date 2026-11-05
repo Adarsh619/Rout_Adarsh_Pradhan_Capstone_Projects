@@ -5,11 +5,13 @@ import { logger } from "./lib/logger.js";
 import { connectMongo, disconnectMongo } from "./lib/mongo.js";
 import { createRedis } from "./lib/redis.js";
 import { SearchIndexer } from "./modules/search/search-indexer.js";
-import { runSearchJob, SEARCH_QUEUE, type SearchJob } from "./modules/search/search-sync.js";
+import { expireDueOrders, releaseReservation } from "./modules/orders/order-service.js";
+import { queuedReservations, RESERVATION_QUEUE, scheduleSweep, SWEEP_JOB } from "./modules/orders/reservations.js";
+import { directSearchSync, runSearchJob, SEARCH_QUEUE, type SearchJob } from "./modules/search/search-sync.js";
 
 // Background worker: runs the slow jobs (search indexing, invoice PDFs, payouts, reservation expiry)
 // outside the API process. Each later day adds its handler here.
-export const QUEUES = [SEARCH_QUEUE, "invoice-pdf", "payout", "reservation-expiry"] as const;
+export const QUEUES = [SEARCH_QUEUE, "invoice-pdf", "payout", RESERVATION_QUEUE] as const;
 
 async function main(): Promise<void> {
   const env = loadEnv();
@@ -18,12 +20,20 @@ async function main(): Promise<void> {
   const es = createElasticsearch(env.ELASTICSEARCH_URL);
   const indexer = new SearchIndexer(es, env.ES_INDEX);
   await indexer.ensureIndex();
+  // Stock handed back by an expired order is indexed straight away (the worker is already the background process).
+  const reservations = queuedReservations(connection);
+  const orderDeps = { redis: connection, searchSync: directSearchSync(indexer), reservations };
+  await scheduleSweep(reservations.queue);
 
   const handlers: Record<(typeof QUEUES)[number], (job: Job) => Promise<unknown>> = {
     [SEARCH_QUEUE]: (job: Job<SearchJob>) => runSearchJob(indexer, job.data),
     "invoice-pdf": async (job) => logger.warn({ queue: "invoice-pdf", job: job.name }, "no handler registered yet"),
     payout: async (job) => logger.warn({ queue: "payout", job: job.name }, "no handler registered yet"),
-    "reservation-expiry": async (job) => logger.warn({ queue: "reservation-expiry", job: job.name }, "no handler registered yet"),
+    [RESERVATION_QUEUE]: async (job: Job<{ orderId?: string }>) => {
+      if (job.name === SWEEP_JOB) return `${await expireDueOrders(orderDeps)} orders expired`;
+      const released = await releaseReservation(orderDeps, job.data.orderId!, { to: "expired", reason: "Not paid in time", actor: { role: "system" }, onlyIfDue: true });
+      return released ? "expired" : "already paid or ended";
+    },
   };
 
   const workers = QUEUES.map((name) => {
@@ -39,7 +49,7 @@ async function main(): Promise<void> {
 
   const shutdown = async () => {
     await Promise.allSettled(workers.map((w) => w.close()));
-    await Promise.allSettled([disconnectMongo(), connection.quit(), es.close()]);
+    await Promise.allSettled([reservations.queue.close(), disconnectMongo(), connection.quit(), es.close()]);
     process.exit(0);
   };
   process.on("SIGTERM", shutdown);

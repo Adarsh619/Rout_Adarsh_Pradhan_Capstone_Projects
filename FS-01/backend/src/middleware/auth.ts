@@ -16,21 +16,38 @@ declare module "express-serve-static-core" {
   }
 }
 
+async function authenticate(tokens: AccessTokens, sessions: SessionStore, token: string): Promise<AuthUser> {
+  const claims = await tokens.verify(token);
+  if (claims === "expired") throw new AppError(401, "token_expired", "Your session token has expired");
+  if (claims === "invalid") throw new AppError(401, "unauthenticated", "Please sign in");
+  if (!(await sessions.isActive(claims.sid))) throw new AppError(401, "session_ended", "You have been signed out");
+  return { id: claims.sub, role: claims.role, sid: claims.sid };
+}
+
+const bearerToken = (header: string | undefined) => (header?.startsWith("Bearer ") ? header.slice(7).trim() : undefined);
+
 // Checks the Bearer token and that its session still exists in Redis (so logout, password changes and
 // suspensions apply immediately, not when the 15-minute token expires).
 export function requireAuth(tokens: AccessTokens, sessions: SessionStore): RequestHandler {
   return async (req, _res, next) => {
     try {
-      const header = req.get("authorization");
-      const token = header?.startsWith("Bearer ") ? header.slice(7).trim() : undefined;
+      const token = bearerToken(req.get("authorization"));
       if (!token) throw new AppError(401, "unauthenticated", "Please sign in");
+      req.auth = await authenticate(tokens, sessions, token);
+      next();
+    } catch (err) {
+      next(err);
+    }
+  };
+}
 
-      const claims = await tokens.verify(token);
-      if (claims === "expired") throw new AppError(401, "token_expired", "Your session token has expired");
-      if (claims === "invalid") throw new AppError(401, "unauthenticated", "Please sign in");
-      if (!(await sessions.isActive(claims.sid))) throw new AppError(401, "session_ended", "You have been signed out");
-
-      req.auth = { id: claims.sub, role: claims.role, sid: claims.sid };
+// For endpoints guests can use too (the cart): no token means a guest, but a token that is sent must be valid,
+// so an expired one still answers token_expired and the app refreshes it instead of silently using a guest cart.
+export function optionalAuth(tokens: AccessTokens, sessions: SessionStore): RequestHandler {
+  return async (req, _res, next) => {
+    try {
+      const token = bearerToken(req.get("authorization"));
+      if (token) req.auth = await authenticate(tokens, sessions, token);
       next();
     } catch (err) {
       next(err);

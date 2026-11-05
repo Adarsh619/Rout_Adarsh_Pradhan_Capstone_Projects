@@ -9,6 +9,7 @@ import type { RouteContext } from "../context.js";
 import { checkUploadedImage, UPLOAD_PURPOSES } from "../uploads/upload-rules.js";
 import { loadOwnStore } from "../vendors/vendor-access.js";
 import { Vendor, type VendorDoc } from "../vendors/vendor.model.js";
+import { Order } from "../orders/order.model.js";
 import { Category } from "./category.model.js";
 import { MAX_IMAGES, Product, PRODUCT_STATUSES, toPublicProduct, toVendorProduct, type ProductDoc } from "./product.model.js";
 import { listStorefront, storefrontQuery } from "./storefront.js";
@@ -194,7 +195,7 @@ export function productRouter(ctx: RouteContext): Router {
   router.delete("/vendor/products/:id", ...sellerOnly, async (req, res) => {
     const product = await findOwn(idParam(req), req.vendor!);
     // Orders keep a snapshot, but invoices, reviews and analytics still point at the product.
-    if (product.soldCount > 0) {
+    if (product.soldCount > 0 || (await Order.exists({ "items.productId": product._id }))) {
       throw new AppError(409, "product_has_orders", "This product has been ordered, so it can't be deleted. Set it to inactive instead.");
     }
     await product.deleteOne();

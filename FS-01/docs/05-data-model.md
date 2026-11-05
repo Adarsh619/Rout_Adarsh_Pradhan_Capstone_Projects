@@ -2,7 +2,7 @@
 
 [← Design decisions](04-design-decisions.md) · [Index](README.md) · [Next: API reference →](06-api-reference.md)
 
-ShopSphere keeps permanent data in **MongoDB** (11 collections), short-lived data in **Redis**, and a search copy of products in **Elasticsearch**.
+ShopSphere keeps permanent data in **MongoDB** (11 collections, plus a small `counters` collection for order numbers), short-lived data in **Redis**, and a search copy of products in **Elasticsearch**.
 Every field, type and index is listed in the [database schema spec](specs/03-database-schema.md); this page explains how the pieces fit together.
 
 ![ER diagram](assets/erd.png)
@@ -29,9 +29,10 @@ Source: [`assets/erd.mmd`](assets/erd.mmd).
 
 - **Snapshots, not references, for what was bought.** Order lines copy title, image and price at purchase time, so editing or deleting a product never changes a past order or invoice.
 - **Denormalised numbers for speed.** `ratingAvg`, `ratingCount` and `soldCount` live on the product so search can sort by them without joins; they are updated when a review is added or an order is paid.
-- **Rates frozen at purchase.** A sub-order stores the commission rate used, so changing a rate later never changes what a vendor was already promised.
+- **Rates frozen at purchase.** Each order line stores the commission rate used (vendor override, else the category's, else its department's, else 10%), so changing a rate later never changes what a vendor was already promised. A sub-order's commission is the sum of its lines'.
 - **Ledger is append-only.** Earnings and analytics are sums over ledger entries; mistakes are corrected with new entries, never edits.
 - **Statuses with history.** Every sub-order status change is pushed to `statusHistory` with who and when, which is what the customer's timeline shows.
+- **Unpaid parts stay hidden.** A sub-order starts as `awaiting_payment` and becomes `placed` when the order is paid; vendors only ever see parts with a `placedAt` date.
 
 ## Money example
 
