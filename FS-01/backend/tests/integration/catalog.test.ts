@@ -85,6 +85,14 @@ describe("categories", () => {
     expect((await api().delete(`/api/v1/admin/categories/${deptId}`).set(bearer(admin))).body.error.details.subCategories).toBe(1);
   });
 
+  it("keeps a category's order and commission when only hiding it", async () => {
+    const { admin } = await setup();
+    const created = await api().post("/api/v1/admin/categories").set(bearer(admin)).send({ name: "Toys", sortOrder: 5, commissionRateBp: 1200 });
+    await api().patch(`/api/v1/admin/categories/${created.body.category.id}`).set(bearer(admin)).send({ isActive: false });
+    const list = await api().get("/api/v1/admin/categories").set(bearer(admin));
+    expect(list.body.items.find((c: { name: string }) => c.name === "Toys")).toMatchObject({ isActive: false, sortOrder: 5, commissionRateBp: 1200 });
+  });
+
   it("is managed by admins only", async () => {
     const { vendor } = await setup();
     expect((await api().post("/api/v1/admin/categories").set(bearer(vendor.token)).send({ name: "Mine" })).status).toBe(403);
@@ -118,6 +126,24 @@ describe("vendor products", () => {
     expect(page.body.product.category).toMatchObject({ name: "Smartphones" });
     const store = await api().get(`/api/v1/stores/${vendor.slug}`);
     expect(store.body.products.items.map((p: { id: string }) => p.id)).toEqual([id]);
+  });
+
+  it("changes only the fields sent, keeping photos, specifications and description", async () => {
+    const { vendor, categoryId } = await setup();
+    const key = await uploadImage(app, vendor.token);
+    const { body } = await api()
+      .post("/api/v1/vendor/products")
+      .set(bearer(vendor.token))
+      .send(product(categoryId, { status: "active", images: [{ key, alt: "Front" }], attributes: { RAM: "8 GB" } }));
+    const res = await api().patch(`/api/v1/vendor/products/${body.product.id}`).set(bearer(vendor.token)).send({ status: "inactive" });
+    expect(res.body.product).toMatchObject({
+      status: "inactive",
+      images: [{ key, alt: "Front" }],
+      attributes: { RAM: "8 GB" },
+      description: "A good phone",
+      price: 1_999_900,
+    });
+    expect(await storage.head(key)).not.toBeNull();
   });
 
   it("validates money and stock rules", async () => {

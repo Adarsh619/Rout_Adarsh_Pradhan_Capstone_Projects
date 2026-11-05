@@ -14,7 +14,7 @@ An Amazon-style marketplace where **many vendors sell**, **customers buy from se
 | Payments | Razorpay test mode (UPI, cards, webhooks, refunds) + own split-and-escrow ledger; built-in mock needs no account |
 | Infra | Docker Compose · nginx · GitHub Actions |
 
-**Status:** Day 3 of 10. Sign-in and roles work end to end; vendors apply for a store, admins approve or suspend it, vendors list products with photos uploaded straight to S3, and shoppers browse 214 seeded products across 5 stores. Progress is tracked in the [10-day build tracker](docs/guides/DAY_PLAN.md).
+**Status:** Day 4 of 10. Sign-in and roles work end to end; vendors apply for a store, admins approve or suspend it, vendors list products with photos uploaded straight to S3, and shoppers search 214 seeded products across 5 stores with typo-tolerant Elasticsearch search, live filter counts and autocomplete. Progress is tracked in the [10-day build tracker](docs/guides/DAY_PLAN.md).
 
 ![Architecture](docs/assets/architecture.png)
 
@@ -50,7 +50,8 @@ docker compose exec api node dist/scripts/seed-catalog.js
 | `kavya@shopsphere.test` | Vendor | A store application waiting for approval |
 
 The catalogue comes from a committed snapshot ([`backend/seed/catalog.json`](backend/seed/catalog.json)), so seeding never
-depends on those sites being up; refresh it with `npm run seed:snapshot`. Prices are converted to rupees.
+depends on those sites being up; refresh it with `npm run seed:snapshot`. Prices are converted to rupees. The seed
+finishes by rebuilding the search index; to rebuild it on its own: `docker compose exec api node dist/scripts/reindex.js`.
 
 Port 3000 taken? Set `FRONTEND_PORT=3001` (and `CORS_ORIGINS=http://localhost:3001`) in `.env`. MongoDB, Redis, Elasticsearch, S3Mock and the API publish their ports on `127.0.0.1` only. The browser loads photos and uploads new ones straight from S3Mock on port 9090, the same way it talks to AWS S3 on the live site.
 
@@ -79,4 +80,4 @@ CI ([`.github/workflows/fs01-ci.yml`](../.github/workflows/fs01-ci.yml)) runs al
 
 ## Documentation
 
-Everything is in [`docs/`](docs/README.md): overview, features and roles, architecture, design decisions, data model, API reference, security, PRD, app flow, database schema and API list. More topics are added as each part is built.
+Everything is in [`docs/`](docs/README.md): overview, features and roles, architecture, design decisions, data model, API reference, background jobs and search, security, PRD, app flow, database schema and API list. More topics are added as each part is built.

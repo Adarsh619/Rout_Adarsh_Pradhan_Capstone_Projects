@@ -72,6 +72,15 @@ if [ -n "${DEMO_PASSWORD:-}" ]; then
   echo "$PAGE" | grep -q '"discountPercent":20' && check "product page shows it with its discount"
   curl -fsS -o /dev/null "$(echo "$PAGE" | field url)" && check "its photo is served from storage"
   curl -fsS "$BASE/api/v1/stores/$STORE_SLUG" | grep -q "\"id\":\"$PRODUCT_ID\"" && check "it's listed on the store page"
+
+  # The background worker picks up the change and indexes it; search (with a typo) finds it within seconds.
+  for i in $(seq 1 30); do
+    curl -fsS "$BASE/api/v1/search?q=smoke%20tset%20phone" | grep -q "\"id\":\"$PRODUCT_ID\"" && break
+    [ "$i" = 30 ] && { echo "✗ search never found the new product"; exit 1; }
+    sleep 1
+  done
+  check "the worker indexes it and search finds it (typo included) after ${i}s"
+  curl -fsS "$BASE/api/v1/search/suggest?q=smoke%20te" | grep -q '"title":"Smoke Test Phone"' && check "autocomplete suggests it"
 fi
 
 echo "Smoke test passed for $BASE"

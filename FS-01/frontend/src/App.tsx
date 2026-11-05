@@ -12,6 +12,7 @@ import { LoginPage } from "./pages/LoginPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { ProductPage } from "./pages/ProductPage";
 import { RegisterPage } from "./pages/RegisterPage";
+import { SearchPage } from "./pages/SearchPage";
 import { StorePage } from "./pages/StorePage";
 import { ProductEditorPage } from "./pages/vendor/ProductEditorPage";
 import { VendorDashboard } from "./pages/vendor/VendorDashboard";
@@ -24,6 +25,7 @@ export function App() {
     <Routes>
       <Route element={<Layout />}>
         <Route index element={<HomePage />} />
+        <Route path="search" element={<SearchPage />} />
         <Route path="products/:id" element={<ProductPage />} />
         <Route path="stores/:slug" element={<StorePage />} />
         <Route path="login" element={<LoginPage />} />

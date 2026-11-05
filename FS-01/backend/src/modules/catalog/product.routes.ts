@@ -4,7 +4,7 @@ import { cached, cacheKeys, invalidate } from "../../lib/cache.js";
 import { uniqueSlug } from "../../lib/slug.js";
 import { requireRole } from "../../middleware/auth.js";
 import { AppError } from "../../middleware/errors.js";
-import { idParam, objectId, pageQuery, parseQuery, validateBody } from "../../middleware/validate.js";
+import { idParam, objectId, pageQuery, parseQuery, patchSchema, validateBody } from "../../middleware/validate.js";
 import type { RouteContext } from "../context.js";
 import { checkUploadedImage, UPLOAD_PURPOSES } from "../uploads/upload-rules.js";
 import { loadOwnStore } from "../vendors/vendor-access.js";
@@ -46,7 +46,7 @@ const productFields = {
   status: z.enum(PRODUCT_STATUSES).default("draft"),
 };
 const createSchema = z.object(productFields);
-const updateSchema = z.object(productFields).partial();
+const updateSchema = patchSchema(productFields);
 type ProductInput = z.infer<typeof createSchema>;
 
 const vendorListQuery = pageQuery.extend({
@@ -159,6 +159,7 @@ export function productRouter(ctx: RouteContext): Router {
     await checkProduct(input, vendor, []);
     const slug = await uniqueSlug(input.title, async (s) => (await Product.exists({ vendorId: vendor._id, slug: s })) !== null);
     const product = await Product.create({ ...input, vendorId: vendor._id, slug }).catch(skuTaken);
+    await ctx.searchSync.product(product._id);
     res.status(201).json({ product: toVendorProduct(product, ctx.storage) });
   });
 
@@ -186,6 +187,7 @@ export function productRouter(ctx: RouteContext): Router {
     const removed = oldKeys.filter((k) => !product.images.some((img) => img.key === k));
     void ctx.storage.deleteMany(removed);
     await invalidate(ctx.redis, cacheKeys.product(product.id as string));
+    await ctx.searchSync.product(product._id);
     res.json({ product: toVendorProduct(product, ctx.storage) });
   });
 
@@ -198,6 +200,7 @@ export function productRouter(ctx: RouteContext): Router {
     await product.deleteOne();
     void ctx.storage.deleteMany(product.images.map((img) => img.key));
     await invalidate(ctx.redis, cacheKeys.product(product.id as string));
+    await ctx.searchSync.product(product._id);
     res.status(204).end();
   });
 

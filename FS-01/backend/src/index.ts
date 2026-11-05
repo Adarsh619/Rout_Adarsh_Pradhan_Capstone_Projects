@@ -5,6 +5,8 @@ import { logger } from "./lib/logger.js";
 import { connectMongo, disconnectMongo, pingMongo } from "./lib/mongo.js";
 import { createRedis, pingRedis } from "./lib/redis.js";
 import { createS3, createStorage, ensureBucket, pingS3 } from "./lib/s3.js";
+import { SearchIndexer } from "./modules/search/search-indexer.js";
+import { queuedSearchSync } from "./modules/search/search-sync.js";
 
 async function main(): Promise<void> {
   const env = loadEnv();
@@ -14,12 +16,17 @@ async function main(): Promise<void> {
   const es = createElasticsearch(env.ELASTICSEARCH_URL);
   const s3 = createS3(env);
   if (env.S3_CREATE_BUCKET) await ensureBucket(s3, env.S3_BUCKET);
+  // A fresh install gets an empty search index straight away; `npm run reindex` (or the seed) fills it.
+  await new SearchIndexer(es, env.ES_INDEX).ensureIndex();
+  const searchSync = queuedSearchSync(redis);
 
   const app = createApp({
     env,
     corsOrigins: corsOrigins(env),
     redis,
     storage: createStorage(env, s3),
+    es,
+    searchSync,
     healthChecks: {
       mongo: pingMongo,
       redis: () => pingRedis(redis),
@@ -36,7 +43,7 @@ async function main(): Promise<void> {
   const shutdown = (signal: string) => {
     logger.info({ signal }, "shutting down");
     server.close(async () => {
-      await Promise.allSettled([disconnectMongo(), redis.quit(), es.close()]);
+      await Promise.allSettled([searchSync.queue.close(), disconnectMongo(), redis.quit(), es.close()]);
       process.exit(0);
     });
     setTimeout(() => process.exit(1), 10_000).unref();

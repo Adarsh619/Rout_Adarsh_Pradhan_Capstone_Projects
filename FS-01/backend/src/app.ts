@@ -1,3 +1,4 @@
+import type { Client } from "@elastic/elasticsearch";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import express, { type Express } from "express";
@@ -14,6 +15,8 @@ import { authRouter, CSRF_HEADER } from "./modules/auth/auth.routes.js";
 import { categoryRouter } from "./modules/catalog/category.routes.js";
 import { productRouter } from "./modules/catalog/product.routes.js";
 import type { RouteContext } from "./modules/context.js";
+import { searchRouter } from "./modules/search/search.routes.js";
+import type { SearchSync } from "./modules/search/search-sync.js";
 import { uploadRouter } from "./modules/uploads/upload.routes.js";
 import { vendorRouter } from "./modules/vendors/vendor.routes.js";
 import { SessionStore } from "./modules/auth/sessions.js";
@@ -25,6 +28,8 @@ export interface AppDeps {
   corsOrigins: string[];
   redis: Redis;
   storage: Storage;
+  es: Client;
+  searchSync: SearchSync;
   healthChecks: Record<string, HealthCheck>;
 }
 
@@ -68,8 +73,15 @@ export function createApp(deps: AppDeps): Express {
 
   // Feature routers use full paths under /api/v1. Their handlers are plain async functions:
   // Express 5 passes a rejected promise to the error handler by itself.
-  const ctx: RouteContext = { redis: deps.redis, storage: deps.storage, signedIn: requireAuth(tokens, sessions) };
-  app.use("/api/v1", vendorRouter(ctx), categoryRouter(ctx), productRouter(ctx), uploadRouter(ctx));
+  const ctx: RouteContext = {
+    redis: deps.redis,
+    storage: deps.storage,
+    es: deps.es,
+    searchIndex: env.ES_INDEX,
+    searchSync: deps.searchSync,
+    signedIn: requireAuth(tokens, sessions),
+  };
+  app.use("/api/v1", vendorRouter(ctx), categoryRouter(ctx), productRouter(ctx), uploadRouter(ctx), searchRouter(ctx));
 
   app.use(notFound);
   app.use(errorHandler);

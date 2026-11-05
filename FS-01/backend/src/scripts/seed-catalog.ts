@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import type { Types } from "mongoose";
 import { loadEnv } from "../config/env.js";
 import { cacheKeys, invalidate, invalidatePrefix } from "../lib/cache.js";
+import { createElasticsearch } from "../lib/elasticsearch.js";
 import { logger } from "../lib/logger.js";
 import { connectMongo, disconnectMongo } from "../lib/mongo.js";
 import { createRedis } from "../lib/redis.js";
@@ -12,11 +13,13 @@ import { Category } from "../modules/catalog/category.model.js";
 import { Product } from "../modules/catalog/product.model.js";
 import { IMAGE_TYPES, MAX_IMAGE_BYTES, UPLOAD_PURPOSES } from "../modules/uploads/upload-rules.js";
 import { User } from "../modules/users/user.model.js";
+import { SearchIndexer } from "../modules/search/search-indexer.js";
 import { Vendor } from "../modules/vendors/vendor.model.js";
 import { CATALOG_SNAPSHOT, CATEGORY_TREE, SEED_STORES, seedPrices, type SnapshotProduct } from "./catalog-data.js";
 
 // Fills the marketplace with the demo catalogue: the category tree, five approved stores (plus one application
-// waiting for the admin) and 214 products whose photos are copied into our own S3 bucket. Safe to run again:
+// waiting for the admin) and 214 products whose photos are copied into our own S3 bucket, then rebuilds the search
+// index. Safe to run again:
 // everything is matched on a fixed key (category slug, owner email, product SKU) and updated in place, and photos
 // already in the bucket aren't downloaded twice.
 //   npm run seed:catalog                                   (local)
@@ -192,8 +195,11 @@ async function main() {
   });
 
   await Promise.all([invalidate(redis, cacheKeys.categories), invalidatePrefix(redis, cacheKeys.product(""))]);
-  logger.info({ products: saved, photos, seconds: Math.round((Date.now() - started) / 1000) }, "demo catalogue ready");
-  await Promise.allSettled([disconnectMongo(), redis.quit()]);
+  // Rebuild search from what was just saved, so it matches the catalogue exactly.
+  const es = createElasticsearch(env.ELASTICSEARCH_URL);
+  const { indexed } = await new SearchIndexer(es, env.ES_INDEX).reindexAll();
+  logger.info({ products: saved, photos, searchable: indexed, seconds: Math.round((Date.now() - started) / 1000) }, "demo catalogue ready");
+  await Promise.allSettled([disconnectMongo(), redis.quit(), es.close()]);
 }
 
 main().catch((err: unknown) => {

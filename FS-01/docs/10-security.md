@@ -1,6 +1,6 @@
 # 10 · Security
 
-[← API reference](06-api-reference.md) · [Index](README.md) · Next: DevOps (written on Day 9)
+[← Background jobs and search](08-background-jobs.md) · [Index](README.md) · Next: DevOps (written on Day 9)
 
 This page covers how ShopSphere signs people in, keeps them signed in, decides what each account may do, and the
 protections around that, and how vendors upload photos safely. Later days add payments and webhooks.
@@ -122,7 +122,8 @@ sequence in the [API reference](06-api-reference.md#uploads).
 | Area | Measure |
 |---|---|
 | Headers | Helmet (nosniff, frame denial, HSTS behind HTTPS, …); `X-Powered-By` removed; nginx adds the same on the static site |
-| Input | Every body parsed with Zod; one error per field; JSON bodies capped at 100 kB; unknown routes return JSON 404 |
+| Input | Every body and query string parsed with Zod; one error per field; JSON bodies capped at 100 kB; unknown routes return JSON 404. `PATCH` bodies never fill in defaults, so a partial update can't reset fields it didn't mention |
+| Search | Search words are passed to Elasticsearch as query *values*, never as query syntax; filters are checked slugs and numbers; Elasticsearch is only reachable by the API and worker |
 | Errors | Unexpected errors return a generic 500; details only in server logs |
 | Logs | Authorization and cookie headers and password fields are redacted |
 | Redirects | `?next=` after sign-in only accepts same-site paths (`/…`, not `//…` or `https://…`) |

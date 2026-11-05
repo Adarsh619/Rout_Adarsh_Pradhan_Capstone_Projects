@@ -65,8 +65,8 @@ The **Day** column says when each endpoint is built; ✓ means it exists now.
 
 | Method | Path | Role | Purpose | Day |
 |---|---|---|---|---|
-| GET | `/search?q=&category=&brand=&vendor=&minPrice=&maxPrice=&rating=&inStock=&sort=&page=` | P | Full-text search with filters and facet counts; `sort` = `relevance` \| `price_asc` \| `price_desc` \| `rating` \| `newest` | 4 |
-| GET | `/search/suggest?q=` | P | Autocomplete (up to 8 titles) | 4 |
+| GET | `/search?q=&category=&brand=&vendor=&minPrice=&maxPrice=&rating=&inStock=&sort=&page=` | P | Full-text search with filters and facet counts; `sort` = `relevance` \| `price_asc` \| `price_desc` \| `rating` \| `newest` | ✓ 4 |
+| GET | `/search/suggest?q=` | P | Autocomplete (up to 8 titles) | ✓ 4 |
 
 ## Cart and checkout
 
@@ -124,6 +124,7 @@ Guests are identified by an httpOnly `guest_id` cookie; their cart merges into t
 | 401 | `unauthenticated`, `token_expired`, `session_ended`, `session_reused`, `invalid_credentials` | Not signed in, token expired (refresh), session revoked, stolen refresh token detected, wrong email or password |
 | 403 | `forbidden`, `vendor_not_approved`, `account_suspended`, `csrf_header_missing` | Wrong role (with `requiredRoles`), not the owner, store not approved, suspended account, cookie endpoint without the header |
 | 404 | `not_found` | Unknown id or route |
+| 503 | `search_unavailable` | Elasticsearch is down (only search is affected) |
 | 409 | `email_taken`, `refresh_in_progress`, `already_applied`, `invalid_transition`, `sku_taken`, `category_in_use`, `product_has_orders`, `out_of_stock`, `price_changed`, `already_reviewed`, `coupon_exhausted` | State conflicts |
 | 413 | `payload_too_large` | Body over 100 kB |
 | 429 | `rate_limited` | Too many attempts |

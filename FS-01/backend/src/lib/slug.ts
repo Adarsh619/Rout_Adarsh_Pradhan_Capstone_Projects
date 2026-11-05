@@ -4,7 +4,7 @@ import { randomBytes } from "node:crypto";
 export function slugify(text: string, maxLength = 60): string {
   const slug = text
     .normalize("NFKD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/\p{M}/gu, "")
     .toLowerCase()
     .replace(/['’]/g, "")
     .replace(/[^a-z0-9]+/g, "-")

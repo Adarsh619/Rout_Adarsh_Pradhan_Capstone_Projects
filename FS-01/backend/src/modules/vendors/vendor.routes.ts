@@ -3,7 +3,7 @@ import { z } from "zod";
 import { cacheKeys, invalidate } from "../../lib/cache.js";
 import { requireRole } from "../../middleware/auth.js";
 import { AppError } from "../../middleware/errors.js";
-import { idParam, pageQuery, parseQuery, validateBody } from "../../middleware/validate.js";
+import { idParam, pageQuery, parseQuery, patchSchema, validateBody } from "../../middleware/validate.js";
 import { listStorefront, storefrontQuery } from "../catalog/storefront.js";
 import { Product } from "../catalog/product.model.js";
 import type { RouteContext } from "../context.js";
@@ -34,14 +34,11 @@ const storeFields = {
   gstin: gstin.optional(),
 };
 const applySchema = z.object(storeFields);
-const updateSchema = z
-  .object({
-    ...storeFields,
-    description: storeFields.description.optional(),
-    // A key from POST /uploads/presign (purpose store-logo), or null to remove the logo.
-    logoKey: z.string().max(300).nullable(),
-  })
-  .partial();
+const updateSchema = patchSchema({
+  ...storeFields,
+  // A key from POST /uploads/presign (purpose store-logo), or null to remove the logo.
+  logoKey: z.string().max(300).nullable(),
+});
 
 const reasonSchema = z.object({ reason: z.string().trim().min(5, "Give the vendor a short reason").max(500) });
 
@@ -120,7 +117,11 @@ export function vendorRouter(ctx: RouteContext): Router {
     if (fields.gstin === undefined && "gstin" in fields) vendor.gstin = undefined;
     await vendor.save();
     if (oldLogo && oldLogo !== vendor.logoKey) void ctx.storage.deleteMany([oldLogo]);
-    if (vendor.status === "approved") await forgetStoreProducts(vendor);
+    if (vendor.status === "approved") {
+      await forgetStoreProducts(vendor);
+      // Search results show the store's name.
+      await ctx.searchSync.vendor(vendor._id);
+    }
     res.json({ store: toOwnStore(vendor, ctx.storage) });
   });
 
@@ -214,6 +215,8 @@ export function vendorRouter(ctx: RouteContext): Router {
         });
       }
       await forgetStoreProducts(vendor);
+      // Approving adds the store's products to search; suspending removes them.
+      await ctx.searchSync.vendor(vendor._id);
       res.json({ store: toOwnStore(vendor, ctx.storage) });
     });
   }

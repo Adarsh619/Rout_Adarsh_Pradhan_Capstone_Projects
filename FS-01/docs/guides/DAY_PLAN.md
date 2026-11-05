@@ -37,14 +37,14 @@ Dates assume you start **Tue 3 Nov 2026** and work every day; shift them if you 
 - [x] ✅ A vendor adds a product with images and it shows on the store page
 
 ## Day 4 · Fri 6 Nov · Elasticsearch search (brief step 4)
-- [ ] 🛠 Index + mappings, background job keeps it in sync, `npm run reindex`
-- [ ] 🛠 Full-text search (typo-tolerant, title boosted)
-- [ ] 🛠 Filters: category, brand, price range, rating, vendor, in stock
-- [ ] 🛠 Sorting: relevance, price ↑↓, rating, newest; facet counts; autocomplete
-- [ ] 🛠 Search page with filters kept in the URL
-- [ ] 🛠 Tests for search; doc 08 (background jobs) started
+- [x] 🛠 Index + mappings, background job keeps it in sync, `npm run reindex` (zero-downtime alias switch)
+- [x] 🛠 Full-text search (typo-tolerant, title boosted, shop synonyms, falls back to most words)
+- [x] 🛠 Filters: category, brand, price range, rating, vendor, in stock
+- [x] 🛠 Sorting: relevance, price ↑↓, rating, newest; facet counts; autocomplete
+- [x] 🛠 Search page with filters kept in the URL
+- [x] 🛠 Tests for search; doc 08 (background jobs) started
 - [ ] 👤 Oracle VM retry
-- [ ] ✅ Search "iphne" finds iPhones, filters show live counts
+- [x] ✅ Search "iphne" finds iPhones, filters show live counts
 
 ## Day 5 · Sat 7 Nov · Cart, checkout, order lifecycle (brief step 5)
 - [ ] 🛠 Redis cart (guest cart merged on login), Redis product cache

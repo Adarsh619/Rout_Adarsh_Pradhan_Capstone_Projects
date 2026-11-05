@@ -50,6 +50,7 @@ Each decision lists what was chosen, the alternatives, and why.
 - **Chosen:** MongoDB is the source of truth. Every product, vendor or review change puts a `search-index` job on a queue; the worker re-reads the product and updates Elasticsearch. `npm run reindex` rebuilds the whole index.
 - **Alternatives:** writing to Elasticsearch inside the request (slow, fails the request if search is down), or MongoDB Atlas Search (not the required stack).
 - **Why:** requests stay fast, a search outage never blocks selling, and the index can always be rebuilt.
+- **Details that matter:** jobs carry only the product id and the worker re-reads MongoDB, so retries and out-of-order jobs are harmless. Searches go through an alias, so a rebuild fills a new index and switches over atomically with no downtime. Synonyms are applied at index time so typo tolerance still works at search time. See [Background jobs and search](08-background-jobs.md).
 
 ## 7. Files go straight between the browser and S3
 

@@ -1,6 +1,6 @@
 # 06 · API reference
 
-[← Data model](05-data-model.md) · [Index](README.md) · [Next: Security →](10-security.md)
+[← Data model](05-data-model.md) · [Index](README.md) · [Next: Background jobs and search →](08-background-jobs.md)
 
 This page documents the endpoints that exist today, with real request and response shapes. The full plan, including
 endpoints still to come, is the [API list](specs/04-api-list.md). A machine-readable `openapi.yaml` follows on Day 10.
@@ -16,6 +16,7 @@ endpoints still to come, is the [API list](specs/04-api-list.md). A machine-read
 | Lists | `?page=1&limit=20` (limit ≤ 50) → `{ items, page, limit, total }`; some lists add `counts` per status |
 | Ids | 24-hex MongoDB ids. An id that can't exist answers 404, the same as one that doesn't |
 | Caching | Cached reads say `X-Cache: HIT` or `MISS` |
+| Updates | `PATCH` changes only the fields sent; anything left out keeps its saved value |
 
 ### Errors
 
@@ -40,6 +41,7 @@ Every error has the same shape. Form errors list **one message per field**, so t
 | 404 | `not_found`, `store_not_found` | Unknown id, another vendor's product, a store that isn't public |
 | 409 | `already_applied`, `invalid_transition`, `sku_taken`, `category_in_use`, `product_has_orders` | The action doesn't fit the current state |
 | 429 | `rate_limited` | Too many attempts; `Retry-After` header |
+| 503 | `search_unavailable` | Elasticsearch is down; browsing, store and product pages still work |
 
 ## Auth and account
 
@@ -128,8 +130,9 @@ Every change clears the category cache and cached product pages (they show the c
 
 ### `GET /products?category=&sort=&page=&limit=`
 
-Active products of approved stores. `category` is a slug; a department includes its sub-categories. `sort` is
-`newest` (default), `price_asc`, `price_desc` or `rating`. Full-text search and filters arrive with Elasticsearch on Day 4.
+Active products of approved stores, straight from MongoDB (the home page's department browsing). `category` is a slug;
+a department includes its sub-categories. `sort` is `newest` (default), `price_asc`, `price_desc` or `rating`.
+Full-text search with filters is `GET /search` below.
 
 ```json
 { "items": [{ "id": "…", "title": "iPhone 13 Pro", "brand": "Apple",
@@ -143,6 +146,45 @@ Active products of approved stores. `category` is a slug; a department includes 
 
 The full product: everything on the card plus `description`, `category`, `vendor.id`, all `images`, `stock` and
 `attributes` (specifications). Drafts, inactive products and products of stores that aren't approved answer 404.
+
+## Search
+
+Served by Elasticsearch, kept in step with MongoDB by a background job ([how](08-background-jobs.md)).
+
+### `GET /search`
+
+| Parameter | Meaning |
+|---|---|
+| `q` | Search words (up to 100 characters); typos allowed. Empty = browse everything |
+| `category` | Category or department slug |
+| `brand` | Repeat for several: `brand=Apple&brand=Samsung` (any of them) |
+| `vendor` | Store slug |
+| `minPrice`, `maxPrice` | **Paise**, inclusive |
+| `rating` | 1–4: average rating at least this |
+| `inStock` | `true` for in-stock only |
+| `sort` | `relevance` (default with `q`), `newest` (default without), `price_asc`, `price_desc`, `rating` |
+| `page`, `limit` | As every list (limit ≤ 50) |
+
+```json
+{ "items": [ProductCard, …], "page": 1, "limit": 24, "total": 4,
+  "matchedAllWords": true, "tookMs": 12,
+  "facets": {
+    "categories": [{ "slug": "smartphones", "name": "Smartphones", "count": 4 }],
+    "brands": [{ "value": "Apple", "count": 4 }],
+    "vendors": [{ "slug": "vikram-electronics", "name": "Vikram Electronics", "count": 4 }],
+    "price": [{ "key": "20000-plus", "min": 2000000, "max": null, "count": 3 }],
+    "rating": [{ "min": 4, "count": 1 }, { "min": 3, "count": 2 }],
+    "inStock": 4 } }
+```
+
+- Each facet counts with every filter **except its own**, so ticking a brand still shows the other brands' counts.
+- `matchedAllWords: false` means no product had every word, so results match all but one of them.
+- Price buckets: under ₹500, ₹500–1 000, ₹1 000–5 000, ₹5 000–20 000, over ₹20 000 (only non-empty ones are listed).
+
+### `GET /search/suggest?q=`
+
+Up to 8 product titles for autocomplete, from 2 characters: `{ "items": [{ "id": "…", "title": "Galaxy S24" }] }`.
+Matches word beginnings ("gal" → Galaxy) and whole words with a typo ("macbok" → MacBook).
 
 ## Products (the vendor's own)
 
@@ -227,4 +269,5 @@ the product save re-checks the stored object, which matters because the local S3
 | Store application, admin review, transitions, public store page | `backend/tests/integration/vendors.test.ts` |
 | Categories, product rules, ownership, photo checks, cache, suspension hiding products, upload links | `backend/tests/integration/catalog.test.ts` |
 | Slugs, money, category tree, upload checks, file URLs, signed-link format | `backend/tests/catalog-units.test.ts` |
+| Search parameters, query rules, facet counts, autocomplete | `backend/tests/search-units.test.ts`, `backend/tests/integration/search.test.ts` |
 | The whole flow through nginx, S3 included | `scripts/smoke-test.sh` (CI) |

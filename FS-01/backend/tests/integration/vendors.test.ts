@@ -165,6 +165,9 @@ describe("store settings", () => {
 
     const edited = await api().patch("/api/v1/vendors/me").set(bearer(token)).send({ description: "Now with free delivery" });
     expect(edited.body.store.description).toBe("Now with free delivery");
+    // Fields that aren't sent keep their values.
+    const phoneOnly = await api().patch("/api/v1/vendors/me").set(bearer(token)).send({ phone: "9811122233" });
+    expect(phoneOnly.body.store).toMatchObject({ phone: "9811122233", description: "Now with free delivery", storeName: "Test Electronics" });
 
     await act(admin, body.store.id, "suspend", { reason: "Under investigation" });
     const blocked = await api().patch("/api/v1/vendors/me").set(bearer(token)).send({ description: "Sneaky edit" });

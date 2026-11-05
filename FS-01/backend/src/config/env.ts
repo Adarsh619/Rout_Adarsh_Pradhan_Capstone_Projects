@@ -16,6 +16,8 @@ const schema = z.object({
   MONGO_URL: z.string().url().default("mongodb://localhost:27017/shopsphere?replicaSet=rs0&directConnection=true"),
   REDIS_URL: z.string().url().default("redis://localhost:6379/0"),
   ELASTICSEARCH_URL: z.string().url().default("http://localhost:9200"),
+  // The alias searches go through; each rebuild creates a new index behind it and switches the alias.
+  ES_INDEX: z.string().regex(/^[a-z0-9_-]+$/).default("products"),
 
   // Leave S3_ENDPOINT empty to use real AWS S3; set it to the local S3 mock in Docker.
   S3_ENDPOINT: z.string().url().optional().or(z.literal("").transform(() => undefined)),

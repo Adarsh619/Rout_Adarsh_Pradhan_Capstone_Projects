@@ -4,7 +4,7 @@ import { cached, cacheKeys, invalidate, invalidatePrefix } from "../../lib/cache
 import { uniqueSlug } from "../../lib/slug.js";
 import { requireRole } from "../../middleware/auth.js";
 import { AppError } from "../../middleware/errors.js";
-import { idParam, objectId, validateBody } from "../../middleware/validate.js";
+import { idParam, objectId, patchSchema, validateBody } from "../../middleware/validate.js";
 import type { RouteContext } from "../context.js";
 import { buildTree, Category, type CategoryNode } from "./category.model.js";
 import { Product } from "./product.model.js";
@@ -17,7 +17,7 @@ const createSchema = z.object({
   commissionRateBp: z.number().int().min(0).max(5000).nullable().default(null),
   sortOrder: z.number().int().min(0).max(1000).default(0),
 });
-const updateSchema = createSchema.omit({ parentId: true }).partial().extend({ isActive: z.boolean().optional() });
+const updateSchema = patchSchema({ ...createSchema.omit({ parentId: true }).shape, isActive: z.boolean() });
 
 const invalidField = (field: string, message: string) =>
   new AppError(400, "validation_error", "Some fields need fixing", { fields: [{ field, message }] });
@@ -75,6 +75,8 @@ export function categoryRouter(ctx: RouteContext): Router {
     });
     if (!category) throw new AppError(404, "not_found", "Category not found");
     await forgetCategories();
+    // Renaming or hiding a category changes what search shows and finds.
+    await ctx.searchSync.category(category._id);
     res.json({ category: { id: category.id as string, name: category.name, slug: category.slug, isActive: category.isActive } });
   });
 

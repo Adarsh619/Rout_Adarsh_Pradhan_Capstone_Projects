@@ -4,7 +4,10 @@ import request from "supertest";
 import { createApp } from "../../src/app.js";
 import { loadEnv } from "../../src/config/env.js";
 import { connectMongo } from "../../src/lib/mongo.js";
+import { createElasticsearch } from "../../src/lib/elasticsearch.js";
 import { createS3, createStorage, ensureBucket } from "../../src/lib/s3.js";
+import { SearchIndexer } from "../../src/modules/search/search-indexer.js";
+import { directSearchSync } from "../../src/modules/search/search-sync.js";
 import { hashPassword } from "../../src/modules/auth/password.js";
 import { User } from "../../src/modules/users/user.model.js";
 
@@ -20,6 +23,8 @@ export const env = loadEnv({
   // The local S3 mock unless CI says otherwise, and a bucket of its own.
   S3_ENDPOINT: process.env.S3_ENDPOINT ?? "http://localhost:9090",
   S3_BUCKET: process.env.S3_BUCKET ?? "shopsphere-test",
+  // Its own search alias, so tests never touch the development index.
+  ES_INDEX: "products-test",
 });
 
 export function testRedis(): Redis {
@@ -34,8 +39,13 @@ export async function startTestServices() {
   const s3 = createS3(env);
   await ensureBucket(s3, env.S3_BUCKET);
   const storage = createStorage(env, s3);
-  const app = createApp({ env, corsOrigins: ["http://localhost:3000"], redis, storage, healthChecks: {} });
-  return { app, redis, storage };
+  const es = createElasticsearch(env.ELASTICSEARCH_URL);
+  const indexer = new SearchIndexer(es, env.ES_INDEX);
+  // A fresh index on every run, so tests always use the current mapping and synonyms.
+  await indexer.reindexAll();
+  // Search updates run inside the request here, so a test can search straight after a change.
+  const app = createApp({ env, corsOrigins: ["http://localhost:3000"], redis, storage, es, searchSync: directSearchSync(indexer), healthChecks: {} });
+  return { app, redis, storage, es, indexer };
 }
 
 // Empties every collection but keeps them and their indexes (dropping the whole database between tests
@@ -44,7 +54,11 @@ export async function wipe(redis: Redis) {
   const collections = await mongoose.connection.db!.collections();
   await Promise.all(collections.map((c) => c.deleteMany({})));
   await redis.flushdb();
+  await searchClient.deleteByQuery({ index: env.ES_INDEX, query: { match_all: {} }, refresh: true, conflicts: "proceed" }, { ignore: [404] });
 }
+
+// Shared by wipe(); a client doesn't connect until it's used.
+const searchClient = createElasticsearch(env.ELASTICSEARCH_URL);
 
 export const PASSWORD = "Sh0pSphere-test";
 

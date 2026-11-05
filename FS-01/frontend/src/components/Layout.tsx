@@ -1,6 +1,7 @@
 import { Link, NavLink, Outlet, useNavigate } from "react-router";
 import { useAuth } from "../auth/AuthContext";
 import { HOME_BY_ROLE, ROLE_LABEL } from "../auth/types";
+import { SearchBox } from "./SearchBox";
 
 export function Layout() {
   const { status, user, logout } = useAuth();
@@ -15,11 +16,15 @@ export function Layout() {
   return (
     <div className="flex min-h-screen flex-col">
       <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 sm:flex-nowrap">
           <Link to="/" className="flex items-center gap-2 text-lg font-semibold text-brand-700">
             <img src="/favicon.svg" alt="" className="h-7 w-7" />
             ShopSphere
           </Link>
+          {/* Its own full-width row on phones, between the logo and the account links on wider screens. */}
+          <div className="order-last flex w-full justify-center sm:order-none sm:flex-1">
+            <SearchBox />
+          </div>
           <nav aria-label="Account" className="flex items-center gap-3 text-sm">
             {status === "signedIn" && user ? (
               <>

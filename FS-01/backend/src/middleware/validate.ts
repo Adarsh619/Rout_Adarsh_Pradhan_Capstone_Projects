@@ -36,6 +36,19 @@ export function parseQuery<T extends z.ZodType>(schema: T, req: Request): z.infe
   return parsed.data;
 }
 
+// For PATCH bodies: the same rules as on create, but every field is optional and a field that isn't sent stays
+// undefined. Zod 4's .partial() would still fill in each field's .default(), so a request changing only the status
+// would also reset the photos, description and so on to their defaults.
+type PatchShape<S extends z.ZodRawShape> = {
+  [K in keyof S]: z.ZodOptional<S[K] extends z.ZodDefault<infer Inner extends z.ZodType> ? Inner : S[K]>;
+};
+export function patchSchema<S extends z.ZodRawShape>(shape: S): z.ZodObject<PatchShape<S>> {
+  const fields = Object.fromEntries(
+    Object.entries(shape).map(([key, field]) => [key, z.optional(field instanceof z.ZodDefault ? (field.unwrap() as z.ZodType) : field)]),
+  );
+  return z.object(fields) as unknown as z.ZodObject<PatchShape<S>>;
+}
+
 // page (from 1) and limit (max 50), shared by every list endpoint.
 export const pageQuery = z.object({
   page: z.coerce.number().int().min(1).max(1000).default(1),
