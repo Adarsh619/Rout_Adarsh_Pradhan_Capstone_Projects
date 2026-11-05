@@ -70,8 +70,8 @@ Every push to `main` publishes tested images to GitHub Container Registry, and G
 
 ```powershell
 mkdir C:\taskflow-release; cd C:\taskflow-release
-Invoke-WebRequest https://github.com/Adarsh619/Rout_Adarsh_Pradhan_Capstone_Projects/releases/latest/download/docker-compose.release.yml -OutFile docker-compose.release.yml
-Invoke-WebRequest https://github.com/Adarsh619/Rout_Adarsh_Pradhan_Capstone_Projects/releases/latest/download/taskflow.env.example -OutFile .env
+Invoke-WebRequest https://github.com/Adarsh619/Rout_Adarsh_Pradhan_Capstone_Projects/releases/download/v1.0.1/docker-compose.release.yml -OutFile docker-compose.release.yml
+Invoke-WebRequest https://github.com/Adarsh619/Rout_Adarsh_Pradhan_Capstone_Projects/releases/download/v1.0.1/taskflow.env.example -OutFile .env
 docker compose -f docker-compose.release.yml up -d --wait
 docker compose -f docker-compose.release.yml exec backend python manage.py seed_demo
 ```
@@ -80,13 +80,15 @@ docker compose -f docker-compose.release.yml exec backend python manage.py seed_
 
 ```bash
 mkdir taskflow-release && cd taskflow-release
-curl -fLO https://github.com/Adarsh619/Rout_Adarsh_Pradhan_Capstone_Projects/releases/latest/download/docker-compose.release.yml
-curl -fL https://github.com/Adarsh619/Rout_Adarsh_Pradhan_Capstone_Projects/releases/latest/download/taskflow.env.example -o .env
+curl -fLO https://github.com/Adarsh619/Rout_Adarsh_Pradhan_Capstone_Projects/releases/download/v1.0.1/docker-compose.release.yml
+curl -fL https://github.com/Adarsh619/Rout_Adarsh_Pradhan_Capstone_Projects/releases/download/v1.0.1/taskflow.env.example -o .env
 docker compose -f docker-compose.release.yml up -d --wait
 docker compose -f docker-compose.release.yml exec backend python manage.py seed_demo
 ```
 
 Then open http://localhost:3000 and sign in as `owner@acme.test` / `demo12345`. Stop it with `docker compose -f docker-compose.release.yml down`.
+
+These commands fetch FS-04 release **v1.0.1**. For a newer FS-04 version, replace `v1.0.1` in the two URLs with its tag from the [Releases page](https://github.com/Adarsh619/Rout_Adarsh_Pradhan_Capstone_Projects/releases) (FS-04 releases are titled "TaskFlow …").
 
 Settings are lines in `.env`, so they work the same on every system:
 

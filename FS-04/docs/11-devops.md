@@ -85,6 +85,8 @@ docker compose -f docker-compose.release.yml up -d --wait
 
 Step-by-step Windows and macOS/Linux commands are in the [README](../README.md#run-the-released-version-no-build). A GitHub Release is a download; nothing is hosted, so `localhost` works only once it's running.
 
+This repository also holds another capstone project, so GitHub's "latest release" can belong to either. **Plain `v*` tags (v1.0.0, v1.0.1…) belong to FS-04** and start this pipeline's release job; other projects must use their own prefix (for example `fs01-v1.0.0`). The README's download commands name the FS-04 tag (`releases/download/v1.0.1/…`) rather than "latest" for the same reason.
+
 `docker-compose.release.yml` mirrors `docker-compose.yml` but pulls the two app images instead of building them, and uses its own project name (`taskflow-release`) so it can't collide with a source-built stack on the same machine. It doesn't publish the database or stripe-mock ports at all.
 
 **A live server (optional):** the `deploy-server` job is ready for a server or platform with a deploy hook. Set the repository variable `DEPLOY_ENABLED=true` and the hook secrets to switch it on; images already run on ARM servers such as Oracle Cloud's free tier.
