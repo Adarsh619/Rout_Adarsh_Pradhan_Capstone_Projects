@@ -2,6 +2,7 @@ import {
   CreateBucketCommand,
   DeleteObjectsCommand,
   HeadBucketCommand,
+  GetObjectCommand,
   HeadObjectCommand,
   PutObjectCommand,
   S3Client,
@@ -47,6 +48,8 @@ export interface Storage {
   // What was actually uploaded under a key, or null if nothing was.
   head(key: string): Promise<StoredObject | null>;
   put(key: string, body: Uint8Array, contentType: string): Promise<void>;
+  // A short-lived download link for a private file (invoices), saved under the given file name.
+  presignGet(key: string, filename: string, expiresInSeconds: number): Promise<string>;
   // Best effort: a leftover file costs a few bytes, a failed request must never fail the user's action.
   deleteMany(keys: string[]): Promise<void>;
   publicUrl(key: string): string;
@@ -83,6 +86,11 @@ export function createStorage(env: Env, client: S3Client = createS3(env)): Stora
     put: async (key, body, contentType) => {
       await client.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: body, ContentType: contentType }));
     },
+
+    presignGet: (key, filename, expiresIn) =>
+      getSignedUrl(signer, new GetObjectCommand({ Bucket: bucket, Key: key, ResponseContentDisposition: `attachment; filename="${filename.replace(/[^\w.-]/g, "_")}"` }), {
+        expiresIn,
+      }),
 
     deleteMany: async (keys) => {
       if (keys.length === 0) return;

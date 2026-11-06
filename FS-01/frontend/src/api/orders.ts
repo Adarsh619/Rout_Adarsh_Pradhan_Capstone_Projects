@@ -69,6 +69,7 @@ export interface Order {
   discount: number;
   shipping: number;
   grandTotal: number;
+  coupon: { code: string; scope: "platform" | "vendor" } | null;
   payment: { provider: "mock" | "razorpay"; status: string; paidAt: string | null; refundedAmount: number; providerOrderId: string | null };
   reservationExpiresAt: string | null;
   shippingAddress: ShippingAddress;
@@ -77,10 +78,13 @@ export interface Order {
     vendor: { storeName: string; slug: string };
     items: OrderLine[];
     itemsTotal: number;
+    discountShare: number;
     payable: number;
     status: PartStatus;
     tracking: { carrier: string; number: string } | null;
     timeline: TimelineEntry[];
+    invoiceNumber: string | null;
+    canReview: boolean;
     canCancel: boolean;
     cancelReason: string | null;
     refund: { amount: number; status: "pending" | "processed" | "failed" } | null;
@@ -167,9 +171,12 @@ export interface VendorPart {
   placedAt: string | null;
   items: OrderLine[];
   itemsTotal: number;
+  discountShare: number;
+  discountBy: "platform" | "vendor" | null;
   payable: number;
   commission: number;
   vendorNet: number;
+  invoiceNumber: string | null;
   customer: { name: string };
   shippingAddress: ShippingAddress | null;
   tracking: { carrier: string; number: string } | null;

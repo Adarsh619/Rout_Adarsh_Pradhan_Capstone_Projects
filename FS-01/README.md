@@ -14,7 +14,7 @@ An Amazon-style marketplace where **many vendors sell**, **customers buy from se
 | Payments | Razorpay test mode (UPI, cards, webhooks, refunds) + own split-and-escrow ledger; built-in mock needs no account ([how it works](docs/09-payments.md)) |
 | Infra | Docker Compose · nginx · GitHub Actions |
 
-**Status:** Day 6 of 10. Sign-in and roles work end to end; vendors apply for a store, admins approve or suspend it, vendors list products with photos uploaded straight to S3, and shoppers search 214 seeded products across 5 stores with typo-tolerant Elasticsearch search. Shoppers fill one cart from several stores (as guests too), check out once with stock held for 15 minutes, pay through Razorpay's test-mode popup, and follow each store's part from placed to delivered while vendors pack and ship their own part. Each store's share is held until delivery, then paid out (simulated); cancelling a part refunds it through Razorpay. Progress is tracked in the [10-day build tracker](docs/guides/DAY_PLAN.md).
+**Status:** Day 7 of 10. Sign-in and roles work end to end; vendors apply for a store, admins approve or suspend it, vendors list products with photos uploaded straight to S3, and shoppers search 214 seeded products across 5 stores with typo-tolerant Elasticsearch search. Shoppers fill one cart from several stores (as guests too), check out once with stock held for 15 minutes, pay through Razorpay's test-mode popup, and follow each store's part from placed to delivered while vendors pack and ship their own part. Each store's share is held until delivery, then paid out (simulated); cancelling a part refunds it through Razorpay. Coupons (platform or store), an invoice PDF for each store's part, and reviews from customers whose order was delivered. Progress is tracked in the [10-day build tracker](docs/guides/DAY_PLAN.md).
 
 ![Architecture](docs/assets/architecture.png)
 
@@ -34,7 +34,7 @@ docker compose up --build
 | http://localhost:4000/api/v1/health | API health, direct |
 
 Create the demo accounts, then the demo catalogue (27 categories, 5 stores, 214 products from DummyJSON and Fake Store,
-438 photos copied into S3; about a minute the first time, a few seconds after that). Every password is `DEMO_PASSWORD` in `.env`.
+438 photos copied into S3, 582 reviews, 3 demo coupons; about a minute the first time, a few seconds after that). Every password is `DEMO_PASSWORD` in `.env`.
 
 ```bash
 docker compose exec api node dist/scripts/seed-users.js
@@ -48,6 +48,9 @@ docker compose exec api node dist/scripts/seed-catalog.js
 | `admin@shopsphere.test` | Admin | Review the waiting application from Kavya Handicrafts; manage categories |
 | `meera@`, `arjun@`, `sana@`, `rohan@shopsphere.test` | Vendor | The other four approved stores |
 | `kavya@shopsphere.test` | Vendor | A store application waiting for approval |
+
+Demo coupons: `WELCOME10` (10% off up to ₹200, orders over ₹499, once per customer), `FLAT100` (₹100 off ₹1,000+),
+`VIKRAM5` (5% off Vikram Electronics' items, ₹1,000+ from that store).
 
 The catalogue comes from a committed snapshot ([`backend/seed/catalog.json`](backend/seed/catalog.json)), so seeding never
 depends on those sites being up; refresh it with `npm run seed:snapshot`. Prices are converted to rupees. The seed

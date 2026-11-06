@@ -37,7 +37,8 @@ export function mockApi(routes: Record<string, Handler>) {
     "GET /api/v1/categories": () => jsonResponse({ items: [] }),
     "GET /api/v1/products": () => jsonResponse({ items: [], page: 1, limit: 24, total: 0 }),
     "GET /api/v1/vendors/me": () => jsonResponse({ store: null }),
-    "GET /api/v1/cart": () => jsonResponse({ cart: { groups: [], itemCount: 0, itemsTotal: 0, problems: 0, canCheckout: false } }),
+    "GET /api/v1/cart": () =>
+      jsonResponse({ cart: { groups: [], itemCount: 0, itemsTotal: 0, problems: 0, canCheckout: false, coupon: null, couponProblem: null, discount: 0, grandTotal: 0 } }),
     ...routes,
   };
   return vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init = {}) => {

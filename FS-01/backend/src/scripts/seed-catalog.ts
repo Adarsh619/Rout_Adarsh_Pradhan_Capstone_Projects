@@ -11,6 +11,9 @@ import { slugify } from "../lib/slug.js";
 import { hashPassword } from "../modules/auth/password.js";
 import { Category } from "../modules/catalog/category.model.js";
 import { Product } from "../modules/catalog/product.model.js";
+import { Coupon } from "../modules/coupons/coupon.model.js";
+import { refreshVendorRating, roundRating } from "../modules/reviews/ratings.js";
+import { Review } from "../modules/reviews/review.model.js";
 import { IMAGE_TYPES, MAX_IMAGE_BYTES, UPLOAD_PURPOSES } from "../modules/uploads/upload-rules.js";
 import { User } from "../modules/users/user.model.js";
 import { SearchIndexer } from "../modules/search/search-indexer.js";
@@ -18,8 +21,8 @@ import { Vendor } from "../modules/vendors/vendor.model.js";
 import { CATALOG_SNAPSHOT, CATEGORY_TREE, SEED_STORES, seedPrices, type SnapshotProduct } from "./catalog-data.js";
 
 // Fills the marketplace with the demo catalogue: the category tree, five approved stores (plus one application
-// waiting for the admin) and 214 products whose photos are copied into our own S3 bucket, then rebuilds the search
-// index. Safe to run again:
+// waiting for the admin), 214 products whose photos are copied into our own S3 bucket, the products' reviews from the
+// source catalogue, three demo coupons, then rebuilds the search index. Safe to run again:
 // everything is matched on a fixed key (category slug, owner email, product SKU) and updated in place, and photos
 // already in the bucket aren't downloaded twice.
 //   npm run seed:catalog                                   (local)
@@ -117,6 +120,62 @@ async function copyImage(storage: Storage, url: string, key: string): Promise<st
   }
 }
 
+const skuOf = (p: SnapshotProduct) => `${p.source === "dummyjson" ? "DJ" : "FS"}-${p.sourceId}`;
+
+// The reviews that came with the source catalogue (DummyJSON), marked as seeded (no account behind them, so they
+// never count as "verified purchase"). Customers' own reviews are never touched. Then every product's and store's
+// rating is recomputed from the visible reviews, the same way the app does it.
+async function seedReviews(products: SnapshotProduct[]): Promise<number> {
+  await Review.init();
+  let n = 0;
+  for (const p of products) {
+    const product = await Product.findOne({ sku: skuOf(p) }).select("_id vendorId");
+    if (!product) continue;
+    await Review.deleteMany({ productId: product._id, source: "seed" });
+    if (!p.reviews?.length) continue;
+    // Straight to the collection, so each review keeps its original date.
+    await Review.collection.insertMany(
+      p.reviews.map((r) => ({
+        productId: product._id,
+        vendorId: product.vendorId,
+        authorName: r.reviewerName.slice(0, 80),
+        rating: Math.min(5, Math.max(1, Math.round(r.rating))),
+        body: r.comment.slice(0, 2000),
+        status: "visible",
+        source: "seed",
+        createdAt: new Date(r.date),
+        updatedAt: new Date(r.date),
+      })),
+    );
+    n += p.reviews.length;
+  }
+  const averages = await Review.aggregate<{ _id: Types.ObjectId; avg: number; n: number }>([
+    { $match: { status: "visible" } },
+    { $group: { _id: "$productId", avg: { $avg: "$rating" }, n: { $sum: 1 } } },
+  ]);
+  await Product.updateMany({}, { $set: { ratingAvg: 0, ratingCount: 0 } });
+  await Product.bulkWrite(averages.map((a) => ({ updateOne: { filter: { _id: a._id }, update: { $set: { ratingAvg: roundRating(a.avg), ratingCount: a.n } } } })));
+  for (const v of await Vendor.find().select("_id")) await refreshVendorRating(v._id);
+  return n;
+}
+
+// Demo coupons. Matched on the code; how often each has been used is never reset.
+async function seedCoupons(): Promise<number> {
+  await Coupon.init();
+  const vikram = await Vendor.findOne({ userId: (await User.findOne({ email: "vendor@shopsphere.test" }))?._id });
+  const coupons = [
+    { code: "WELCOME10", scope: "platform", type: "percent", value: 1000, maxDiscount: 20_000, minOrder: 49_900, perUserLimit: 1, description: "10% off your order, up to ₹200 (orders over ₹499)" },
+    { code: "FLAT100", scope: "platform", type: "flat", value: 10_000, minOrder: 100_000, perUserLimit: 3, usageLimit: 1000, description: "₹100 off orders of ₹1,000 or more" },
+    ...(vikram
+      ? [{ code: "VIKRAM5", scope: "vendor", vendorId: vikram._id, type: "percent", value: 500, minOrder: 100_000, perUserLimit: 2, description: "5% off Vikram Electronics (₹1,000 or more from the store)" }]
+      : []),
+  ];
+  for (const c of coupons) {
+    await Coupon.updateOne({ code: c.code }, { $set: { ...c, isActive: true }, $setOnInsert: { usedCount: 0 } }, { upsert: true });
+  }
+  return coupons.length;
+}
+
 async function main() {
   const env = loadEnv();
   const withImages = !process.argv.includes("--no-images");
@@ -147,7 +206,7 @@ async function main() {
       logger.warn({ category: p.sourceCategory }, "no store sells this category; product skipped");
       return;
     }
-    const sku = `${p.source === "dummyjson" ? "DJ" : "FS"}-${p.sourceId}`;
+    const sku = skuOf(p);
     let slug = slugify(p.title);
     if (usedSlugs.has(`${vendor.key}/${slug}`)) slug = `${slug}-${p.sourceId}`;
     usedSlugs.add(`${vendor.key}/${slug}`);
@@ -174,8 +233,6 @@ async function main() {
             ...seedPrices(p),
             stock: p.stock,
             attributes: p.attributes,
-            ratingAvg: Math.round(p.rating * 10) / 10,
-            ratingCount: p.ratingCount,
             // A product needs a photo to be on sale, the same rule vendors follow.
             ...(withImages && { images: keys.map((key) => ({ key, alt: p.title.slice(0, 150) })), status: keys.length ? "active" : "draft" }),
             ...(p.brand && { brand: p.brand.slice(0, 60) }),
@@ -194,11 +251,14 @@ async function main() {
     saved++;
   });
 
+  const reviews = await seedReviews(snapshot.products);
+  const coupons = await seedCoupons();
+
   await Promise.all([invalidate(redis, cacheKeys.categories), invalidatePrefix(redis, cacheKeys.product(""))]);
   // Rebuild search from what was just saved, so it matches the catalogue exactly.
   const es = createElasticsearch(env.ELASTICSEARCH_URL);
   const { indexed } = await new SearchIndexer(es, env.ES_INDEX).reindexAll();
-  logger.info({ products: saved, photos, searchable: indexed, seconds: Math.round((Date.now() - started) / 1000) }, "demo catalogue ready");
+  logger.info({ products: saved, photos, reviews, coupons, searchable: indexed, seconds: Math.round((Date.now() - started) / 1000) }, "demo catalogue ready");
   await Promise.allSettled([disconnectMongo(), redis.quit(), es.close()]);
 }
 

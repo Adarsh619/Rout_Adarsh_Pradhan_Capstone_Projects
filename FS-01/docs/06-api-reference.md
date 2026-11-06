@@ -2,7 +2,7 @@
 
 [← Data model](05-data-model.md) · [Index](README.md) · [Next: Background jobs and search →](08-background-jobs.md)
 
-This page documents the endpoints that exist today, with real request and response shapes (Days 1–6). The full plan, including
+This page documents the endpoints that exist today, with real request and response shapes (Days 1–7). The full plan, including
 endpoints still to come, is the [API list](specs/04-api-list.md). A machine-readable `openapi.yaml` follows on Day 10.
 
 ## Conventions
@@ -44,6 +44,9 @@ Every error has the same shape. Form errors list **one message per field**, so t
 | 409 | `out_of_stock`, `cart_full`, `cart_empty`, `cart_changed`, `price_changed`, `order_not_payable`, `too_many_addresses` | Cart and checkout conflicts, explained below |
 | 400 | `invalid_signature` | A payment proof or webhook that doesn't verify |
 | 409 | `payment_not_completed` | Razorpay says the payment didn't go through |
+| 409 | `coupon_invalid`, `coupon_exhausted`, `code_taken`, `already_reviewed` | Coupon and review conflicts, explained below |
+| 403 | `not_delivered` | Reviewing a product that hasn't been delivered to you |
+| 404 | `invoice_not_ready` | The invoice PDF is still being made |
 | 503 | `webhook_not_configured` | No webhook secret is set on this server |
 | 502 | `payment_unavailable` | The payment provider can't be reached; nothing was charged |
 | 429 | `rate_limited` | Too many attempts; `Retry-After` header |
@@ -352,6 +355,83 @@ Delivering releases the store's share and the worker pays it out.
 Registers the account with the payout provider (simulated) and keeps only the last 4 digits. Shares already released
 and waiting for these details are sent straight away (`payoutsStarted`).
 
+## Coupons
+
+### In the cart: `POST /cart/coupon` · `DELETE /cart/coupon`
+
+```json
+POST /api/v1/cart/coupon   { "code": "welcome10" }
+200 { "cart": { …, "itemsTotal": 2059800,
+                "coupon": { "code": "WELCOME10", "description": "10% off your order, up to ₹200 (orders over ₹499)", "scope": "platform", "storeName": null },
+                "couponProblem": null, "discount": 20000, "grandTotal": 2039800 } }
+```
+
+One code per cart, checked when applied and again at checkout, with the same pricing checkout uses. A code that stops
+applying (the cart dropped below its minimum, say) stays on the cart with `couponProblem` explaining why and no
+discount. `409 coupon_invalid` says why a code can't be applied ("This code isn't valid.", "This coupon has expired.",
+"You've already used this coupon.", "Add items worth ₹200 more to use this coupon (from this store)." …). A guest's
+coupon moves into the account at sign-in like the cart does.
+
+At checkout send the **total the shopper saw** (`grandTotal`, after the discount) as `expectedTotal`. The order then has
+`discount`, `grandTotal` and `coupon: { code, scope }`, and each part `discountShare` and `payable`. If the last use was
+taken a moment earlier, checkout answers `409 coupon_exhausted`.
+
+| Coupon | Who pays | Effect |
+|---|---|---|
+| Platform (`/admin/coupons`) | ShopSphere | Discount split across the parts by value; vendors still get their full share; capped at the order's total commission |
+| Vendor (`/vendor/coupons`) | That store | Only that store's part is discounted; its commission is on what the customer paid for it |
+
+### Managing coupons: `GET · POST · PATCH /admin/coupons[/:id]`, `/vendor/coupons[/:id]`
+
+```json
+POST /api/v1/vendor/coupons
+{ "code": "VIKRAM5", "type": "percent", "value": 500, "maxDiscount": 50000, "minOrder": 100000,
+  "endsAt": "2026-12-31T18:29:59Z", "usageLimit": 500, "perUserLimit": 2, "description": "5% off Vikram Electronics" }
+201 { "coupon": { "id": "…", "code": "VIKRAM5", "scope": "vendor", "vendorId": "…", "usedCount": 0, "isActive": true, … } }
+```
+
+`value` is basis points for `percent` (1%–90%) and paise for `flat`. Codes are 4–20 letters and numbers, stored
+upper-case, unique (`409 code_taken`) and can't be changed; everything else can (`PATCH`, e.g. `{ "isActive": false }`).
+Vendors only see and change their own store's coupons.
+
+## Reviews
+
+### `GET /products/:id/reviews?page=`
+
+```json
+{ "items": [{ "id": "…", "rating": 5, "title": "Love it", "body": "Battery lasts two days.", "authorName": "Asha",
+              "verified": true, "createdAt": "…" }],
+  "page": 1, "limit": 20, "total": 4,
+  "summary": { "ratingAvg": 4.3, "ratingCount": 4, "stars": { "5": 2, "4": 1, "3": 1, "2": 0, "1": 0 } },
+  "viewer": { "canReview": false, "reason": "not_delivered", "mine": null } }
+```
+
+Visible reviews, newest first. `viewer` is there for a signed-in customer only: whether they may review, and why not
+(`not_delivered`, `already_reviewed`). `verified` marks reviews by customers whose order was delivered; the demo
+catalogue's own reviews aren't verified.
+
+### `POST /products/:id/reviews` (customer)
+
+`{ "rating": 1–5, "title"?: "…", "body": "at least 10 characters" }`. Only after an order with this product was
+**delivered** to this customer (`403 not_delivered`), once per product (`409 already_reviewed`). The product's and the
+store's ratings are recalculated from the visible reviews straight away, and search picks up the new rating.
+
+### Admin: `GET /admin/reviews?status=`, `PATCH /admin/reviews/:id`
+
+`{ "status": "hidden", "reason": "…" }` hides a review (or `visible` shows it again); ratings are recalculated at once.
+
+## Invoices
+
+### `GET /invoices/:subId` (the buyer, the selling store, admins)
+
+```json
+{ "invoiceNumber": "INV-2026-000001", "url": "https://…/invoices/<vendorId>/INV-2026-000001.pdf?X-Amz-…", "expiresInSeconds": 300 }
+```
+
+One PDF per store's part, made by the worker once the order is paid and stored privately in S3. The answer is a
+**5-minute signed download link**, made fresh each time. Anyone else gets `404`; while the PDF is still being made,
+`404 invoice_not_ready`. Order and vendor-order views carry `invoiceNumber` once it exists.
+
 ## Products (the vendor's own)
 
 All need a vendor whose store is **approved** (`403 vendor_not_approved` otherwise). A vendor only ever sees their own
@@ -439,4 +519,5 @@ the product save re-checks the stored object, which matters because the local S3
 | Addresses, cart (guest cookie, merge on sign-in, stock checks), checkout, the overselling race, payment verification, expiry, cancelling, vendor status steps | `backend/tests/integration/orders.test.ts` |
 | Commission and splitting, status rules, payment signatures | `backend/tests/order-units.test.ts` |
 | Razorpay driver, webhooks, escrow, ledger balance, refunds, payouts | `backend/tests/payment-units.test.ts`, `backend/tests/integration/payments.test.ts` |
+| Coupon maths and rules, invoice PDF; reviews, coupons and invoices end to end | `backend/tests/coupon-units.test.ts`, `backend/tests/integration/reviews-coupons-invoices.test.ts` |
 | The whole flow through nginx, S3 included, from guest cart to the vendor packing a paid order | `scripts/smoke-test.sh` (CI) |

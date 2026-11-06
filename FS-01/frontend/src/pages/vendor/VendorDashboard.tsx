@@ -48,6 +48,9 @@ function ApprovedStore({ store }: { store: OwnStore }) {
         <Link to="/vendor/orders" className="rounded-lg border border-slate-300 bg-white px-4 py-2 font-medium hover:bg-slate-50">
           Orders to ship
         </Link>
+        <Link to="/vendor/coupons" className="rounded-lg border border-slate-300 bg-white px-4 py-2 font-medium hover:bg-slate-50">
+          Coupons
+        </Link>
         <Link to={`/stores/${store.slug}`} className="rounded-lg border border-slate-300 bg-white px-4 py-2 font-medium hover:bg-slate-50">
           View your store page
         </Link>

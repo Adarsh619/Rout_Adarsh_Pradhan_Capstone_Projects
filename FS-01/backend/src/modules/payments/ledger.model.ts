@@ -11,6 +11,8 @@ export const LEDGER_TYPES = [
   "vendor_release", // the part was delivered: the share can be paid out
   "vendor_reversal", // the part was cancelled before delivery: the held share is cancelled
   "payout", // the share was paid to the vendor (simulated provider in v1)
+  "platform_discount", // a platform coupon: the platform pays this much of the customer's price (order level)
+  "platform_discount_reversal", // a part with a platform discount was cancelled: that share of the discount is undone
 ] as const;
 export type LedgerType = (typeof LEDGER_TYPES)[number];
 

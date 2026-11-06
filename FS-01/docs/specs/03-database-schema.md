@@ -122,7 +122,8 @@ Indexes: `{ vendorId, status, createdAt: -1 }`, `{ vendorId, placedAt: -1 }`, `o
 - **Platform coupon** (the platform pays for it): split across sub-orders in proportion to `itemsTotal` (remainder paise go to the largest). Commission is on `itemsTotal`, so `vendorNet = itemsTotal − commission`; the vendor isn't affected by the discount. The discount is capped so the platform never pays out more than it collected (`Σ vendorNet ≤ grandTotal`).
 - **Vendor coupon** (the vendor pays for it): applies only to that vendor's sub-order. Commission is on `payable`, so `vendorNet = payable − commission`.
 - **Check on every paid order:** `grandTotal = Σ vendorNet + platform share`, where `platform share = Σ commission − platform discount`. A test enforces this for every scenario.
-- **Cancelling one sub-order** refunds its `payable` through Razorpay and reverses its `vendorNet` hold; the platform gives up that sub-order's commission and, for a platform coupon, absorbs its discount share.
+- **Cancelling one sub-order** refunds its `payable` through Razorpay and reverses its `vendorNet` hold; the platform gives up that sub-order's commission and, for a platform coupon, its discount share is reversed in the ledger (`platform_discount_reversal`).
+- Order level: `discount`, and `coupon: { couponId, code, scope, vendorId, discount }`; sub-order level: `discountShare`, `discountBy` (`platform` \| `vendor`).
 
 ## ledgerEntries (append-only)
 
@@ -142,12 +143,16 @@ Never updated or deleted; corrections are new entries. Powers vendor earnings an
 
 | Field | Type | Notes |
 |---|---|---|
-| productId, vendorId, userId, subOrderId | ObjectId | `subOrderId` proves a delivered purchase |
+| productId, vendorId | ObjectId | |
+| userId, subOrderId | ObjectId | The customer and the delivered part that proves the purchase; empty for the demo catalogue's own reviews |
+| authorName | string | As written, so a later name change doesn't rewrite old reviews |
 | rating | int 1–5 | |
 | title, body | string | Up to 120 / 2 000 chars |
-| status | `visible` \| `hidden` | Admin can hide |
+| status, hiddenReason | `visible` \| `hidden`, string | Admin can hide |
+| source | `customer` \| `seed` | Only `customer` reviews are "verified purchase" |
 
-Indexes: `{ productId, userId }` **unique**, `{ productId, status, createdAt: -1 }`.
+Indexes: `{ productId, userId }` **unique** (when `userId` is set), `{ productId, status, createdAt: -1 }`, `{ vendorId, status }`.
+`products.ratingAvg/ratingCount` and `vendors.ratingAvg/ratingCount` are recalculated from visible reviews on every change.
 
 ## coupons and couponRedemptions
 
@@ -159,17 +164,20 @@ Indexes: `{ productId, userId }` **unique**, `{ productId, status, createdAt: -1
 | maxDiscount, minOrder | int (paise) | |
 | startsAt, endsAt | date | |
 | usageLimit, perUserLimit, usedCount | int | `usedCount` incremented atomically with a limit check |
-| isActive | bool | Hidden categories disappear from the shop; a category in use can be hidden but not deleted |
-| sortOrder | int | Display order within its level |
+| isActive | bool | Off = can't be applied |
+| description, createdBy | string, ObjectId | Shown in the cart |
 
-`couponRedemptions`: `{ couponId, userId, orderId }`, unique `{ couponId, orderId }`, used for the per-user limit and released if the order expires or is cancelled in full.
+`couponRedemptions`: `{ couponId, userId, orderId }`, unique `{ couponId, orderId }`, used for the per-user limit and
+removed (with `usedCount` given back) if the order expires or is cancelled before payment. A coupon applied to a cart
+lives in Redis next to it (`cart:<id>:coupon`).
 
 ## invoices
 
 | Field | Type | Notes |
 |---|---|---|
 | subOrderId | ObjectId | **unique** |
-| invoiceNumber | string | **unique**, `INV-2026-000123` |
+| orderId, vendorId, customerId | ObjectId | Who may download it |
+| invoiceNumber | string | **unique**, `INV-2026-000123` (from `counters`, also copied onto the sub-order) |
 | s3Key | string | `invoices/<vendorId>/<invoiceNumber>.pdf`, private |
 | generatedAt | date | |
 

@@ -131,6 +131,9 @@ sequence in the [API reference](06-api-reference.md#uploads).
 | Razorpay keys | Test keys only: the server refuses to start with a live key (`rzp_live_…`); keys live in `.env` / the server environment, never in Git |
 | Webhooks | Signature checked over the raw body with the webhook secret; each event id handled once; events without ids ignored; endpoint off unless a secret is set |
 | Bank details | A vendor's full account number goes only to the payout provider; the database keeps the last 4 digits, IFSC and holder name |
+| Invoices | Private S3 objects; only the buyer, the selling store and admins get a link, signed for 5 minutes and made fresh each time; anyone else gets 404 |
+| Reviews | Only from customers whose order with the product was delivered, once per product; ratings are computed, never typed in; admins can hide |
+| Coupons | Re-checked at checkout; a use is taken atomically inside the checkout transaction (no two shoppers get the last use); vendors can only touch their own store's coupons |
 | Errors | Unexpected errors return a generic 500; details only in server logs |
 | Logs | Authorization and cookie headers and password fields are redacted |
 | Redirects | `?next=` after sign-in only accepts same-site paths (`/…`, not `//…` or `https://…`) |

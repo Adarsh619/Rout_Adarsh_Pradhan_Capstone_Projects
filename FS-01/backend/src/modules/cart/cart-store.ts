@@ -35,7 +35,7 @@ function parseLine(productId: string, raw: string): CartLine | undefined {
 const encode = (qty: number, addedAt: number) => JSON.stringify({ qty, at: addedAt });
 
 export class CartStore {
-  constructor(private readonly redis: Redis) {}
+  constructor(readonly redis: Redis) {}
 
   // Newest first. Reading also pushes the expiry back, so an active cart never disappears.
   async read(key: string): Promise<CartLine[]> {

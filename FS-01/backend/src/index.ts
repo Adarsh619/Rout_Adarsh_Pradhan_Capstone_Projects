@@ -7,6 +7,7 @@ import { createRedis, pingRedis } from "./lib/redis.js";
 import { createS3, createStorage, ensureBucket, pingS3 } from "./lib/s3.js";
 import { SearchIndexer } from "./modules/search/search-indexer.js";
 import { queuedReservations } from "./modules/orders/reservations.js";
+import { queuedInvoiceJobs } from "./modules/invoices/invoice-jobs.js";
 import { queuedMoneyJobs } from "./modules/payments/money-jobs.js";
 import { createPaymentProvider } from "./modules/payments/payment-provider.js";
 import { MockPayoutProvider } from "./modules/payments/payout-provider.js";
@@ -25,6 +26,7 @@ async function main(): Promise<void> {
   const searchSync = queuedSearchSync(redis);
   const reservations = queuedReservations(redis);
   const moneyJobs = queuedMoneyJobs(redis);
+  const invoiceJobs = queuedInvoiceJobs(redis);
 
   const app = createApp({
     env,
@@ -36,6 +38,7 @@ async function main(): Promise<void> {
     payments: createPaymentProvider(env.PAYMENT_PROVIDER, env.JWT_ACCESS_SECRET, { keyId: env.RAZORPAY_KEY_ID, keySecret: env.RAZORPAY_KEY_SECRET }),
     payouts: new MockPayoutProvider(),
     moneyJobs,
+    invoiceJobs,
     reservations,
     healthChecks: {
       mongo: pingMongo,
@@ -53,7 +56,7 @@ async function main(): Promise<void> {
   const shutdown = (signal: string) => {
     logger.info({ signal }, "shutting down");
     server.close(async () => {
-      await Promise.allSettled([searchSync.queue.close(), reservations.queue.close(), moneyJobs.queue.close(), disconnectMongo(), redis.quit(), es.close()]);
+      await Promise.allSettled([searchSync.queue.close(), reservations.queue.close(), moneyJobs.queue.close(), invoiceJobs.queue.close(), disconnectMongo(), redis.quit(), es.close()]);
       process.exit(0);
     });
     setTimeout(() => process.exit(1), 10_000).unref();

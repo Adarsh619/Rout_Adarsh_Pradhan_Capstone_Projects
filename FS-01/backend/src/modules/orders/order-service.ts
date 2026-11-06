@@ -5,17 +5,19 @@ import { logger } from "../../lib/logger.js";
 import { inTransaction } from "../../lib/transaction.js";
 import { AppError } from "../../middleware/errors.js";
 import { CartStore, userCartKey } from "../cart/cart-store.js";
-import { isBuyable } from "../cart/cart-view.js";
-import { Category } from "../catalog/category.model.js";
 import { Product } from "../catalog/product.model.js";
+import { applyCoupon } from "../coupons/coupon-rules.js";
+import { couponKeyFor, evaluateCoupon, redeem, releaseRedemption, termsOf } from "../coupons/coupon-service.js";
+import type { CouponDoc } from "../coupons/coupon.model.js";
+import type { InvoiceJobs } from "../invoices/invoice-jobs.js";
 import { record, type LedgerInput } from "../payments/ledger.model.js";
 import { addRefundToOrder, type MoneyJobs } from "../payments/money-jobs.js";
 import type { PaymentProvider } from "../payments/payment-provider.js";
 import type { SearchSync } from "../search/search-sync.js";
 import { User } from "../users/user.model.js";
-import { Vendor } from "../vendors/vendor.model.js";
 import { Order, SubOrder, nextOrderNumber, type ActorRole, type OrderDoc, type SubOrderDoc, type SubOrderStatus } from "./order.model.js";
-import { canCustomerCancel, canVendorMove, commissionRate, rollUpOrderStatus, splitByVendor, VENDOR_NEXT, type PricedLine } from "./order-rules.js";
+import { canCustomerCancel, canVendorMove, rollUpOrderStatus, splitByVendor, VENDOR_NEXT } from "./order-rules.js";
+import { priceLines } from "./pricing.js";
 import type { ReservationScheduler } from "./reservations.js";
 
 export interface OrderDeps {
@@ -26,6 +28,8 @@ export interface OrderDeps {
   reservationMinutes: number;
   // Refunds and payouts, run in the background.
   moneyJobs: MoneyJobs;
+  // Invoice PDFs, made in the background once an order is paid.
+  invoiceJobs: InvoiceJobs;
 }
 
 export interface Actor {
@@ -66,55 +70,35 @@ export async function placeOrder(deps: OrderDeps, input: { userId: string; addre
   }
 
   // Today's prices and stock, never what the browser last saw.
-  const products = await Product.find({ _id: { $in: lines.map((l) => l.productId) } });
-  const productById = new Map(products.map((p) => [p.id as string, p]));
-  const vendors = await Vendor.find({ _id: { $in: products.map((p) => p.vendorId) } });
-  const vendorById = new Map(vendors.map((v) => [v.id as string, v]));
-  const categories = await Category.find({ _id: { $in: products.map((p) => p.categoryId) } });
-  const parents = await Category.find({ _id: { $in: categories.map((c) => c.parentId).filter(Boolean) } });
-  const categoryById = new Map([...categories, ...parents].map((c) => [c.id as string, c]));
-
-  const problems: { productId: string; title?: string; problem: string; available?: number }[] = [];
-  const priced: PricedLine[] = [];
-  for (const line of lines) {
-    const p = productById.get(line.productId);
-    const vendor = p && vendorById.get(p.vendorId.toString());
-    if (!p || !isBuyable(p, vendor)) {
-      problems.push({ productId: line.productId, title: p?.title, problem: "unavailable" });
-      continue;
-    }
-    if (line.qty > p.stock) {
-      problems.push({ productId: line.productId, title: p.title, problem: "out_of_stock", available: p.stock });
-      continue;
-    }
-    const category = categoryById.get(p.categoryId.toString());
-    const department = category?.parentId ? categoryById.get(category.parentId.toString()) : undefined;
-    priced.push({
-      productId: line.productId,
-      vendorId: p.vendorId.toString(),
-      title: p.title,
-      ...(p.images[0] && { imageKey: p.images[0].key }),
-      price: p.price,
-      qty: line.qty,
-      commissionRateBp: commissionRate(vendor!.commissionRateBp, category?.commissionRateBp, department?.commissionRateBp),
-    });
-  }
+  const { priced, problems, vendorById } = await priceLines(lines);
   if (problems.length) {
     throw new AppError(409, "cart_changed", "Some items in your cart changed. Review your cart and try again.", { items: problems });
   }
 
-  const parts = splitByVendor(priced);
-  const itemsTotal = parts.reduce((sum, p) => sum + p.itemsTotal, 0);
-  if (input.expectedTotal !== undefined && input.expectedTotal !== itemsTotal) {
+  const plainParts = splitByVendor(priced);
+  const itemsTotal = plainParts.reduce((sum, p) => sum + p.itemsTotal, 0);
+
+  // The coupon applied in the cart, checked again now (it may have expired or been used up since).
+  const couponCode = await deps.redis.get(couponKeyFor(cartKey));
+  let coupon: CouponDoc | null = null;
+  if (couponCode) {
+    const checked = await evaluateCoupon(couponCode, input.userId, plainParts);
+    if (checked.problem || !checked.coupon) throw new AppError(409, "coupon_invalid", `${checked.problem} Remove the coupon to continue.`, { code: couponCode });
+    coupon = checked.coupon;
+  }
+  const { parts, discount } = applyCoupon(plainParts, coupon ? termsOf(coupon) : null);
+  const grandTotal = itemsTotal - discount;
+  if (input.expectedTotal !== undefined && input.expectedTotal !== grandTotal) {
     throw new AppError(409, "price_changed", "Prices changed since you opened checkout. Check the new total.", {
       expectedTotal: input.expectedTotal,
       itemsTotal,
+      discount,
+      grandTotal,
     });
   }
 
   const orderNumber = await nextOrderNumber();
   const expiresAt = new Date(Date.now() + deps.reservationMinutes * 60_000);
-  const grandTotal = itemsTotal;
 
   const order = await inTransaction(async (session) => {
     // Take the stock only if enough is still there. Two shoppers racing for the last unit: one update matches,
@@ -137,7 +121,11 @@ export async function placeOrder(deps: OrderDeps, input: { userId: string; addre
           items: priced,
           shippingAddress: { name: address.name, phone: address.phone, line1: address.line1, line2: address.line2, city: address.city, state: address.state, pincode: address.pincode },
           itemsTotal,
+          discount,
           grandTotal,
+          ...(coupon && {
+            coupon: { couponId: coupon._id, code: coupon.code, scope: coupon.scope, vendorId: coupon.vendorId, discount },
+          }),
           payment: { provider: deps.payments.name, status: "created" },
           status: "pending_payment",
           reservationExpiresAt: expiresAt,
@@ -157,7 +145,9 @@ export async function placeOrder(deps: OrderDeps, input: { userId: string; addre
           vendorSlug: vendor.slug,
           items: part.items,
           itemsTotal: part.itemsTotal,
-          payable: part.itemsTotal,
+          discountShare: part.discountShare,
+          ...(part.discountBy && { discountBy: part.discountBy }),
+          payable: part.payable,
           commission: part.commission,
           vendorNet: part.vendorNet,
           status: "awaiting_payment",
@@ -166,6 +156,7 @@ export async function placeOrder(deps: OrderDeps, input: { userId: string; addre
       }),
       { session, ordered: true },
     );
+    if (coupon) await redeem(coupon, input.userId, created!._id, session);
     return created!;
   });
 
@@ -183,6 +174,7 @@ export async function placeOrder(deps: OrderDeps, input: { userId: string; addre
 
   await deps.reservations.schedule(order.id as string, expiresAt);
   await cart.remove(cartKey, ...priced.map((l) => l.productId));
+  await deps.redis.del(couponKeyFor(cartKey));
   await afterStockChange(deps, priced.map((l) => l.productId));
   return order;
 }
@@ -191,7 +183,7 @@ export async function placeOrder(deps: OrderDeps, input: { userId: string; addre
 
 // Confirms an order once its payment is proven, and puts each vendor's share on hold until delivery. Safe to call
 // twice for the same payment (the popup's callback and Razorpay's webhook both report it).
-export async function markPaid(deps: Pick<OrderDeps, "payments" | "reservations">, orderId: string, providerPaymentId: string): Promise<OrderDoc> {
+export async function markPaid(deps: Pick<OrderDeps, "payments" | "reservations" | "invoiceJobs">, orderId: string, providerPaymentId: string): Promise<OrderDoc> {
   const now = new Date();
   const paid = await inTransaction(async (session) => {
     const order = await Order.findOneAndUpdate(
@@ -202,6 +194,10 @@ export async function markPaid(deps: Pick<OrderDeps, "payments" | "reservations"
     if (!order) return undefined;
     const parts = await SubOrder.find({ orderId: order._id, status: "awaiting_payment" }).session(session);
     const entries: LedgerInput[] = [{ type: "payment", orderId: order._id, amount: order.grandTotal, providerRef: providerPaymentId }];
+    // A platform coupon: the platform covers that part of the price, so vendors are still owed their full share.
+    if (order.coupon?.scope === "platform" && order.discount > 0) {
+      entries.push({ type: "platform_discount", orderId: order._id, amount: order.discount, note: `Coupon ${order.coupon.code}` });
+    }
     for (const part of parts) {
       part.status = "placed";
       part.placedAt = now;
@@ -223,6 +219,7 @@ export async function markPaid(deps: Pick<OrderDeps, "payments" | "reservations"
   });
   if (paid) {
     await deps.reservations.cancel(orderId);
+    for (const part of await SubOrder.find({ orderId: paid._id }).select("_id")) await deps.invoiceJobs.generate(part.id as string);
     return paid;
   }
 
@@ -287,6 +284,8 @@ export async function releaseReservation(
       { $set: { status: "cancelled", cancelledAt: now, cancelReason: opts.reason }, $push: { statusHistory: history("cancelled", opts.actor, opts.reason) } },
       { session },
     );
+    // Never paid, so the coupon use is given back.
+    if (order.coupon?.couponId) await releaseRedemption(order.coupon.couponId, order._id, session);
     return order.items.map((i) => i.productId);
   });
   if (!released) return false;
@@ -355,6 +354,9 @@ export async function cancelPart(
       [
         { type: "vendor_reversal", orderId: doc.orderId, subOrderId: doc._id, vendorId: doc.vendorId, amount: doc.vendorNet },
         { type: "commission_reversal", orderId: doc.orderId, subOrderId: doc._id, vendorId: doc.vendorId, amount: doc.commission },
+        ...(doc.discountBy === "platform" && doc.discountShare > 0
+          ? [{ type: "platform_discount_reversal" as const, orderId: doc.orderId, subOrderId: doc._id, vendorId: doc.vendorId, amount: doc.discountShare }]
+          : []),
       ],
       session,
     );

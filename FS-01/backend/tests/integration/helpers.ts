@@ -8,6 +8,7 @@ import { createElasticsearch } from "../../src/lib/elasticsearch.js";
 import { createS3, createStorage, ensureBucket } from "../../src/lib/s3.js";
 import { SearchIndexer } from "../../src/modules/search/search-indexer.js";
 import { noReservations } from "../../src/modules/orders/reservations.js";
+import { directInvoiceJobs } from "../../src/modules/invoices/invoice-jobs.js";
 import { directMoneyJobs } from "../../src/modules/payments/money-jobs.js";
 import { createPaymentProvider, type PaymentProvider } from "../../src/modules/payments/payment-provider.js";
 import { MockPayoutProvider, type PayoutProvider } from "../../src/modules/payments/payout-provider.js";
@@ -68,6 +69,7 @@ export async function startTestServices(opts: { payments?: PaymentProvider; payo
     payments,
     payouts,
     moneyJobs: directMoneyJobs({ payments, payouts }),
+    invoiceJobs: directInvoiceJobs(storage),
     reservations: noReservations,
     healthChecks: {},
   });

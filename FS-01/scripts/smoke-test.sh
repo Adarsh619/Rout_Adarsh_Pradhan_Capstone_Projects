@@ -103,6 +103,8 @@ if [ -n "${DEMO_PASSWORD:-}" ]; then
     -d "{\"name\":\"Smoke Shopper\",\"email\":\"smoke-shopper-$(date +%s)-$RANDOM@example.com\",\"password\":\"Smoke-test-123\"}" | field accessToken)"
   as_shopper() { curl -fsS -H 'Content-Type: application/json' -H 'X-Requested-With: ShopSphere' -H "Authorization: Bearer $SHOPPER" "$@"; }
   as_shopper "$BASE/api/v1/cart" | grep -q '"itemCount":2' && check "signing up keeps the guest's cart"
+  # WELCOME10 comes with the demo catalogue: 10% off, up to ₹200, paid for by the platform.
+  as_shopper -X POST "$BASE/api/v1/cart/coupon" -d '{"code":"welcome10"}' | grep -q '"discount":20000' && check "the WELCOME10 coupon takes ₹200 off"
   ADDRESS_ID="$(as_shopper -X POST "$BASE/api/v1/account/addresses" -d '{"name":"Smoke Shopper","phone":"9876543210",
 "line1":"1 Test Street","city":"Bengaluru","state":"Karnataka","pincode":"560001"}' | sed -n 's/.*"address":{"id":"\([^"]*\)".*/\1/p')"
   CHECKOUT="$(as_shopper -X POST "$BASE/api/v1/checkout" -d "{\"addressId\":\"$ADDRESS_ID\"}")"
@@ -114,6 +116,7 @@ if [ -n "${DEMO_PASSWORD:-}" ]; then
   as_shopper -X POST "$BASE/api/v1/checkout/verify" -d "{\"orderId\":\"$ORDER_ID\",\"providerOrderId\":\"$PROVIDER_ORDER\",\
 \"providerPaymentId\":\"$(echo "$PAID" | field providerPaymentId)\",\"signature\":\"$(echo "$PAID" | field signature)\"}" \
     | grep -q '"status":"confirmed"' && check "the signed test payment is verified and the order confirmed"
+  as_shopper "$BASE/api/v1/orders/$ORDER_ID" | grep -q '"discount":20000,' && check "the order was charged with the discount"
   PART_ID="$(as_vendor "$BASE/api/v1/vendor/orders" | sed -n 's/^{"items":\[{"id":"\([^"]*\)".*/\1/p')"
   as_vendor -X POST "$BASE/api/v1/vendor/orders/$PART_ID/status" -d '{"status":"packed"}' | grep -q '"status":"packed"' \
     && check "the vendor sees the paid order and packs it"
@@ -132,11 +135,23 @@ if [ -n "${DEMO_PASSWORD:-}" ]; then
   done
   check "delivery releases the share and the worker pays it out after ${i}s"
 
+  # The worker made an invoice PDF for each store's part; the buyer gets a short-lived link to it.
+  for i in $(seq 1 30); do
+    INVOICE="$(as_shopper "$BASE/api/v1/invoices/$PART_ID" 2>/dev/null || true)"
+    echo "$INVOICE" | grep -q '"url"' && break
+    [ "$i" = 30 ] && { echo "✗ the invoice was never made"; exit 1; }
+    sleep 1
+  done
+  curl -fsS "$(echo "$INVOICE" | field url)" | head -c 5 | grep -q '%PDF-' && check "the invoice PDF downloads ($(echo "$INVOICE" | field invoiceNumber))"
+
+  # Delivered, so the customer may review it, and the product's rating follows.
+  as_shopper -X POST "$BASE/api/v1/products/$PRODUCT_ID/reviews" -d '{"rating":5,"body":"Smoke test review: works as described."}'     | grep -q '"ratingCount":1' && check "the customer reviews the delivered product and its rating updates"
+
   # The customer cancels the other store's part: its share is reversed and the worker refunds it.
   OTHER_PART="$(as_shopper "$BASE/api/v1/orders/$ORDER_ID" | grep -o '"id":"[a-f0-9]\{24\}","vendor":{"storeName":"Smoke Second Store"' | sed 's/"id":"\([^"]*\)".*/\1/')"
   as_shopper -X POST "$BASE/api/v1/orders/$ORDER_ID/sub-orders/$OTHER_PART/cancel" -d '{"reason":"Smoke test"}' -o /dev/null
   for i in $(seq 1 30); do
-    as_shopper "$BASE/api/v1/orders/$ORDER_ID" | grep -q '"refund":{"amount":29900,"status":"processed"}' && break
+    as_shopper "$BASE/api/v1/orders/$ORDER_ID" | grep -q '"refund":{"amount":[0-9]*,"status":"processed"}' && break
     [ "$i" = 30 ] && { echo "✗ the cancelled part was never refunded"; exit 1; }
     sleep 1
   done

@@ -53,6 +53,14 @@ const orderSchema = new Schema(
     discount: { type: Number, default: 0 },
     shipping: { type: Number, default: 0 },
     grandTotal: { type: Number, required: true },
+    // The coupon used, as it was at checkout.
+    coupon: {
+      couponId: { type: Schema.Types.ObjectId, ref: "Coupon" },
+      code: { type: String },
+      scope: { type: String, enum: ["platform", "vendor"] },
+      vendorId: { type: Schema.Types.ObjectId, ref: "Vendor" },
+      discount: { type: Number },
+    },
     payment: {
       provider: { type: String, enum: ["mock", "razorpay"], required: true },
       providerOrderId: { type: String },
@@ -105,6 +113,8 @@ const subOrderSchema = new Schema(
     items: { type: [lineSchema], required: true },
     itemsTotal: { type: Number, required: true },
     discountShare: { type: Number, default: 0 },
+    // Who pays for the discount: the platform (vendor's share unchanged) or this store (its own coupon).
+    discountBy: { type: String, enum: ["platform", "vendor"] },
     // What the customer paid for this part: itemsTotal − discountShare.
     payable: { type: Number, required: true },
     commission: { type: Number, required: true },
@@ -137,6 +147,8 @@ const subOrderSchema = new Schema(
     },
     // Set when the order is paid: from then on the vendor sees this part.
     placedAt: { type: Date },
+    // Set once its invoice PDF has been made.
+    invoiceNumber: { type: String },
     deliveredAt: { type: Date },
     cancelledAt: { type: Date },
     cancelReason: { type: String, maxlength: 300 },

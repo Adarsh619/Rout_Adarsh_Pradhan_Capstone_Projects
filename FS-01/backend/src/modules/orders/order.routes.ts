@@ -54,6 +54,7 @@ export function orderRouter(ctx: RouteContext): Router {
     reservations: ctx.reservations,
     reservationMinutes: ctx.reservationMinutes,
     moneyJobs: ctx.moneyJobs,
+    invoiceJobs: ctx.invoiceJobs,
   };
   const customer = [ctx.signedIn, requireRole("customer")];
   const seller = [ctx.signedIn, requireRole("vendor"), loadOwnStore({ approved: false })];

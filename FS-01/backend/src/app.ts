@@ -21,7 +21,11 @@ import { productRouter } from "./modules/catalog/product.routes.js";
 import type { RouteContext } from "./modules/context.js";
 import { orderRouter } from "./modules/orders/order.routes.js";
 import type { ReservationScheduler } from "./modules/orders/reservations.js";
+import { couponRouter } from "./modules/coupons/coupon.routes.js";
+import type { InvoiceJobs } from "./modules/invoices/invoice-jobs.js";
+import { invoiceRouter } from "./modules/invoices/invoice.routes.js";
 import type { MoneyJobs } from "./modules/payments/money-jobs.js";
+import { reviewRouter } from "./modules/reviews/review.routes.js";
 import type { PaymentProvider } from "./modules/payments/payment-provider.js";
 import type { PayoutProvider } from "./modules/payments/payout-provider.js";
 import { webhookRouter } from "./modules/payments/webhook.routes.js";
@@ -43,6 +47,7 @@ export interface AppDeps {
   payments: PaymentProvider;
   payouts: PayoutProvider;
   moneyJobs: MoneyJobs;
+  invoiceJobs: InvoiceJobs;
   reservations: ReservationScheduler;
   healthChecks: Record<string, HealthCheck>;
 }
@@ -109,6 +114,7 @@ export function createApp(deps: AppDeps): Express {
     payments: deps.payments,
     payouts: deps.payouts,
     moneyJobs: deps.moneyJobs,
+    invoiceJobs: deps.invoiceJobs,
     webhookSecret: env.RAZORPAY_WEBHOOK_SECRET,
     reservations: deps.reservations,
     reservationMinutes: env.RESERVATION_MINUTES,
@@ -124,6 +130,9 @@ export function createApp(deps: AppDeps): Express {
     cartRouter(ctx),
     orderRouter(ctx),
     webhookRouter(ctx),
+    reviewRouter(ctx),
+    couponRouter(ctx),
+    invoiceRouter(ctx),
   );
 
   app.use(notFound);

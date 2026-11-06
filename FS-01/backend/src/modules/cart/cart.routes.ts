@@ -4,6 +4,10 @@ import { requireCsrfHeader } from "../../middleware/csrf.js";
 import { AppError } from "../../middleware/errors.js";
 import { objectId, validateBody } from "../../middleware/validate.js";
 import { Product } from "../catalog/product.model.js";
+import { applyCoupon } from "../coupons/coupon-rules.js";
+import { couponKeyFor, couponSummary, evaluateCoupon, normaliseCode, termsOf } from "../coupons/coupon-service.js";
+import { splitByVendor } from "../orders/order-rules.js";
+import { priceLines } from "../orders/pricing.js";
 import type { RouteContext } from "../context.js";
 import { Vendor } from "../vendors/vendor.model.js";
 import {
@@ -26,6 +30,7 @@ const qty = z
   .max(MAX_LINE_QTY, `Up to ${MAX_LINE_QTY} of each product`);
 const addSchema = z.object({ productId: objectId, qty: qty.default(1) });
 const updateSchema = z.object({ qty });
+const couponSchema = z.object({ code: z.string().trim().min(1, "Enter a code").max(30) });
 
 export type CookieSettings = { secure: boolean; sameSite: "lax" | "strict" | "none" };
 
@@ -44,6 +49,10 @@ export function mergeGuestCartOnSignIn(store: CartStore, cookies: CookieSettings
     const guestId: unknown = req.cookies?.[GUEST_COOKIE];
     if (!isGuestId(guestId)) return;
     await store.merge(guestCartKey(guestId), userCartKey(userId));
+    // A coupon the guest applied comes along, unless the account already has one.
+    const guestCoupon = await store.redis.get(couponKeyFor(guestCartKey(guestId)));
+    if (guestCoupon) await store.redis.set(couponKeyFor(userCartKey(userId)), guestCoupon, "EX", CART_TTL_SECONDS, "NX");
+    await store.redis.del(couponKeyFor(guestCartKey(guestId)));
     // clearCookie needs the same attributes the cookie was set with, minus maxAge.
     const opts = guestCookieOptions(cookies);
     delete opts.maxAge;
@@ -69,11 +78,30 @@ export function cartRouter(ctx: RouteContext): Router {
     return guestCartKey(id);
   }
 
-  async function view(key: string | undefined) {
+  async function view(key: string | undefined, userId?: string) {
     if (!key) return emptyCart();
-    const { cart, gone } = await buildCartView(await store.read(key), ctx.storage);
+    const lines = await store.read(key);
+    const { cart, gone } = await buildCartView(lines, ctx.storage);
     // A product deleted by its vendor simply disappears from carts.
     await store.remove(key, ...gone);
+
+    // The coupon is checked against the cart as it is now, with the same pricing checkout uses.
+    const code = await ctx.redis.get(couponKeyFor(key));
+    if (code) {
+      const { priced } = await priceLines(lines);
+      const parts = splitByVendor(priced);
+      const { coupon, problem } = await evaluateCoupon(code, userId, parts);
+      if (!coupon) {
+        await ctx.redis.del(couponKeyFor(key));
+      } else {
+        cart.coupon = await couponSummary(coupon);
+        cart.couponProblem = problem;
+        if (!problem) {
+          cart.discount = applyCoupon(parts, termsOf(coupon)).discount;
+          cart.grandTotal = cart.itemsTotal - cart.discount;
+        }
+      }
+    }
     return cart;
   }
 
@@ -95,7 +123,26 @@ export function cartRouter(ctx: RouteContext): Router {
     );
 
   router.get("/cart", ctx.maybeSignedIn, async (req, res) => {
-    res.json({ cart: await view(cartKey(req, res, false)) });
+    res.json({ cart: await view(cartKey(req, res, false), req.auth?.id) });
+  });
+
+  // Applies a code to the cart. It's checked now (and again at checkout); one code per cart.
+  router.post("/cart/coupon", ...write, validateBody(couponSchema), async (req, res) => {
+    const key = cartKey(req, res, false);
+    const lines = key ? await store.read(key) : [];
+    if (!key || lines.length === 0) throw new AppError(409, "cart_empty", "Add something to your cart first");
+    const code = normaliseCode((req.body as z.infer<typeof couponSchema>).code);
+    const { priced } = await priceLines(lines);
+    const { problem } = await evaluateCoupon(code, req.auth?.id, splitByVendor(priced));
+    if (problem) throw new AppError(409, "coupon_invalid", problem, { fields: [{ field: "code", message: problem }] });
+    await ctx.redis.set(couponKeyFor(key), code, "EX", CART_TTL_SECONDS);
+    res.json({ cart: await view(key, req.auth?.id) });
+  });
+
+  router.delete("/cart/coupon", ...write, async (req, res) => {
+    const key = cartKey(req, res, false);
+    if (key) await ctx.redis.del(couponKeyFor(key));
+    res.json({ cart: await view(key, req.auth?.id) });
   });
 
   router.post("/cart/items", ...write, validateBody(addSchema), async (req, res) => {
@@ -111,7 +158,7 @@ export function cartRouter(ctx: RouteContext): Router {
     const wanted = Math.min(MAX_LINE_QTY, inCart + adding);
     if (wanted > product.stock) throw notEnough(product.stock, inCart);
     await store.setQty(key, productId, wanted, current?.addedAt);
-    res.status(current ? 200 : 201).json({ cart: await view(key) });
+    res.status(current ? 200 : 201).json({ cart: await view(key, req.auth?.id) });
   });
 
   router.patch("/cart/items/:productId", ...write, validateBody(updateSchema), async (req, res) => {
@@ -123,13 +170,13 @@ export function cartRouter(ctx: RouteContext): Router {
     const { qty: wanted } = req.body as z.infer<typeof updateSchema>;
     if (wanted > product.stock) throw notEnough(product.stock);
     await store.setQty(key, line.productId, wanted, line.addedAt);
-    res.json({ cart: await view(key) });
+    res.json({ cart: await view(key, req.auth?.id) });
   });
 
   router.delete("/cart/items/:productId", ...write, async (req, res) => {
     const key = cartKey(req, res, false);
     if (key) await store.remove(key, String(req.params.productId));
-    res.json({ cart: await view(key) });
+    res.json({ cart: await view(key, req.auth?.id) });
   });
 
   return router;

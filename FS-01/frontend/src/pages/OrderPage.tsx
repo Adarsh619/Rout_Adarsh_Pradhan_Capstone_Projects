@@ -18,6 +18,7 @@ import {
 } from "../api/orders";
 import { LoadError, Loading, StatusBadge } from "../components/Catalog";
 import { FormError } from "../components/Field";
+import { InvoiceButton } from "../components/InvoiceButton";
 import { OrderTimeline } from "../components/OrderTimeline";
 import { formatINR } from "../lib/money";
 import { AddressText } from "./CheckoutPage";
@@ -262,6 +263,22 @@ export function OrderPage() {
               {part.refund.status === "processed" ? "sent to your original payment method" : part.refund.status === "failed" ? "couldn't be sent yet; it will be retried" : "being processed"}
             </p>
           )}
+          {part.status !== "awaiting_payment" && order.payment.status !== "created" && order.payment.status !== "failed" && (
+            <InvoiceButton partId={part.id} invoiceNumber={part.invoiceNumber} />
+          )}
+          {part.canReview && (
+            <p className="text-sm">
+              Delivered. How was it?{" "}
+              {part.items.map((item, n) => (
+                <span key={item.productId}>
+                  {n > 0 && " · "}
+                  <Link to={`/products/${item.productId}#reviews`} className="font-medium text-brand-700 underline">
+                    Review {item.title}
+                  </Link>
+                </span>
+              ))}
+            </p>
+          )}
           {part.canCancel && <CancelPart order={order} partId={part.id} storeName={part.vendor.storeName} />}
         </section>
       ))}
@@ -277,6 +294,12 @@ export function OrderPage() {
             <dt>Items</dt>
             <dd>{formatINR(order.itemsTotal)}</dd>
           </div>
+          {order.discount > 0 && (
+            <div className="flex justify-between text-emerald-700">
+              <dt>Coupon {order.coupon?.code}</dt>
+              <dd>− {formatINR(order.discount)}</dd>
+            </div>
+          )}
           <div className="flex justify-between">
             <dt>Delivery</dt>
             <dd>{order.shipping ? formatINR(order.shipping) : "Free"}</dd>

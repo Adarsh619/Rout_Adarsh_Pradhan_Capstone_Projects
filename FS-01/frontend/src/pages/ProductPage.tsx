@@ -4,6 +4,7 @@ import { MAX_LINE_QTY, useAddToCart } from "../api/cart";
 import { useProduct, type Product } from "../api/catalog";
 import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
+import { Reviews } from "../components/Reviews";
 import { LoadError, Loading, Price, Rating } from "../components/Catalog";
 
 function AddToCart({ product }: { product: Product }) {
@@ -137,6 +138,7 @@ export function ProductPage() {
           )}
         </div>
       </div>
+      <Reviews productId={product.id} />
     </div>
   );
 }

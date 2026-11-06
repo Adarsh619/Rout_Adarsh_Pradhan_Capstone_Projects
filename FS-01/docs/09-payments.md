@@ -118,6 +118,33 @@ ShopSphere handles this the same way it would a Razorpay outage: the cancellatio
 reversed, ledger balanced), the refund shows as failed, and the hourly sweep keeps retrying, so it completes by itself
 once Razorpay allows it. An integration test runs exactly this case.
 
+## Coupons: who pays for the discount
+
+| | Platform coupon | Vendor coupon |
+|---|---|---|
+| Discounts | The whole order, split across parts by value (leftover paise to the largest part) | Only that store's part |
+| Commission charged on | Each part's full items total | What the customer paid for the part |
+| Vendor receives | Exactly what they would without the coupon | Their price minus their own coupon, minus commission |
+| Platform | Pays the discount out of its commission; **capped at the total commission**, so it never pays out more than it collects | Unaffected |
+| Ledger | `platform_discount` (order) on payment; `platform_discount_reversal` for a cancelled part's share | Nothing extra: `payment = Σ vendor_hold + Σ commission` |
+
+With coupons the books still balance:
+
+> `payment − refund + platform_discount − platform_discount_reversal = (vendor_hold − vendor_reversal) + (commission − commission_reversal)`
+
+**Worked example** (from the tests): WELCOME10 (10%, up to ₹200) on the ₹20,000 phone and two ₹299 cables, 10% commission.
+
+| | Vikram's part | Meera's part | Order |
+|---|---|---|---|
+| Items | 2 000 000 | 59 800 | 2 059 800 |
+| Discount share (by value) | 19 420 | 580 | **20 000** (`platform_discount`) |
+| Customer pays | 1 980 580 | 59 220 | **2 039 800** (`payment`) |
+| Commission (on items) | 200 000 | 5 980 | 205 980 |
+| Held for the vendor | **1 800 000** | **53 820** | 1 853 820 |
+
+Check: 2 039 800 + 20 000 = 1 853 820 + 205 980 ✓. A coupon's use is taken inside the checkout transaction (only
+while below its limit, so two shoppers can't both take the last one) and given back if the order is never paid.
+
 ## Webhooks
 
 `POST /api/v1/webhooks/razorpay` (on the live site, Razorpay Dashboard → Webhooks, with a secret you choose; locally the

@@ -1,5 +1,6 @@
 import { Link } from "react-router";
-import { MAX_LINE_QTY, PROBLEM_TEXT, useCart, useRemoveFromCart, useSetCartQty, type CartItem } from "../api/cart";
+import { useState, type FormEvent } from "react";
+import { MAX_LINE_QTY, PROBLEM_TEXT, useApplyCoupon, useCart, useRemoveCoupon, useRemoveFromCart, useSetCartQty, type Cart, type CartItem } from "../api/cart";
 import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { LoadError, Loading } from "../components/Catalog";
@@ -62,6 +63,57 @@ function Line({ item }: { item: CartItem }) {
   );
 }
 
+function CouponBox({ cart }: { cart: Cart }) {
+  const apply = useApplyCoupon();
+  const remove = useRemoveCoupon();
+  const [code, setCode] = useState("");
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    if (code.trim()) apply.mutate(code.trim(), { onSuccess: () => setCode("") });
+  };
+
+  if (cart.coupon) {
+    return (
+      <div className={`rounded-lg border px-3 py-2 text-sm ${cart.couponProblem ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}>
+        <div className="flex items-center justify-between gap-2">
+          <span>
+            <span className="font-mono font-semibold">{cart.coupon.code}</span>
+            {cart.coupon.storeName && <span className="text-slate-600"> · {cart.coupon.storeName} only</span>}
+          </span>
+          <button type="button" onClick={() => remove.mutate()} disabled={remove.isPending} className="text-slate-600 underline hover:text-red-700">
+            Remove<span className="sr-only"> coupon {cart.coupon.code}</span>
+          </button>
+        </div>
+        {cart.couponProblem ? (
+          <p className="mt-1 text-amber-900">{cart.couponProblem}</p>
+        ) : (
+          cart.coupon.description && <p className="mt-1 text-emerald-800">{cart.coupon.description}</p>
+        )}
+      </div>
+    );
+  }
+  return (
+    <form onSubmit={submit} className="space-y-1" aria-label="Coupon">
+      <div className="flex gap-2">
+        <label className="sr-only" htmlFor="coupon-code">
+          Coupon code
+        </label>
+        <input
+          id="coupon-code"
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          placeholder="Coupon code"
+          className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm uppercase"
+        />
+        <button type="submit" disabled={apply.isPending} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium hover:bg-slate-50 disabled:opacity-60">
+          Apply
+        </button>
+      </div>
+      {apply.error && <p className="text-sm text-red-700">{apply.error instanceof ApiError ? apply.error.message : "Couldn't apply the code"}</p>}
+    </form>
+  );
+}
+
 export function CartPage() {
   const { status, user } = useAuth();
   const { data: cart, isPending, isError, error } = useCart();
@@ -111,15 +163,22 @@ export function CartPage() {
             <dt>Items ({cart.itemCount})</dt>
             <dd>{formatINR(cart.itemsTotal)}</dd>
           </div>
+          {cart.discount > 0 && (
+            <div className="flex justify-between text-emerald-700">
+              <dt>Coupon {cart.coupon?.code}</dt>
+              <dd>− {formatINR(cart.discount)}</dd>
+            </div>
+          )}
           <div className="flex justify-between">
             <dt>Delivery</dt>
             <dd className="text-emerald-700">Free</dd>
           </div>
           <div className="flex justify-between border-t border-slate-100 pt-2 text-base font-semibold">
             <dt>Total</dt>
-            <dd>{formatINR(cart.itemsTotal)}</dd>
+            <dd>{formatINR(cart.grandTotal)}</dd>
           </div>
         </dl>
+        <CouponBox cart={cart} />
         {cart.groups.length > 1 && (
           <p className="text-xs text-slate-500">
             {cart.groups.length} stores: you pay once, and each store ships its part separately.

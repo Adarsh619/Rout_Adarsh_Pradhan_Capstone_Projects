@@ -76,7 +76,7 @@ The **Day** column says when each endpoint is built; ✓ means it exists now.
 | GET | `/cart` | P | Cart with live prices, stock warnings, grouped by vendor | ✓ 5 |
 | POST | `/cart/items` | P | Add `{ productId, qty }` | ✓ 5 |
 | PATCH · DELETE | `/cart/items/:productId` | P | Change quantity or remove | ✓ 5 |
-| POST · DELETE | `/cart/coupon` | P | Apply or remove a coupon | 7 |
+| POST · DELETE | `/cart/coupon` | P | Apply or remove a coupon | ✓ 7 |
 | POST | `/checkout` | C | Create order + sub-orders, reserve stock, create the Razorpay (or mock) order | ✓ 5 |
 | POST | `/checkout/verify` | C | Verify the payment signature returned by the popup | ✓ 5 |
 | POST | `/payments/mock/pay` | C | Test payment gateway (only with `PAYMENT_PROVIDER=mock`): signs a payment like Razorpay | ✓ 5 |
@@ -93,22 +93,23 @@ Guests are identified by an httpOnly `ss_guest` cookie; their cart merges into t
 | POST | `/orders/:id/sub-orders/:subId/cancel` | C | Cancel a part that hasn't shipped; its share is reversed and its amount refunded through Razorpay | ✓ 6 |
 | GET | `/vendor/orders?status=` | V (any status) | My paid sub-orders, with counts per status | ✓ 5 |
 | POST | `/vendor/orders/:subId/status` | V (any status) | `{ status: "packed" \| "shipped" \| "delivered", tracking? }` | ✓ 5 |
-| GET | `/invoices/:subId` | C (buyer) · V (seller) · A | Short-lived download link for the PDF | 7 |
+| GET | `/invoices/:subId` | C (buyer) · V (seller) · A | Short-lived download link for the PDF | ✓ 7 |
 
 ## Reviews
 
 | Method | Path | Role | Purpose | Day |
 |---|---|---|---|---|
-| GET | `/products/:id/reviews` | P | Visible reviews, newest first | 7 |
-| POST | `/products/:id/reviews` | C | Review after delivery, once per product | 7 |
-| PATCH | `/admin/reviews/:id` | A | Hide or show | 7 |
+| GET | `/products/:id/reviews` | P | Visible reviews, newest first, star breakdown; for a customer, whether they may review | ✓ 7 |
+| POST | `/products/:id/reviews` | C | Review after delivery, once per product | ✓ 7 |
+| GET | `/admin/reviews?status=` | A | Reviews for moderation | ✓ 7 |
+| PATCH | `/admin/reviews/:id` | A | Hide or show | ✓ 7 |
 
 ## Coupons
 
 | Method | Path | Role | Purpose | Day |
 |---|---|---|---|---|
-| GET · POST · PATCH | `/vendor/coupons[/:id]` | V | My store's coupons | 7 |
-| GET · POST · PATCH | `/admin/coupons[/:id]` | A | Platform coupons | 7 |
+| GET · POST · PATCH | `/vendor/coupons[/:id]` | V | My store's coupons | ✓ 7 |
+| GET · POST · PATCH | `/admin/coupons[/:id]` | A | Platform coupons | ✓ 7 |
 
 ## Earnings, analytics and refunds
 

@@ -25,9 +25,24 @@ export interface CartView {
   itemsTotal: number;
   problems: number;
   canCheckout: boolean;
+  // The applied coupon (if any) and what it takes off right now; couponProblem says why it doesn't apply.
+  coupon: { code: string; description: string | null; scope: "platform" | "vendor"; storeName: string | null } | null;
+  couponProblem: string | null;
+  discount: number;
+  grandTotal: number;
 }
 
-export const emptyCart = (): CartView => ({ groups: [], itemCount: 0, itemsTotal: 0, problems: 0, canCheckout: false });
+export const emptyCart = (): CartView => ({
+  groups: [],
+  itemCount: 0,
+  itemsTotal: 0,
+  problems: 0,
+  canCheckout: false,
+  coupon: null,
+  couponProblem: null,
+  discount: 0,
+  grandTotal: 0,
+});
 
 export const isBuyable = (p: ProductDoc, v: VendorDoc | null | undefined) => p.status === "active" && v?.status === "approved";
 
@@ -93,7 +108,15 @@ export async function buildCartView(lines: CartLine[], storage: Storage): Promis
   }
 
   return {
-    cart: { groups: [...groups.values()], itemCount, itemsTotal, problems, canCheckout: groups.size > 0 && problems === 0 },
+    cart: {
+      ...emptyCart(),
+      groups: [...groups.values()],
+      itemCount,
+      itemsTotal,
+      grandTotal: itemsTotal,
+      problems,
+      canCheckout: groups.size > 0 && problems === 0,
+    },
     gone,
   };
 }

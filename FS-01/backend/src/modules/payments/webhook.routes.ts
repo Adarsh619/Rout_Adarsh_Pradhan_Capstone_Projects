@@ -83,6 +83,7 @@ export function webhookRouter(ctx: RouteContext): Router {
     reservations: ctx.reservations,
     reservationMinutes: ctx.reservationMinutes,
     moneyJobs: ctx.moneyJobs,
+    invoiceJobs: ctx.invoiceJobs,
   };
 
   const eventId = (req: Request) =>

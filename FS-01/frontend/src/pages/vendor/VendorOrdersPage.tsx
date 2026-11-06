@@ -5,6 +5,7 @@ import { ApiError } from "../../api/client";
 import { advancePart, PART_STATUS_LABEL, PAYOUT_TEXT, useVendorOrders, type VendorPart, type VendorPartStatus } from "../../api/orders";
 import { LoadError, Loading, Pagination, StatusBadge } from "../../components/Catalog";
 import { Field, FormError } from "../../components/Field";
+import { InvoiceButton } from "../../components/InvoiceButton";
 import { OrderTimeline } from "../../components/OrderTimeline";
 import { formatINR } from "../../lib/money";
 import { orderDate } from "../OrdersPage";
@@ -95,9 +96,21 @@ function PartCard({ part }: { part: VendorPart }) {
         )}
         <dl className="space-y-1">
           <div className="flex justify-between">
-            <dt>Customer paid</dt>
-            <dd>{formatINR(part.payable)}</dd>
+            <dt>Items</dt>
+            <dd>{formatINR(part.itemsTotal)}</dd>
           </div>
+          {part.discountBy === "vendor" && (
+            <div className="flex justify-between text-slate-600">
+              <dt>Your coupon</dt>
+              <dd>− {formatINR(part.discountShare)}</dd>
+            </div>
+          )}
+          {part.discountBy === "platform" && (
+            <div className="flex justify-between text-slate-500">
+              <dt>Coupon paid by ShopSphere</dt>
+              <dd>{formatINR(part.discountShare)}</dd>
+            </div>
+          )}
           <div className="flex justify-between text-slate-600">
             <dt>Platform commission</dt>
             <dd>− {formatINR(part.commission)}</dd>
@@ -120,6 +133,7 @@ function PartCard({ part }: { part: VendorPart }) {
         </p>
       )}
       {part.cancelReason && <p className="text-sm text-slate-600">Cancelled: {part.cancelReason}</p>}
+      <InvoiceButton partId={part.id} invoiceNumber={part.invoiceNumber} />
       <NextStep part={part} />
     </article>
   );

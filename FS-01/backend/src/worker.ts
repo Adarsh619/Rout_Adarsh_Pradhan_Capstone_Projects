@@ -1,6 +1,8 @@
 import { Worker, type Job } from "bullmq";
 import { loadEnv } from "./config/env.js";
 import { createElasticsearch } from "./lib/elasticsearch.js";
+import { createS3, createStorage } from "./lib/s3.js";
+import { generateInvoice, INVOICE_QUEUE } from "./modules/invoices/invoice-jobs.js";
 import { logger } from "./lib/logger.js";
 import { connectMongo, disconnectMongo } from "./lib/mongo.js";
 import { createRedis } from "./lib/redis.js";
@@ -14,7 +16,7 @@ import { directSearchSync, runSearchJob, SEARCH_QUEUE, type SearchJob } from "./
 
 // Background worker: runs the slow jobs (search indexing, invoice PDFs, payouts, reservation expiry)
 // outside the API process. Each later day adds its handler here.
-export const QUEUES = [SEARCH_QUEUE, "invoice-pdf", MONEY_QUEUE, RESERVATION_QUEUE] as const;
+export const QUEUES = [SEARCH_QUEUE, INVOICE_QUEUE, MONEY_QUEUE, RESERVATION_QUEUE] as const;
 
 async function main(): Promise<void> {
   const env = loadEnv();
@@ -33,10 +35,11 @@ async function main(): Promise<void> {
   };
   const moneyQueue = queuedMoneyJobs(connection).queue;
   await scheduleMoneySweep(moneyQueue);
+  const storage = createStorage(env, createS3(env));
 
   const handlers: Record<(typeof QUEUES)[number], (job: Job) => Promise<unknown>> = {
     [SEARCH_QUEUE]: (job: Job<SearchJob>) => runSearchJob(indexer, job.data),
-    "invoice-pdf": async (job) => logger.warn({ queue: "invoice-pdf", job: job.name }, "no handler registered yet"),
+    [INVOICE_QUEUE]: (job: Job<{ subOrderId: string }>) => generateInvoice(storage, job.data.subOrderId),
     [MONEY_QUEUE]: (job: Job<MoneyJob>) => (job.name === MONEY_SWEEP_JOB ? retryStuckMoney(moneyDeps) : runMoneyJob(moneyDeps, job.data)),
     [RESERVATION_QUEUE]: async (job: Job<{ orderId?: string }>) => {
       if (job.name === SWEEP_JOB) return `${await expireDueOrders(orderDeps)} orders expired`;

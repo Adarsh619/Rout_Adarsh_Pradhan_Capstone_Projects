@@ -108,13 +108,13 @@ export function CheckoutPage() {
     setError(undefined);
     setBusy(true);
     try {
-      const { order, payment } = await placeOrder({ addressId, expectedTotal: cart.data.itemsTotal });
+      const { order, payment } = await placeOrder({ addressId, expectedTotal: cart.data.grandTotal });
       queryClient.setQueryData(orderKey(order.id), { order, payment });
       await queryClient.invalidateQueries({ queryKey: cartKey });
       navigate(`/orders/${order.id}`);
     } catch (err) {
       // Prices or stock moved: refresh the cart so the summary shows the new numbers.
-      if (err instanceof ApiError && ["price_changed", "cart_changed", "out_of_stock", "cart_empty"].includes(err.code)) {
+      if (err instanceof ApiError && ["price_changed", "cart_changed", "out_of_stock", "cart_empty", "coupon_invalid", "coupon_exhausted"].includes(err.code)) {
         await queryClient.invalidateQueries({ queryKey: cartKey });
       }
       setError(err instanceof ApiError ? err.message : "Couldn't place the order. Try again.");
@@ -196,13 +196,19 @@ export function CheckoutPage() {
             <dt>Items ({cart.data.itemCount})</dt>
             <dd>{formatINR(cart.data.itemsTotal)}</dd>
           </div>
+          {cart.data.discount > 0 && (
+            <div className="flex justify-between text-emerald-700">
+              <dt>Coupon {cart.data.coupon?.code}</dt>
+              <dd>− {formatINR(cart.data.discount)}</dd>
+            </div>
+          )}
           <div className="flex justify-between">
             <dt>Delivery</dt>
             <dd className="text-emerald-700">Free</dd>
           </div>
           <div className="flex justify-between border-t border-slate-100 pt-2 text-base font-semibold">
             <dt>Order total</dt>
-            <dd>{formatINR(cart.data.itemsTotal)}</dd>
+            <dd>{formatINR(cart.data.grandTotal)}</dd>
           </div>
         </dl>
         <FormError message={error} />

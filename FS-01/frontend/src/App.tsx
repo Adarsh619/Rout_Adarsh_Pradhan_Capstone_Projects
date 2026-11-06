@@ -5,6 +5,7 @@ import type { Role } from "./auth/types";
 import { Layout } from "./components/Layout";
 import { AccountPage } from "./pages/AccountPage";
 import { CartPage } from "./pages/CartPage";
+import { CouponsPage } from "./pages/CouponsPage";
 import { CheckoutPage } from "./pages/CheckoutPage";
 import { OrderPage } from "./pages/OrderPage";
 import { OrdersPage } from "./pages/OrdersPage";
@@ -46,10 +47,12 @@ export function App() {
         <Route path="vendor/products/new" element={only(["vendor"], <ProductEditorPage />)} />
         <Route path="vendor/products/:id" element={only(["vendor"], <ProductEditorPage />)} />
         <Route path="vendor/orders" element={only(["vendor"], <VendorOrdersPage />)} />
+        <Route path="vendor/coupons" element={only(["vendor"], <CouponsPage owner="vendor" />)} />
 
         <Route path="admin" element={only(["admin"], <AdminDashboard />)} />
         <Route path="admin/vendors" element={only(["admin"], <AdminVendorsPage />)} />
         <Route path="admin/categories" element={only(["admin"], <AdminCategoriesPage />)} />
+        <Route path="admin/coupons" element={only(["admin"], <CouponsPage owner="admin" />)} />
 
         <Route path="*" element={<NotFoundPage />} />
       </Route>

@@ -70,12 +70,12 @@ Started **Tue 3 Nov 2026**. Day 4 finished a day early (Thu 5 Nov), so Days 5–
   - Paid with test Netbanking (UPI isn't offered on this account); payment captured and visible in the dashboard. Refunds are refused by Razorpay for this test account, dashboard included ("invalid request sent"), so the refund shows as failed and is retried hourly ([doc 09](../09-payments.md#known-limit-razorpay-test-accounts-may-refuse-refunds))
 
 ## Day 7 · Sun 8 Nov · Reviews, coupons, invoices (brief step 7, part 1)
-- [ ] 🛠 Reviews only from buyers whose order was delivered; rating updates product + search
-- [ ] 🛠 Coupons: platform or vendor, % or flat, minimum order, usage limits, expiry
-- [ ] 🛠 PDF invoice per sub-order, generated in the background, stored in S3, download link
-- [ ] 🛠 Tests for review rules, coupon maths, invoices
+- [x] 🛠 Reviews only from buyers whose order was delivered; rating updates product + search (+ admin hide/show; catalogue's own reviews imported)
+- [x] 🛠 Coupons: platform or vendor, % or flat, minimum order, usage limits, expiry
+- [x] 🛠 PDF invoice per sub-order, generated in the background, stored in S3, download link
+- [x] 🛠 Tests for review rules, coupon maths, invoices
 - [ ] 👤 Oracle VM retry; create MongoDB Atlas M0 (Mumbai), DuckDNS name, Vercel and UptimeRobot accounts
-- [ ] ✅ Buy with a coupon → invoice PDF downloads → leave a review
+- [x] ✅ Buy with a coupon → invoice PDF downloads → leave a review
 
 ## Day 8 · Mon 9 Nov · Admin analytics & polish (brief step 7, part 2)
 - [ ] 🛠 Admin analytics: sales total (GMV), commission earned, orders by status, daily sales chart, top vendors/products

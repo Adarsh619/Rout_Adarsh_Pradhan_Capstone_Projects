@@ -3,6 +3,7 @@ import { createApp, type AppDeps } from "../../src/app.js";
 import { loadEnv } from "../../src/config/env.js";
 import { createElasticsearch } from "../../src/lib/elasticsearch.js";
 import { noReservations } from "../../src/modules/orders/reservations.js";
+import { noInvoiceJobs } from "../../src/modules/invoices/invoice-jobs.js";
 import { noMoneyJobs } from "../../src/modules/payments/money-jobs.js";
 import { createPaymentProvider } from "../../src/modules/payments/payment-provider.js";
 import { MockPayoutProvider } from "../../src/modules/payments/payout-provider.js";
@@ -22,6 +23,7 @@ export function unitApp(overrides: Partial<AppDeps> = {}) {
     payments: createPaymentProvider("mock", "unit-test-secret"),
     payouts: new MockPayoutProvider(),
     moneyJobs: noMoneyJobs,
+    invoiceJobs: noInvoiceJobs,
     reservations: noReservations,
     healthChecks: {},
     ...overrides,

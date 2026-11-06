@@ -22,6 +22,11 @@ export interface Cart {
   itemsTotal: number;
   problems: number;
   canCheckout: boolean;
+  coupon: { code: string; description: string | null; scope: "platform" | "vendor"; storeName: string | null } | null;
+  // Why the applied coupon doesn't apply right now (e.g. the cart dropped below its minimum).
+  couponProblem: string | null;
+  discount: number;
+  grandTotal: number;
 }
 
 export const MAX_LINE_QTY = 10;
@@ -69,6 +74,11 @@ export const useSetCartQty = () =>
   useCartMutation(({ productId, qty }: { productId: string; qty: number }) =>
     api<{ cart: Cart }>(`/cart/items/${productId}`, { method: "PATCH", body: JSON.stringify({ qty }) }),
   );
+
+export const useApplyCoupon = () =>
+  useCartMutation((code: string) => api<{ cart: Cart }>("/cart/coupon", { method: "POST", body: JSON.stringify({ code }) }));
+
+export const useRemoveCoupon = () => useCartMutation(() => api<{ cart: Cart }>("/cart/coupon", { method: "DELETE" }));
 
 export const useRemoveFromCart = () =>
   useCartMutation((productId: string) => api<{ cart: Cart }>(`/cart/items/${productId}`, { method: "DELETE" }));

@@ -94,3 +94,20 @@ Each decision lists what was chosen, the alternatives, and why.
 
 - **Chosen:** `PaymentProvider` has a `mock` driver for local work, tests and CI. Its "popup" is an API endpoint that signs a payment exactly the way Razorpay does (HMAC-SHA256 of `order id|payment id`), and the app verifies it through the same `/checkout/verify` used for Razorpay.
 - **Why:** the whole buying flow, including the signature check, runs with no account, no internet and no keys, so CI and reviewers can try it. The mock endpoint only exists when `PAYMENT_PROVIDER=mock`; the live site uses Razorpay test mode.
+
+## 14. Who pays for a coupon
+
+- **Chosen:** platform coupons are paid by ShopSphere out of its commission (vendors get their full share, and the discount is capped at the order's total commission); vendor coupons are paid by the store, which is charged commission only on what the customer actually paid.
+- **Alternatives:** split every discount between vendors by value (vendors would pay for promotions they didn't choose); let platform coupons exceed the commission (the platform would pay vendors more than it collected).
+- **Why:** each party pays only for discounts it chose, and the ledger rule `payment + platform discount = vendor shares + commission` holds for every order. See [Payments](09-payments.md#coupons-who-pays-for-the-discount).
+
+## 15. Ratings come only from reviews
+
+- **Chosen:** a product's and a store's rating are recalculated from the visible reviews whenever one is added, hidden or shown. Only customers whose order with the product was delivered can review, once per product. The demo catalogue's own review texts are imported (marked as not verified), and products that came without reviews start unrated.
+- **Why:** a rating no one can type in or inflate; hiding an abusive review corrects the rating immediately.
+
+## 16. Invoice PDFs in the background, private in S3
+
+- **Chosen:** when an order is paid the worker renders one PDF per store's part with pdfkit (built-in PDF fonts, nothing to bundle) and stores it under a private `invoices/` key. The API hands the buyer, the seller and admins a 5-minute signed download link on request.
+- **Alternatives:** render on every download (slow, and the invoice could differ later); a headless browser (hundreds of MB in the image).
+- **Why:** the payment request stays fast, an invoice never changes once issued, and nobody can guess a link to someone else's invoice.

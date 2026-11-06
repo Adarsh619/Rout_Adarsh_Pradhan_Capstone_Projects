@@ -11,6 +11,7 @@ export function memoryStorage(): Storage & { objects: Map<string, StoredObject> 
     put: async (key, body, contentType) => {
       objects.set(key, { contentType, size: body.byteLength });
     },
+    presignGet: async (key, filename) => `http://storage.test/bucket/${key}?download=${encodeURIComponent(filename)}`,
     deleteMany: async (keys) => {
       keys.forEach((k) => objects.delete(k));
     },

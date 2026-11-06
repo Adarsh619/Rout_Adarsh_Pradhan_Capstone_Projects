@@ -41,6 +41,7 @@ export function AdminDashboard() {
           badge={pending ? `${pending} waiting` : undefined}
         />
         <Card title="Categories" to="/admin/categories" text="Departments and categories shoppers browse by." />
+        <Card title="Coupons" to="/admin/coupons" text="Platform-wide discount codes, paid for by ShopSphere." />
         <Card title="Analytics" text="Sales, commission earned and orders by status (coming with checkout)." />
       </div>
       <Link to="/account" className="text-sm text-brand-700 underline">
