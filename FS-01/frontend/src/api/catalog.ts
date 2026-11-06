@@ -68,6 +68,8 @@ export interface OwnStore extends PublicStore {
   commissionRateBp: number | null;
   submittedAt: string;
   approvedAt: string | null;
+  // Where earnings are paid; only the last 4 digits of the account are ever stored.
+  payout: { accountHolder: string; bankLast4: string; ifsc: string; provider: string } | null;
 }
 
 export type ProductStatus = "draft" | "active" | "inactive";

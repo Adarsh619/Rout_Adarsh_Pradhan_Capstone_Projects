@@ -1,11 +1,15 @@
 import type { Redis } from "ioredis";
-import mongoose, { type ClientSession, type Types } from "mongoose";
+import type { ClientSession, Types } from "mongoose";
 import { cacheKeys, invalidate } from "../../lib/cache.js";
+import { logger } from "../../lib/logger.js";
+import { inTransaction } from "../../lib/transaction.js";
 import { AppError } from "../../middleware/errors.js";
 import { CartStore, userCartKey } from "../cart/cart-store.js";
 import { isBuyable } from "../cart/cart-view.js";
 import { Category } from "../catalog/category.model.js";
 import { Product } from "../catalog/product.model.js";
+import { record, type LedgerInput } from "../payments/ledger.model.js";
+import { addRefundToOrder, type MoneyJobs } from "../payments/money-jobs.js";
 import type { PaymentProvider } from "../payments/payment-provider.js";
 import type { SearchSync } from "../search/search-sync.js";
 import { User } from "../users/user.model.js";
@@ -20,6 +24,8 @@ export interface OrderDeps {
   payments: PaymentProvider;
   reservations: ReservationScheduler;
   reservationMinutes: number;
+  // Refunds and payouts, run in the background.
+  moneyJobs: MoneyJobs;
 }
 
 export interface Actor {
@@ -36,10 +42,6 @@ const history = (status: SubOrderStatus, actor: Actor, note?: string) => ({
   ...(actor.userId && { byUserId: actor.userId }),
   ...(note && { note }),
 });
-
-// Every multi-document change runs in one MongoDB transaction; the driver retries it on a write conflict
-// (two checkouts touching the same product at the same moment).
-const inTransaction = <T>(fn: (session: ClientSession) => Promise<T>): Promise<T> => mongoose.connection.transaction(fn);
 
 // Stock changed: product pages and search must show it (in stock / out of stock).
 export async function afterStockChange(deps: Pick<OrderDeps, "redis" | "searchSync">, productIds: (string | Types.ObjectId)[]) {
@@ -187,9 +189,9 @@ export async function placeOrder(deps: OrderDeps, input: { userId: string; addre
 
 // ---- Payment ---------------------------------------------------------------------------------------
 
-// Confirms an order once its payment is proven. Safe to call twice for the same payment (the popup's callback and,
-// from Day 6, Razorpay's webhook both report it).
-export async function markPaid(deps: OrderDeps, orderId: string, providerPaymentId: string): Promise<OrderDoc> {
+// Confirms an order once its payment is proven, and puts each vendor's share on hold until delivery. Safe to call
+// twice for the same payment (the popup's callback and Razorpay's webhook both report it).
+export async function markPaid(deps: Pick<OrderDeps, "payments" | "reservations">, orderId: string, providerPaymentId: string): Promise<OrderDoc> {
   const now = new Date();
   const paid = await inTransaction(async (session) => {
     const order = await Order.findOneAndUpdate(
@@ -198,11 +200,21 @@ export async function markPaid(deps: OrderDeps, orderId: string, providerPayment
       { session, returnDocument: "after" },
     );
     if (!order) return undefined;
-    await SubOrder.updateMany(
-      { orderId: order._id, status: "awaiting_payment" },
-      { $set: { status: "placed", placedAt: now }, $push: { statusHistory: history("placed", SYSTEM, "Payment received") } },
-      { session },
-    );
+    const parts = await SubOrder.find({ orderId: order._id, status: "awaiting_payment" }).session(session);
+    const entries: LedgerInput[] = [{ type: "payment", orderId: order._id, amount: order.grandTotal, providerRef: providerPaymentId }];
+    for (const part of parts) {
+      part.status = "placed";
+      part.placedAt = now;
+      part.statusHistory.push(history("placed", SYSTEM, "Payment received"));
+      // Escrow: the vendor's share is owed but held by the platform until the part is delivered.
+      part.set("payout", { amount: part.vendorNet, status: "held" });
+      await part.save({ session });
+      entries.push(
+        { type: "commission", orderId: order._id, subOrderId: part._id, vendorId: part.vendorId, amount: part.commission },
+        { type: "vendor_hold", orderId: order._id, subOrderId: part._id, vendorId: part.vendorId, amount: part.vendorNet },
+      );
+    }
+    await record(entries, session);
     await Product.bulkWrite(
       order.items.map((item) => ({ updateOne: { filter: { _id: item.productId }, update: { $inc: { soldCount: item.qty } } } })),
       { session },
@@ -215,10 +227,38 @@ export async function markPaid(deps: OrderDeps, orderId: string, providerPayment
   }
 
   const order = await Order.findById(orderId);
-  if (order && order.payment?.providerPaymentId === providerPaymentId && order.payment.status === "paid") return order;
-  // Paid after the reservation ran out: the stock may already be sold to someone else. With Razorpay (Day 6) the
-  // payment is refunded automatically; the mock gateway refuses to pay an order in this state in the first place.
-  throw new AppError(409, "order_not_payable", "This order can no longer be paid. It expired or was cancelled, and its items went back on sale.");
+  if (order && order.payment?.providerPaymentId === providerPaymentId && order.payment.status !== "created" && order.payment.status !== "failed") return order;
+  // Paid after the reservation ran out: the stock may already be sold to someone else, so the money goes straight back.
+  if (order) await refundLatePayment(deps, order, providerPaymentId);
+  throw new AppError(409, "order_not_payable", "This order expired or was cancelled before the payment arrived, so its items went back on sale. The payment has been refunded in full.");
+}
+
+// A payment for an order that already ended (expired or cancelled before paying) is refunded in full, once.
+export async function refundLatePayment(deps: Pick<OrderDeps, "payments">, order: OrderDoc, providerPaymentId: string): Promise<void> {
+  if (order.status !== "expired" && order.status !== "cancelled") return;
+  // Claim it first, so two reports of the same payment (popup and webhook) don't both refund.
+  const claimed = await Order.findOneAndUpdate(
+    { _id: order._id, "payment.providerPaymentId": { $exists: false } },
+    { $set: { "payment.providerPaymentId": providerPaymentId, "payment.status": "paid", "payment.paidAt": new Date() } },
+    { returnDocument: "after" },
+  );
+  if (!claimed) return;
+  try {
+    const refund = await deps.payments.refund({ providerPaymentId, amount: order.grandTotal, key: `late-${order.id as string}` });
+    await inTransaction(async (session) => {
+      await record(
+        [
+          { type: "payment", orderId: order._id, amount: order.grandTotal, providerRef: providerPaymentId, note: "Paid after the order ended" },
+          { type: "refund", orderId: order._id, amount: order.grandTotal, providerRef: refund.refundId, note: "Late payment refunded in full" },
+        ],
+        session,
+      );
+      await addRefundToOrder(order._id, order.grandTotal, session);
+    });
+  } catch (err) {
+    // Stays visible as paid on an ended order, for an admin to refund by hand (Day 8 admin refunds page).
+    logger.error({ err, orderId: order.id, providerPaymentId }, "could not refund a late payment");
+  }
 }
 
 // ---- Giving reserved stock back ------------------------------------------------------------------
@@ -281,10 +321,10 @@ async function rollUp(orderId: Types.ObjectId, session: ClientSession) {
   );
 }
 
-// The customer cancels one store's part before it ships. Its stock goes back on sale. (Day 6 adds the refund of
-// its amount through Razorpay and reverses the vendor's held share.)
+// The customer cancels one store's part before it ships: its stock goes back on sale, the vendor's held share and
+// the platform's commission are reversed, and what the customer paid for it is refunded through the payment provider.
 export async function cancelPart(
-  deps: Pick<OrderDeps, "redis" | "searchSync">,
+  deps: Pick<OrderDeps, "redis" | "searchSync" | "moneyJobs">,
   input: { orderId: string; subOrderId: string; actor: Actor & { userId: string }; reason?: string },
 ): Promise<SubOrderDoc> {
   const sub = await SubOrder.findOne({ _id: input.subOrderId, orderId: input.orderId, customerId: input.actor.userId });
@@ -298,10 +338,26 @@ export async function cancelPart(
   const updated = await inTransaction(async (session) => {
     const doc = await SubOrder.findOneAndUpdate(
       { _id: sub._id, status: from },
-      { $set: { status: "cancelled", cancelledAt: now, cancelReason: reason }, $push: { statusHistory: history("cancelled", input.actor, reason) } },
+      {
+        $set: {
+          status: "cancelled",
+          cancelledAt: now,
+          cancelReason: reason,
+          "payout.status": "reversed",
+          refund: { amount: sub.payable, status: "pending", requestedAt: now },
+        },
+        $push: { statusHistory: history("cancelled", input.actor, reason) },
+      },
       { session, returnDocument: "after" },
     );
     if (!doc) return undefined;
+    await record(
+      [
+        { type: "vendor_reversal", orderId: doc.orderId, subOrderId: doc._id, vendorId: doc.vendorId, amount: doc.vendorNet },
+        { type: "commission_reversal", orderId: doc.orderId, subOrderId: doc._id, vendorId: doc.vendorId, amount: doc.commission },
+      ],
+      session,
+    );
     await Product.bulkWrite(
       doc.items.map((item) => ({ updateOne: { filter: { _id: item.productId }, update: { $inc: { stock: item.qty, soldCount: -item.qty } } } })),
       { session },
@@ -312,11 +368,13 @@ export async function cancelPart(
   // The vendor changed it at the same moment (e.g. shipped it).
   if (!updated) throw new AppError(409, "invalid_transition", "This part changed while you were cancelling it. Refresh and try again.");
   await afterStockChange(deps, updated.items.map((i) => i.productId));
+  await deps.moneyJobs.refund(updated.id as string);
   return updated;
 }
 
-// The vendor moves their part along: placed → packed → shipped (with tracking) → delivered.
-export async function advancePart(input: {
+// The vendor moves their part along: placed → packed → shipped (with tracking) → delivered. Delivery releases the
+// vendor's held share, and a background job pays it out.
+export async function advancePart(deps: Pick<OrderDeps, "moneyJobs">, input: {
   vendorId: string;
   subOrderId: string;
   to: SubOrderStatus;
@@ -342,14 +400,22 @@ export async function advancePart(input: {
     const doc = await SubOrder.findOneAndUpdate(
       { _id: sub._id, status: from },
       {
-        $set: { status: input.to, ...(input.tracking && { tracking: input.tracking }), ...(input.to === "delivered" && { deliveredAt: now }) },
+        $set: {
+          status: input.to,
+          ...(input.tracking && { tracking: input.tracking }),
+          ...(input.to === "delivered" && { deliveredAt: now, "payout.status": "released", "payout.releasedAt": now }),
+        },
         $push: { statusHistory: history(input.to, input.actor, input.tracking ? `${input.tracking.carrier} ${input.tracking.number}` : undefined) },
       },
       { session, returnDocument: "after" },
     );
-    if (doc && input.to === "delivered") await rollUp(doc.orderId, session);
+    if (doc && input.to === "delivered") {
+      await record([{ type: "vendor_release", orderId: doc.orderId, subOrderId: doc._id, vendorId: doc.vendorId, amount: doc.vendorNet }], session);
+      await rollUp(doc.orderId, session);
+    }
     return doc;
   });
   if (!updated) throw new AppError(409, "invalid_transition", "This order changed in the meantime (the customer may have cancelled it). Refresh and try again.");
+  if (input.to === "delivered") await deps.moneyJobs.payout(updated.id as string);
   return updated;
 }

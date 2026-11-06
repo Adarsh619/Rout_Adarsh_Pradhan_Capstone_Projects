@@ -6,12 +6,15 @@ import { connectMongo, disconnectMongo } from "./lib/mongo.js";
 import { createRedis } from "./lib/redis.js";
 import { SearchIndexer } from "./modules/search/search-indexer.js";
 import { expireDueOrders, releaseReservation } from "./modules/orders/order-service.js";
+import { MONEY_QUEUE, MONEY_SWEEP_JOB, queuedMoneyJobs, retryStuckMoney, runMoneyJob, scheduleMoneySweep, type MoneyJob } from "./modules/payments/money-jobs.js";
+import { createPaymentProvider } from "./modules/payments/payment-provider.js";
+import { MockPayoutProvider } from "./modules/payments/payout-provider.js";
 import { queuedReservations, RESERVATION_QUEUE, scheduleSweep, SWEEP_JOB } from "./modules/orders/reservations.js";
 import { directSearchSync, runSearchJob, SEARCH_QUEUE, type SearchJob } from "./modules/search/search-sync.js";
 
 // Background worker: runs the slow jobs (search indexing, invoice PDFs, payouts, reservation expiry)
 // outside the API process. Each later day adds its handler here.
-export const QUEUES = [SEARCH_QUEUE, "invoice-pdf", "payout", RESERVATION_QUEUE] as const;
+export const QUEUES = [SEARCH_QUEUE, "invoice-pdf", MONEY_QUEUE, RESERVATION_QUEUE] as const;
 
 async function main(): Promise<void> {
   const env = loadEnv();
@@ -24,11 +27,17 @@ async function main(): Promise<void> {
   const reservations = queuedReservations(connection);
   const orderDeps = { redis: connection, searchSync: directSearchSync(indexer), reservations };
   await scheduleSweep(reservations.queue);
+  const moneyDeps = {
+    payments: createPaymentProvider(env.PAYMENT_PROVIDER, env.JWT_ACCESS_SECRET, { keyId: env.RAZORPAY_KEY_ID, keySecret: env.RAZORPAY_KEY_SECRET }),
+    payouts: new MockPayoutProvider(),
+  };
+  const moneyQueue = queuedMoneyJobs(connection).queue;
+  await scheduleMoneySweep(moneyQueue);
 
   const handlers: Record<(typeof QUEUES)[number], (job: Job) => Promise<unknown>> = {
     [SEARCH_QUEUE]: (job: Job<SearchJob>) => runSearchJob(indexer, job.data),
     "invoice-pdf": async (job) => logger.warn({ queue: "invoice-pdf", job: job.name }, "no handler registered yet"),
-    payout: async (job) => logger.warn({ queue: "payout", job: job.name }, "no handler registered yet"),
+    [MONEY_QUEUE]: (job: Job<MoneyJob>) => (job.name === MONEY_SWEEP_JOB ? retryStuckMoney(moneyDeps) : runMoneyJob(moneyDeps, job.data)),
     [RESERVATION_QUEUE]: async (job: Job<{ orderId?: string }>) => {
       if (job.name === SWEEP_JOB) return `${await expireDueOrders(orderDeps)} orders expired`;
       const released = await releaseReservation(orderDeps, job.data.orderId!, { to: "expired", reason: "Not paid in time", actor: { role: "system" }, onlyIfDue: true });
@@ -49,7 +58,7 @@ async function main(): Promise<void> {
 
   const shutdown = async () => {
     await Promise.allSettled(workers.map((w) => w.close()));
-    await Promise.allSettled([reservations.queue.close(), disconnectMongo(), connection.quit(), es.close()]);
+    await Promise.allSettled([moneyQueue.close(), reservations.queue.close(), disconnectMongo(), connection.quit(), es.close()]);
     process.exit(0);
   };
   process.on("SIGTERM", shutdown);

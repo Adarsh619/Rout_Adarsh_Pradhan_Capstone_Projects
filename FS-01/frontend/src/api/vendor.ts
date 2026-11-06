@@ -57,4 +57,7 @@ export const saveProduct = (input: ProductInput, id?: string) =>
     body: JSON.stringify(input),
   }).then((r) => r.product);
 
+export const savePayoutDetails = (input: { accountHolder: string; accountNumber: string; ifsc: string }) =>
+  api<{ store: OwnStore; payoutsStarted: number }>("/vendors/me/payout", { method: "PUT", body: JSON.stringify(input) });
+
 export const deleteProduct = (id: string) => api<void>(`/vendor/products/${id}`, { method: "DELETE" });

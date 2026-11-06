@@ -53,6 +53,7 @@ export function orderRouter(ctx: RouteContext): Router {
     payments: ctx.payments,
     reservations: ctx.reservations,
     reservationMinutes: ctx.reservationMinutes,
+    moneyJobs: ctx.moneyJobs,
   };
   const customer = [ctx.signedIn, requireRole("customer")];
   const seller = [ctx.signedIn, requireRole("vendor"), loadOwnStore({ approved: false })];
@@ -87,6 +88,10 @@ export function orderRouter(ctx: RouteContext): Router {
     const order = await ownOrder(body.orderId, req.auth!.id);
     if (order.payment?.providerOrderId !== body.providerOrderId || !ctx.payments.verifyPayment(body)) {
       throw new AppError(400, "invalid_signature", "The payment couldn't be verified. If money left your account, it will be refunded.");
+    }
+    // A valid signature proves the payment was authorised; make sure the money is actually taken (captured).
+    if (order.status === "pending_payment") {
+      await ctx.payments.ensureCaptured({ providerOrderId: body.providerOrderId, providerPaymentId: body.providerPaymentId, amount: order.grandTotal });
     }
     res.json({ order: await customerView(await markPaid(deps, order.id as string, body.providerPaymentId)) });
   });
@@ -190,7 +195,7 @@ export function orderRouter(ctx: RouteContext): Router {
 
   router.post("/vendor/orders/:subId/status", ...seller, validateBody(statusSchema), async (req, res) => {
     const body = req.body as z.infer<typeof statusSchema>;
-    const part = await advancePart({
+    const part = await advancePart(deps, {
       vendorId: req.vendor!.id as string,
       subOrderId: idParam(req, "subId"),
       to: body.status,

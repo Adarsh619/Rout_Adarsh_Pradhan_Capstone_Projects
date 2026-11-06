@@ -1,6 +1,6 @@
 # 10 · Security
 
-[← Background jobs and search](08-background-jobs.md) · [Index](README.md) · Next: DevOps (written on Day 9)
+[← Payments, escrow and payouts](09-payments.md) · [Index](README.md) · Next: DevOps (written on Day 9)
 
 This page covers how ShopSphere signs people in, keeps them signed in, decides what each account may do, and the
 protections around that, and how vendors upload photos safely. Later days add payments and webhooks.
@@ -127,7 +127,10 @@ sequence in the [API reference](06-api-reference.md#uploads).
 | Input | Every body and query string parsed with Zod; one error per field; JSON bodies capped at 100 kB; unknown routes return JSON 404. `PATCH` bodies never fill in defaults, so a partial update can't reset fields it didn't mention |
 | Search | Search words are passed to Elasticsearch as query *values*, never as query syntax; filters are checked slugs and numbers; Elasticsearch is only reachable by the API and worker |
 | Checkout | Prices, stock and totals always come from the database, never from the browser (`expectedTotal` is only compared); stock is taken with a conditional update inside a transaction, so it can't go negative |
-| Payments | An order is marked paid only after the payment signature verifies (HMAC-SHA256, compared in constant time) and its provider order id matches; repeating a proof changes nothing; the mock gateway exists only when `PAYMENT_PROVIDER=mock` |
+| Payments | An order is marked paid only after the payment signature verifies (HMAC-SHA256, compared in constant time), its provider order id matches, and Razorpay confirms the payment is for that order and amount and is captured; repeating a proof changes nothing; the mock gateway exists only when `PAYMENT_PROVIDER=mock` |
+| Razorpay keys | Test keys only: the server refuses to start with a live key (`rzp_live_…`); keys live in `.env` / the server environment, never in Git |
+| Webhooks | Signature checked over the raw body with the webhook secret; each event id handled once; events without ids ignored; endpoint off unless a secret is set |
+| Bank details | A vendor's full account number goes only to the payout provider; the database keeps the last 4 digits, IFSC and holder name |
 | Errors | Unexpected errors return a generic 500; details only in server logs |
 | Logs | Authorization and cookie headers and password fields are redacted |
 | Redirects | `?next=` after sign-in only accepts same-site paths (`/…`, not `//…` or `https://…`) |
@@ -138,6 +141,7 @@ sequence in the [API reference](06-api-reference.md#uploads).
 
 - Unit (`backend/tests/auth-units.test.ts`): password rules incl. the 72-byte limit, JWT expiry vs tampering vs `alg: none`, refresh-token parsing, `requireAuth` / `requireRole`, production secret rules.
 - Integration against real MongoDB and Redis (`backend/tests/integration/auth.test.ts`): sign-up, case-insensitive sign-in, identical errors for unknown email and wrong password, the 5-failure lock, suspended accounts, rotation, the two-tab race, reuse detection signing out every device, CSRF header, logout killing the access token at once, password change signing out other devices.
+- Unit and integration (`payment-units.test.ts`, `payments.test.ts`): forged and wrongly signed webhooks refused, live keys refused, a payment for the wrong order or amount refused, duplicate events and late payments never processed twice, only 4 digits of an account stored.
 - Integration (`orders.test.ts`): another customer's order is 404, vendors and admins can't check out, guest cart writes need the CSRF header, a forged payment signature is refused, a vendor can't move another store's part.
 - Integration (`vendors.test.ts`, `catalog.test.ts`): admin-only routes, vendor ownership (404 for another store's product), unapproved stores blocked, photos from another store or never uploaded refused, a file stored as HTML refused, suspension hiding products straight away.
 - Smoke test through nginx: sign-up, `/me`, refresh, logout, the token failing afterwards, seeded admin sign-in, store approval, a real presigned upload and the product it belongs to.

@@ -39,6 +39,7 @@ const store = (overrides: Partial<OwnStore> = {}): OwnStore => ({
   commissionRateBp: null,
   submittedAt: "2026-11-01T00:00:00.000Z",
   approvedAt: null,
+  payout: null,
   ...overrides,
 });
 

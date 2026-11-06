@@ -6,6 +6,7 @@ import { AppError } from "../../middleware/errors.js";
 import { idParam, pageQuery, parseQuery, patchSchema, validateBody } from "../../middleware/validate.js";
 import { listStorefront, storefrontQuery } from "../catalog/storefront.js";
 import { Product } from "../catalog/product.model.js";
+import { SubOrder } from "../orders/order.model.js";
 import type { RouteContext } from "../context.js";
 import { checkUploadedImage, UPLOAD_PURPOSES } from "../uploads/upload-rules.js";
 import { User } from "../users/user.model.js";
@@ -38,6 +39,20 @@ const updateSchema = patchSchema({
   ...storeFields,
   // A key from POST /uploads/presign (purpose store-logo), or null to remove the logo.
   logoKey: z.string().max(300).nullable(),
+});
+
+// Bank details for payouts. The full account number is passed to the payout provider and never stored.
+const payoutSchema = z.object({
+  accountHolder: z.string().trim().min(3, "Enter the account holder's name").max(80),
+  accountNumber: z
+    .string()
+    .transform((s) => s.replace(/\s/g, ""))
+    .refine((s) => /^\d{9,18}$/.test(s), "Enter the account number (9 to 18 digits)"),
+  ifsc: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .refine((s) => /^[A-Z]{4}0[A-Z0-9]{6}$/.test(s), "Enter the 11-character IFSC, e.g. HDFC0001234"),
 });
 
 const reasonSchema = z.object({ reason: z.string().trim().min(5, "Give the vendor a short reason").max(500) });
@@ -123,6 +138,26 @@ export function vendorRouter(ctx: RouteContext): Router {
       await ctx.searchSync.vendor(vendor._id);
     }
     res.json({ store: toOwnStore(vendor, ctx.storage) });
+  });
+
+  // Saves where the store's earnings are paid. Shares already released wait for this, so they're sent now.
+  router.put("/vendors/me/payout", ...vendorOnly, loadOwnStore({ approved: false }), validateBody(payoutSchema), async (req, res) => {
+    const vendor = req.vendor!;
+    const body = req.body as z.infer<typeof payoutSchema>;
+    const { beneficiaryRef } = await ctx.payouts.registerBeneficiary({ vendorId: vendor.id as string, ...body });
+    vendor.set("payout", {
+      accountHolder: body.accountHolder,
+      bankLast4: body.accountNumber.slice(-4),
+      ifsc: body.ifsc,
+      provider: ctx.payouts.name,
+      beneficiaryRef,
+      status: "active",
+      updatedAt: new Date(),
+    });
+    await vendor.save();
+    const waiting = await SubOrder.find({ vendorId: vendor._id, "payout.status": { $in: ["released", "failed"] } }).select("_id");
+    for (const part of waiting) await ctx.moneyJobs.payout(part.id as string);
+    res.json({ store: toOwnStore(vendor, ctx.storage), payoutsStarted: waiting.length });
   });
 
   // ---- Public store page -----------------------------------------------------------------------

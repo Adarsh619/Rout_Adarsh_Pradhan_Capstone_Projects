@@ -34,9 +34,9 @@ The **Day** column says when each endpoint is built; ✓ means it exists now.
 | Method | Path | Role | Purpose | Day |
 |---|---|---|---|---|
 | POST | `/vendors/apply` | V (any status) | Submit or resubmit the store application | ✓ 3 |
-| GET | `/vendors/me` | V (any status) | My store and its status (`null` before applying); payout status on Day 6 | ✓ 3 |
+| GET | `/vendors/me` | V (any status) | My store and its status (`null` before applying), with payout account (last 4 digits) | ✓ 3 |
 | PATCH | `/vendors/me` | V | Edit store details and logo (not while suspended) | ✓ 3 |
-| PUT | `/vendors/me/payout` | V | Save payout details (account holder, account number, IFSC); registers the beneficiary with the payout provider and keeps only the last 4 digits | 6 |
+| PUT | `/vendors/me/payout` | V | Save payout details (account holder, account number, IFSC); registers the beneficiary with the payout provider and keeps only the last 4 digits; sends shares waiting for it | ✓ 6 |
 | GET | `/stores/:slug` | P | Public store page with products | ✓ 3 |
 | GET | `/admin/vendors?status=` | A | Applications and vendors, with owner, product count and counts per status | ✓ 3 |
 | POST | `/admin/vendors/:id/approve` · `/reject` · `/suspend` · `/restore` | A | Change vendor status (reject and suspend need a reason) | ✓ 3 |
@@ -77,11 +77,10 @@ The **Day** column says when each endpoint is built; ✓ means it exists now.
 | POST | `/cart/items` | P | Add `{ productId, qty }` | ✓ 5 |
 | PATCH · DELETE | `/cart/items/:productId` | P | Change quantity or remove | ✓ 5 |
 | POST · DELETE | `/cart/coupon` | P | Apply or remove a coupon | 7 |
-| POST | `/checkout` | C | Create order + sub-orders, reserve stock, create the payment order (mock now, Razorpay on Day 6) | ✓ 5 |
+| POST | `/checkout` | C | Create order + sub-orders, reserve stock, create the Razorpay (or mock) order | ✓ 5 |
 | POST | `/checkout/verify` | C | Verify the payment signature returned by the popup | ✓ 5 |
 | POST | `/payments/mock/pay` | C | Test payment gateway (only with `PAYMENT_PROVIDER=mock`): signs a payment like Razorpay | ✓ 5 |
-| POST | `/webhooks/razorpay` | P (signed) | Payment and refund events; HMAC-verified, idempotent | 6 |
-| POST | `/webhooks/payouts` | P (signed) | Payout events from the payout provider (the simulated one in v1); HMAC-verified, idempotent | 6 |
+| POST | `/webhooks/razorpay` | P (signed) | Payment and refund events; HMAC-verified, idempotent | ✓ 6 |
 
 Guests are identified by an httpOnly `ss_guest` cookie; their cart merges into the account on sign-in or sign-up.
 
@@ -91,7 +90,7 @@ Guests are identified by an httpOnly `ss_guest` cookie; their cart merges into t
 |---|---|---|---|---|
 | GET | `/orders` · `/orders/:id` | C | My orders with each vendor's part and timeline | ✓ 5 |
 | POST | `/orders/:id/cancel` | C | Cancel an unpaid order (stock returned at once) | ✓ 5 |
-| POST | `/orders/:id/sub-orders/:subId/cancel` | C | Cancel a part that hasn't shipped (refund added on Day 6) | ✓ 5 |
+| POST | `/orders/:id/sub-orders/:subId/cancel` | C | Cancel a part that hasn't shipped; its share is reversed and its amount refunded through Razorpay | ✓ 6 |
 | GET | `/vendor/orders?status=` | V (any status) | My paid sub-orders, with counts per status | ✓ 5 |
 | POST | `/vendor/orders/:subId/status` | V (any status) | `{ status: "packed" \| "shipped" \| "delivered", tracking? }` | ✓ 5 |
 | GET | `/invoices/:subId` | C (buyer) · V (seller) · A | Short-lived download link for the PDF | 7 |

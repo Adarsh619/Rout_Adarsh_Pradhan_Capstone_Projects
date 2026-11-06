@@ -118,6 +118,29 @@ if [ -n "${DEMO_PASSWORD:-}" ]; then
   as_vendor -X POST "$BASE/api/v1/vendor/orders/$PART_ID/status" -d '{"status":"packed"}' | grep -q '"status":"packed"' \
     && check "the vendor sees the paid order and packs it"
   as_shopper "$BASE/api/v1/orders/$ORDER_ID" | grep -q '"status":"packed"' && check "the customer sees it packed"
+
+  # Escrow: the vendor's share is held until delivery, then the worker pays it out (simulated payouts).
+  as_vendor "$BASE/api/v1/vendor/orders" | grep -q '"payout":{"status":"held"' && check "the vendor's share is held until delivery"
+  as_vendor -X PUT "$BASE/api/v1/vendors/me/payout" -d '{"accountHolder":"Smoke Vendor","accountNumber":"123456789012","ifsc":"HDFC0001234"}' \
+    | grep -q '"bankLast4":"9012"' && check "vendor adds payout details (only the last 4 digits are kept)"
+  as_vendor -X POST "$BASE/api/v1/vendor/orders/$PART_ID/status" -d '{"status":"shipped","tracking":{"carrier":"Delhivery","number":"DL123456"}}' -o /dev/null
+  as_vendor -X POST "$BASE/api/v1/vendor/orders/$PART_ID/status" -d '{"status":"delivered"}' -o /dev/null
+  for i in $(seq 1 30); do
+    as_vendor "$BASE/api/v1/vendor/orders" | grep -q '"payout":{"status":"paid"' && break
+    [ "$i" = 30 ] && { echo "✗ the delivered share was never paid out"; exit 1; }
+    sleep 1
+  done
+  check "delivery releases the share and the worker pays it out after ${i}s"
+
+  # The customer cancels the other store's part: its share is reversed and the worker refunds it.
+  OTHER_PART="$(as_shopper "$BASE/api/v1/orders/$ORDER_ID" | grep -o '"id":"[a-f0-9]\{24\}","vendor":{"storeName":"Smoke Second Store"' | sed 's/"id":"\([^"]*\)".*/\1/')"
+  as_shopper -X POST "$BASE/api/v1/orders/$ORDER_ID/sub-orders/$OTHER_PART/cancel" -d '{"reason":"Smoke test"}' -o /dev/null
+  for i in $(seq 1 30); do
+    as_shopper "$BASE/api/v1/orders/$ORDER_ID" | grep -q '"refund":{"amount":29900,"status":"processed"}' && break
+    [ "$i" = 30 ] && { echo "✗ the cancelled part was never refunded"; exit 1; }
+    sleep 1
+  done
+  as_shopper "$BASE/api/v1/orders/$ORDER_ID" | grep -q '"status":"partially_refunded"' && check "cancelling a paid part refunds it (after ${i}s)"
   rm -f "$GUEST_JAR"
 fi
 

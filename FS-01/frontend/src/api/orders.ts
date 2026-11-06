@@ -69,7 +69,7 @@ export interface Order {
   discount: number;
   shipping: number;
   grandTotal: number;
-  payment: { provider: "mock" | "razorpay"; status: string; paidAt: string | null; providerOrderId: string | null };
+  payment: { provider: "mock" | "razorpay"; status: string; paidAt: string | null; refundedAmount: number; providerOrderId: string | null };
   reservationExpiresAt: string | null;
   shippingAddress: ShippingAddress;
   parts: {
@@ -83,6 +83,7 @@ export interface Order {
     timeline: TimelineEntry[];
     canCancel: boolean;
     cancelReason: string | null;
+    refund: { amount: number; status: "pending" | "processed" | "failed" } | null;
   }[];
 }
 
@@ -92,6 +93,8 @@ export interface PaymentStep {
   amount: number;
   currency: "INR";
   expiresAt: string;
+  // Razorpay's public key id, to open its popup (only when provider is "razorpay").
+  keyId?: string;
 }
 
 export interface OrderSummary {
@@ -173,7 +176,18 @@ export interface VendorPart {
   timeline: TimelineEntry[];
   nextStatus: "packed" | "shipped" | "delivered" | null;
   cancelReason: string | null;
+  payout: { status: PayoutStatus; amount: number; releasedAt: string | null; paidAt: string | null; reference: string | null } | null;
 }
+
+export type PayoutStatus = "held" | "released" | "paid" | "reversed" | "failed";
+
+export const PAYOUT_TEXT: Record<PayoutStatus, string> = {
+  held: "Held until delivery",
+  released: "Released, being paid out",
+  paid: "Paid out (simulated)",
+  reversed: "Cancelled, not payable",
+  failed: "Payout failed, retrying",
+};
 
 export const useVendorOrders = (params: { status?: VendorPartStatus; page: number }) =>
   useQuery({

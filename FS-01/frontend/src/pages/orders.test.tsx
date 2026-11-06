@@ -52,6 +52,7 @@ const part = (overrides: Partial<Order["parts"][number]> = {}): Order["parts"][n
   timeline: [{ status: "awaiting_payment", at: "2026-11-06T10:00:00.000Z", byRole: "customer", note: "Order placed, waiting for payment" }],
   canCancel: false,
   cancelReason: null,
+  refund: null,
   ...overrides,
 });
 
@@ -64,7 +65,7 @@ const order = (overrides: Partial<Order> = {}): Order => ({
   discount: 0,
   shipping: 0,
   grandTotal: 2_000_000,
-  payment: { provider: "mock", status: "created", paidAt: null, providerOrderId: "order_mock_1" },
+  payment: { provider: "mock", status: "created", paidAt: null, refundedAmount: 0, providerOrderId: "order_mock_1" },
   reservationExpiresAt: new Date(Date.now() + 15 * 60_000).toISOString(),
   shippingAddress: { name: "Priya Sharma", phone: "9876543210", line1: "12 MG Road", line2: null, city: "Bengaluru", state: "Karnataka", pincode: "560001" },
   parts: [part()],
@@ -166,7 +167,7 @@ describe("checkout and payment", () => {
   it("pays through the test gateway and verifies the signed result", async () => {
     const paid = order({
       status: "confirmed",
-      payment: { provider: "mock", status: "paid", paidAt: "2026-11-06T10:01:00.000Z", providerOrderId: null },
+      payment: { provider: "mock", status: "paid", paidAt: "2026-11-06T10:01:00.000Z", refundedAmount: 0, providerOrderId: null },
       reservationExpiresAt: null,
       parts: [part({ status: "placed", canCancel: true })],
     });
@@ -204,7 +205,7 @@ describe("checkout and payment", () => {
         jsonResponse({
           order: order({
             status: "confirmed",
-            payment: { provider: "mock", status: "paid", paidAt: "2026-11-06T10:01:00.000Z", providerOrderId: null },
+            payment: { provider: "mock", status: "paid", paidAt: "2026-11-06T10:01:00.000Z", refundedAmount: 0, providerOrderId: null },
             parts: [
               part({
                 status: "shipped",
@@ -246,6 +247,7 @@ describe("vendor orders", () => {
     timeline: [],
     nextStatus: "shipped",
     cancelReason: null,
+    payout: { status: "held", amount: 1_700_000, releasedAt: null, paidAt: null, reference: null },
     ...overrides,
   });
 

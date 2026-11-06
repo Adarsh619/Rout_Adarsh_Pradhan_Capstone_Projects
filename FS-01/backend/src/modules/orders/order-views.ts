@@ -44,6 +44,7 @@ export function toCustomerOrder(o: OrderDoc, parts: SubOrderDoc[], storage: Stor
       provider: o.payment!.provider,
       status: o.payment!.status,
       paidAt: iso(o.payment!.paidAt),
+      refundedAmount: o.payment!.refundedAmount ?? 0,
       // Needed to open the payment screen again while the order waits for payment.
       providerOrderId: pending ? (o.payment!.providerOrderId ?? null) : null,
     },
@@ -60,6 +61,7 @@ export function toCustomerOrder(o: OrderDoc, parts: SubOrderDoc[], storage: Stor
       timeline: timeline(s),
       canCancel: canCustomerCancel(s.status as SubOrderStatus),
       cancelReason: s.cancelReason ?? null,
+      refund: s.refund?.amount ? { amount: s.refund.amount, status: s.refund.status ?? "pending" } : null,
     })),
   };
 }
@@ -99,5 +101,9 @@ export function toVendorPart(s: SubOrderDoc, order: OrderDoc | undefined, custom
     timeline: timeline(s),
     nextStatus: VENDOR_NEXT[status] ?? null,
     cancelReason: s.cancelReason ?? null,
+    // Escrow: held until delivery, then released and paid out; reversed if the part is cancelled.
+    payout: s.payout?.status
+      ? { status: s.payout.status, amount: s.payout.amount ?? s.vendorNet, releasedAt: iso(s.payout.releasedAt), paidAt: iso(s.payout.paidAt), reference: s.payout.providerRef ?? null }
+      : null,
   };
 }

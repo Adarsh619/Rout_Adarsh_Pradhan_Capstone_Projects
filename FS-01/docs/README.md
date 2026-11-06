@@ -14,8 +14,8 @@ Read the files in order, or jump to the topic you need. Topics without a link ar
 | 05 | [Data model](05-data-model.md) | Collections, relationships, ER diagram, money rules | ✓ |
 | 06 | [API reference](06-api-reference.md) | Conventions, errors, vendors, categories, products, uploads, search, addresses, cart, checkout, orders (with examples) | ✓ |
 | 07 | Frontend | React structure, pages, state | Day 8 |
-| 08 | [Background jobs and search](08-background-jobs.md) | BullMQ queues and retries; keeping Elasticsearch in step; giving back stock from unpaid orders; zero-downtime reindex; how search scores | ✓ (more queues on Days 6–7) |
-| 09 | Payments | Razorpay checkout and webhooks, split and escrow ledger, payouts, mock mode | Day 6 |
+| 08 | [Background jobs and search](08-background-jobs.md) | BullMQ queues and retries; keeping Elasticsearch in step; giving back stock from unpaid orders; zero-downtime reindex; how search scores | ✓ (invoice queue on Day 7) |
+| 09 | [Payments, escrow and payouts](09-payments.md) | Razorpay test-mode checkout, signature and capture checks, webhooks, the ledger and why it balances, held → released → paid shares, refunds, simulated payouts | ✓ |
 | 10 | [Security](10-security.md) | Passwords, tokens and sessions, roles, rate limits, CSRF | ✓ |
 | 11 | DevOps | Docker Compose, CI/CD, live hosting | Day 9 |
 | 12 | Testing and performance | Test counts, coverage, load-test numbers | Day 9 |

@@ -8,7 +8,9 @@ import { createElasticsearch } from "../../src/lib/elasticsearch.js";
 import { createS3, createStorage, ensureBucket } from "../../src/lib/s3.js";
 import { SearchIndexer } from "../../src/modules/search/search-indexer.js";
 import { noReservations } from "../../src/modules/orders/reservations.js";
-import { createPaymentProvider } from "../../src/modules/payments/payment-provider.js";
+import { directMoneyJobs } from "../../src/modules/payments/money-jobs.js";
+import { createPaymentProvider, type PaymentProvider } from "../../src/modules/payments/payment-provider.js";
+import { MockPayoutProvider, type PayoutProvider } from "../../src/modules/payments/payout-provider.js";
 import { directSearchSync } from "../../src/modules/search/search-sync.js";
 import { hashPassword } from "../../src/modules/auth/password.js";
 import { User } from "../../src/modules/users/user.model.js";
@@ -27,6 +29,11 @@ export const env = loadEnv({
   S3_BUCKET: process.env.S3_BUCKET ?? "shopsphere-test",
   // Its own search alias, so tests never touch the development index.
   ES_INDEX: "products-test",
+  // Webhook tests sign their sample events with this.
+  RAZORPAY_WEBHOOK_SECRET: "test-webhook-secret",
+  PAYMENT_PROVIDER: "mock",
+  RAZORPAY_KEY_ID: "",
+  RAZORPAY_KEY_SECRET: "",
 });
 
 export function testRedis(): Redis {
@@ -35,7 +42,8 @@ export function testRedis(): Redis {
   return new Redis(url.toString(), { maxRetriesPerRequest: null });
 }
 
-export async function startTestServices() {
+// Payments, payouts and their jobs run inside the request, so a test can check the result straight after.
+export async function startTestServices(opts: { payments?: PaymentProvider; payouts?: PayoutProvider } = {}) {
   await connectMongo(env.MONGO_URL, TEST_DB);
   const redis = testRedis();
   const s3 = createS3(env);
@@ -47,6 +55,8 @@ export async function startTestServices() {
   await indexer.reindexAll();
   // Search updates run inside the request here, so a test can search straight after a change.
   const searchSync = directSearchSync(indexer);
+  const payments = opts.payments ?? createPaymentProvider("mock", env.JWT_ACCESS_SECRET);
+  const payouts = opts.payouts ?? new MockPayoutProvider();
   // Expiry is driven by the tests themselves (releaseReservation / expireDueOrders), not by a queue.
   const app = createApp({
     env,
@@ -55,11 +65,13 @@ export async function startTestServices() {
     storage,
     es,
     searchSync,
-    payments: createPaymentProvider("mock", env.JWT_ACCESS_SECRET),
+    payments,
+    payouts,
+    moneyJobs: directMoneyJobs({ payments, payouts }),
     reservations: noReservations,
     healthChecks: {},
   });
-  return { app, redis, storage, es, indexer, searchSync };
+  return { app, redis, storage, es, indexer, searchSync, payments, payouts };
 }
 
 // Empties every collection but keeps them and their indexes (dropping the whole database between tests

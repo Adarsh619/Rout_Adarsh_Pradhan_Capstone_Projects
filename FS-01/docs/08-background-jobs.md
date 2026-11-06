@@ -1,11 +1,11 @@
 # 08 · Background jobs and search
 
-[← API reference](06-api-reference.md) · [Index](README.md) · [Next: Security →](10-security.md)
+[← API reference](06-api-reference.md) · [Index](README.md) · [Next: Payments, escrow and payouts →](09-payments.md)
 
 Slow or retryable work runs in a separate **worker** process (`backend/src/worker.ts`), not inside API requests.
 The API puts a job on a **BullMQ** queue in Redis and answers straight away; the worker picks the job up, and retries
 it if it fails. This page covers the queues, and in detail the first one built: keeping **Elasticsearch search** in step
-with MongoDB, and handing back stock from unpaid orders. Later days add invoice PDFs and payouts here.
+with MongoDB, and handing back stock from unpaid orders. Refunds and payouts are described in [Payments](09-payments.md); invoice PDFs follow on Day 7.
 
 ## Queues
 
@@ -13,7 +13,7 @@ with MongoDB, and handing back stock from unpaid orders. Later days add invoice 
 |---|---|---|---|
 | `search-index` | Add, update or remove products in the search index | Day 4 | ✓ |
 | `invoice-pdf` | Generate a sub-order's invoice PDF and store it in S3 | Day 7 | planned |
-| `payout` | Pay a released vendor share through the payout provider | Day 6 | planned |
+| `payout` | Refund a cancelled part through Razorpay, or pay a released vendor share through the payout provider; an hourly sweep retries any that still haven't gone through ([details](09-payments.md)) | Day 6 | ✓ |
 | `reservation-expiry` | Return reserved stock when an order is never paid | Day 5 | ✓ |
 
 Every queue lives in the same Redis as the cache and sessions. Jobs survive an API or worker restart, because they're

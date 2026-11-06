@@ -2,7 +2,7 @@
 
 [← Data model](05-data-model.md) · [Index](README.md) · [Next: Background jobs and search →](08-background-jobs.md)
 
-This page documents the endpoints that exist today, with real request and response shapes (Days 1–5). The full plan, including
+This page documents the endpoints that exist today, with real request and response shapes (Days 1–6). The full plan, including
 endpoints still to come, is the [API list](specs/04-api-list.md). A machine-readable `openapi.yaml` follows on Day 10.
 
 ## Conventions
@@ -42,7 +42,9 @@ Every error has the same shape. Form errors list **one message per field**, so t
 | 402 | `payment_failed` | The (test) payment was declined; the order can still be paid |
 | 409 | `already_applied`, `invalid_transition`, `sku_taken`, `category_in_use`, `product_has_orders` | The action doesn't fit the current state |
 | 409 | `out_of_stock`, `cart_full`, `cart_empty`, `cart_changed`, `price_changed`, `order_not_payable`, `too_many_addresses` | Cart and checkout conflicts, explained below |
-| 400 | `invalid_signature` | A payment proof that doesn't verify |
+| 400 | `invalid_signature` | A payment proof or webhook that doesn't verify |
+| 409 | `payment_not_completed` | Razorpay says the payment didn't go through |
+| 503 | `webhook_not_configured` | No webhook secret is set on this server |
 | 502 | `payment_unavailable` | The payment provider can't be reached; nothing was charged |
 | 429 | `rate_limited` | Too many attempts; `Retry-After` header |
 | 503 | `search_unavailable` | Elasticsearch is down; browsing, store and product pages still work |
@@ -288,6 +290,20 @@ The signature is HMAC-SHA256 of `order id|payment id`, Razorpay's own scheme, so
 the mock gateway and `/checkout/verify` stays the same. A wrong signature is `400 invalid_signature`; verifying the same
 payment twice changes nothing; paying an order that already expired is `409 order_not_payable`.
 
+### Paying with Razorpay (`PAYMENT_PROVIDER=razorpay`)
+
+The payment step also has `keyId` (the public test key). The browser opens Razorpay's Checkout popup with it and sends
+the popup's `razorpay_order_id`, `razorpay_payment_id` and `razorpay_signature` to `POST /checkout/verify` as
+`providerOrderId`, `providerPaymentId` and `signature`. Besides the signature, the API asks Razorpay that the payment
+belongs to this order, is for the right amount and is captured (capturing it if only authorised). A failed payment is
+`409 payment_not_completed`. Details: [Payments](09-payments.md).
+
+### `POST /webhooks/razorpay` (signed by Razorpay)
+
+`payment.captured`, `payment.failed`, `refund.processed`, `refund.failed`. Needs `X-Razorpay-Signature` (HMAC-SHA256 of
+the raw body with `RAZORPAY_WEBHOOK_SECRET`); each `X-Razorpay-Event-Id` is handled once. `400 invalid_signature` if the
+signature is wrong, `503 webhook_not_configured` when no secret is set. Answers `{ "ok": true, "result": "order confirmed" }`.
+
 ## Orders (customers)
 
 | Method | Path | Notes |
@@ -295,7 +311,7 @@ payment twice changes nothing; paying an order that already expired is `409 orde
 | GET | `/orders?page=` | Newest first: number, status, total, first item's photo and title, each store's status |
 | GET | `/orders/:id` | The order, its parts with their timelines and tracking, and `payment` (the payment step) while it waits for payment |
 | POST | `/orders/:id/cancel` | Cancels an **unpaid** order; its stock goes back at once |
-| POST | `/orders/:id/sub-orders/:subId/cancel` | `{ reason? }` Cancels one store's part while it's `placed` or `packed`; stock goes back (the refund is added on Day 6) |
+| POST | `/orders/:id/sub-orders/:subId/cancel` | `{ reason? }` Cancels one store's part while it's `placed` or `packed`: stock goes back, the vendor's held share is reversed and what was paid for the part is refunded through Razorpay (`part.refund`, `payment.refundedAmount`) |
 
 Another customer's order answers `404`. Customers never see commission or vendor shares.
 
@@ -313,7 +329,7 @@ Another customer's order answers `404`. Customers never see commission or vendor
 
 The store's **paid** parts only (an order waiting for payment isn't the vendor's business yet), newest first, with what to
 pack, where to send it and the money: `payable` (what the customer paid for this part), `commission` and `vendorNet`
-(what the store receives). `counts` gives the number per status for the filter tabs. `nextStatus` is the one step allowed next.
+(what the store receives), and `payout` (`held` until delivery, then `released` and `paid`; `reversed` if cancelled). `counts` gives the number per status for the filter tabs. `nextStatus` is the one step allowed next.
 
 ### `POST /vendor/orders/:subId/status`
 
@@ -324,6 +340,17 @@ pack, where to send it and the money: `payable` (what the customer paid for this
 
 One step at a time: `placed → packed → shipped → delivered`. Shipping needs tracking. Anything else is
 `409 invalid_transition` with `details.allowed`; another store's part is `404`. Delivering the last open part completes the order.
+Delivering releases the store's share and the worker pays it out.
+
+### `PUT /vendors/me/payout`
+
+```json
+{ "accountHolder": "Vikram Rao", "accountNumber": "1234 5678 9012", "ifsc": "HDFC0001234" }
+200 { "store": { …, "payout": { "accountHolder": "Vikram Rao", "bankLast4": "9012", "ifsc": "HDFC0001234", "provider": "mock" } }, "payoutsStarted": 1 }
+```
+
+Registers the account with the payout provider (simulated) and keeps only the last 4 digits. Shares already released
+and waiting for these details are sent straight away (`payoutsStarted`).
 
 ## Products (the vendor's own)
 
@@ -411,4 +438,5 @@ the product save re-checks the stored object, which matters because the local S3
 | Search parameters, query rules, facet counts, autocomplete | `backend/tests/search-units.test.ts`, `backend/tests/integration/search.test.ts` |
 | Addresses, cart (guest cookie, merge on sign-in, stock checks), checkout, the overselling race, payment verification, expiry, cancelling, vendor status steps | `backend/tests/integration/orders.test.ts` |
 | Commission and splitting, status rules, payment signatures | `backend/tests/order-units.test.ts` |
+| Razorpay driver, webhooks, escrow, ledger balance, refunds, payouts | `backend/tests/payment-units.test.ts`, `backend/tests/integration/payments.test.ts` |
 | The whole flow through nginx, S3 included, from guest cart to the vendor packing a paid order | `scripts/smoke-test.sh` (CI) |

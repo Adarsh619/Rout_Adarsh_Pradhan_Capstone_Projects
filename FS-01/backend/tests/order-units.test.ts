@@ -99,7 +99,4 @@ describe("mock payments", () => {
     expect(other.verifyPayment({ providerOrderId, ...provider.pay(providerOrderId) })).toBe(false);
   });
 
-  it("refuses Razorpay until its driver exists", () => {
-    expect(() => createPaymentProvider("razorpay", "x")).toThrow(/Day 6/);
-  });
 });

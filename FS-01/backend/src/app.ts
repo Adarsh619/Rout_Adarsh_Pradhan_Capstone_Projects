@@ -21,7 +21,10 @@ import { productRouter } from "./modules/catalog/product.routes.js";
 import type { RouteContext } from "./modules/context.js";
 import { orderRouter } from "./modules/orders/order.routes.js";
 import type { ReservationScheduler } from "./modules/orders/reservations.js";
+import type { MoneyJobs } from "./modules/payments/money-jobs.js";
 import type { PaymentProvider } from "./modules/payments/payment-provider.js";
+import type { PayoutProvider } from "./modules/payments/payout-provider.js";
+import { webhookRouter } from "./modules/payments/webhook.routes.js";
 import { searchRouter } from "./modules/search/search.routes.js";
 import type { SearchSync } from "./modules/search/search-sync.js";
 import { uploadRouter } from "./modules/uploads/upload.routes.js";
@@ -38,6 +41,8 @@ export interface AppDeps {
   es: Client;
   searchSync: SearchSync;
   payments: PaymentProvider;
+  payouts: PayoutProvider;
+  moneyJobs: MoneyJobs;
   reservations: ReservationScheduler;
   healthChecks: Record<string, HealthCheck>;
 }
@@ -59,7 +64,15 @@ export function createApp(deps: AppDeps): Express {
       maxAge: 600,
     }),
   );
-  app.use(express.json({ limit: "100kb" }));
+  // The raw bytes are kept as well, because webhook signatures are computed over the body exactly as sent.
+  app.use(
+    express.json({
+      limit: "100kb",
+      verify: (req, _res, buf) => {
+        (req as express.Request).rawBody = buf;
+      },
+    }),
+  );
   app.use(cookieParser());
   app.use(pinoHttp({ logger, autoLogging: { ignore: (req) => req.url === "/api/v1/health" } }));
 
@@ -94,6 +107,9 @@ export function createApp(deps: AppDeps): Express {
     maybeSignedIn: optionalAuth(tokens, sessions),
     cookies,
     payments: deps.payments,
+    payouts: deps.payouts,
+    moneyJobs: deps.moneyJobs,
+    webhookSecret: env.RAZORPAY_WEBHOOK_SECRET,
     reservations: deps.reservations,
     reservationMinutes: env.RESERVATION_MINUTES,
   };
@@ -107,6 +123,7 @@ export function createApp(deps: AppDeps): Express {
     searchRouter(ctx),
     cartRouter(ctx),
     orderRouter(ctx),
+    webhookRouter(ctx),
   );
 
   app.use(notFound);

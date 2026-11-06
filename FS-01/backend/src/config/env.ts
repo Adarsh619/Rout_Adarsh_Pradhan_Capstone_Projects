@@ -6,6 +6,13 @@ const bool = z
   .enum(["true", "false", "1", "0"])
   .transform((v) => v === "true" || v === "1");
 
+// Unset and empty both mean "not configured".
+const optionalString = z
+  .string()
+  .trim()
+  .optional()
+  .transform((v) => v || undefined);
+
 const schema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().positive().default(4000),
@@ -35,6 +42,11 @@ const schema = z.object({
   S3_PUBLIC_URL: z.string().url().optional().or(z.literal("").transform(() => undefined)),
 
   PAYMENT_PROVIDER: z.enum(["mock", "razorpay"]).default("mock"),
+  // Razorpay test-mode keys (Dashboard → Test Mode → API Keys). Live keys are refused: this project never moves real money.
+  RAZORPAY_KEY_ID: optionalString.refine((v) => v === undefined || v.startsWith("rzp_test_"), "must be a test key (rzp_test_…); live keys are not allowed"),
+  RAZORPAY_KEY_SECRET: optionalString,
+  // The secret typed when creating the webhook in the Razorpay dashboard. Empty = the webhook endpoint is off.
+  RAZORPAY_WEBHOOK_SECRET: optionalString,
   // How long checkout holds the stock for an unpaid order before it goes back on sale.
   RESERVATION_MINUTES: z.coerce.number().int().min(1).max(120).default(15),
 
@@ -57,6 +69,9 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
     .superRefine((env, ctx) => {
       if (env.NODE_ENV === "production" && !env.JWT_ACCESS_SECRET) {
         ctx.addIssue({ code: "custom", path: ["JWT_ACCESS_SECRET"], message: "is required in production" });
+      }
+      if (env.PAYMENT_PROVIDER === "razorpay" && (!env.RAZORPAY_KEY_ID || !env.RAZORPAY_KEY_SECRET)) {
+        ctx.addIssue({ code: "custom", path: ["RAZORPAY_KEY_ID"], message: "and RAZORPAY_KEY_SECRET are required when PAYMENT_PROVIDER=razorpay" });
       }
       if (env.COOKIE_SAME_SITE === "none" && !env.COOKIE_SECURE) {
         ctx.addIssue({ code: "custom", path: ["COOKIE_SECURE"], message: "must be true when COOKIE_SAME_SITE=none" });

@@ -4,7 +4,9 @@ import type { Redis } from "ioredis";
 import type { Storage } from "../lib/s3.js";
 import type { CookieSettings } from "./cart/cart.routes.js";
 import type { ReservationScheduler } from "./orders/reservations.js";
+import type { MoneyJobs } from "./payments/money-jobs.js";
 import type { PaymentProvider } from "./payments/payment-provider.js";
+import type { PayoutProvider } from "./payments/payout-provider.js";
 import type { SearchSync } from "./search/search-sync.js";
 
 // What every feature router needs, built once in createApp.
@@ -23,6 +25,12 @@ export interface RouteContext {
   // Cookie attributes for this deployment (Secure + SameSite=None on the live site).
   cookies: CookieSettings;
   payments: PaymentProvider;
+  // Pays vendors (simulated in v1).
+  payouts: PayoutProvider;
+  // Refunds and payouts, run in the background and retried.
+  moneyJobs: MoneyJobs;
+  // Razorpay webhook secret; undefined turns the webhook endpoint off.
+  webhookSecret: string | undefined;
   // Hands reserved stock back when an order isn't paid in time.
   reservations: ReservationScheduler;
   reservationMinutes: number;

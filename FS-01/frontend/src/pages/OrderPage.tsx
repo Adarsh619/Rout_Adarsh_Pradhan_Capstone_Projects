@@ -2,6 +2,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
 import { ApiError } from "../api/client";
+import { useAuth } from "../auth/AuthContext";
+import { loadRazorpay } from "../lib/razorpay";
 import {
   cancelPart,
   cancelUnpaidOrder,
@@ -33,32 +35,66 @@ function useCountdown(until: string | null) {
   return { left, text: `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}` };
 }
 
-// The test payment screen. With PAYMENT_PROVIDER=mock the server stands in for Razorpay: "Pay" makes it sign a payment,
-// which is then verified exactly like a real one. Razorpay's own popup replaces this panel on Day 6.
+// Pays a waiting order. With Razorpay (test mode) it opens Razorpay's popup; with PAYMENT_PROVIDER=mock it shows a test
+// payment screen where the server plays Razorpay. Either way the result is verified by the API the same way.
 function PaymentPanel({ order, payment }: { order: Order; payment: PaymentStep }) {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const countdown = useCountdown(payment.expiresAt);
   const [busy, setBusy] = useState<"pay" | "fail" | "cancel">();
   const [error, setError] = useState<string>();
+  const razorpay = payment.provider === "razorpay";
+
+  const done = async (updated: Order) => {
+    queryClient.setQueryData(orderKey(order.id), { order: updated, payment: null });
+    await queryClient.invalidateQueries({ queryKey: ["orders", "list"] });
+  };
+  const failed = async (err: unknown) => {
+    setError(err instanceof ApiError || err instanceof Error ? err.message : "Something went wrong. Try again.");
+    if (err instanceof ApiError && err.code === "order_not_payable") await queryClient.invalidateQueries({ queryKey: orderKey(order.id) });
+  };
 
   const run = async (kind: "pay" | "fail" | "cancel") => {
     setBusy(kind);
     setError(undefined);
     try {
-      let updated: Order;
-      if (kind === "cancel") updated = (await cancelUnpaidOrder(order.id)).order;
-      else {
+      if (kind === "cancel") await done((await cancelUnpaidOrder(order.id)).order);
+      else if (razorpay) {
+        await openRazorpay();
+        return; // the popup's callbacks finish the job
+      } else {
         const proof = await mockPay(payment.providerOrderId, kind === "pay" ? "success" : "failure");
-        updated = (await verifyPayment({ orderId: order.id, ...proof })).order;
+        await done((await verifyPayment({ orderId: order.id, ...proof })).order);
       }
-      queryClient.setQueryData(orderKey(order.id), { order: updated, payment: null });
-      await queryClient.invalidateQueries({ queryKey: ["orders", "list"] });
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Something went wrong. Try again.");
-      if (err instanceof ApiError && err.code === "order_not_payable") await queryClient.invalidateQueries({ queryKey: orderKey(order.id) });
-    } finally {
-      setBusy(undefined);
+      await failed(err);
     }
+    setBusy(undefined);
+  };
+
+  const openRazorpay = async () => {
+    const Razorpay = await loadRazorpay();
+    const popup = new Razorpay({
+      key: payment.keyId ?? "",
+      amount: payment.amount,
+      currency: payment.currency,
+      order_id: payment.providerOrderId,
+      name: "ShopSphere",
+      description: `Order ${order.orderNumber} (test mode)`,
+      // Razorpay wants the number with its country code; addresses store the 10 digits.
+      prefill: { name: user?.name, email: user?.email, contact: `+91${order.shippingAddress.phone}` },
+      notes: { orderNumber: order.orderNumber },
+      theme: { color: "#4f46e5" },
+      handler: (r) => {
+        verifyPayment({ orderId: order.id, providerOrderId: r.razorpay_order_id, providerPaymentId: r.razorpay_payment_id, signature: r.razorpay_signature })
+          .then((res) => done(res.order))
+          .catch(failed)
+          .finally(() => setBusy(undefined));
+      },
+      modal: { ondismiss: () => setBusy(undefined) },
+    });
+    popup.on("payment.failed", (r) => setError(`${r.error.description ?? "The payment failed"}. Nothing was charged; you can try again.`));
+    popup.open();
   };
 
   return (
@@ -73,9 +109,15 @@ function PaymentPanel({ order, payment }: { order: Order; payment: PaymentStep }
           </p>
         )}
       </div>
-      <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
-        Test payment screen. No real money moves. Choose what the payment does.
-      </p>
+      {razorpay ? (
+        <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          Razorpay <strong>test mode</strong>: no real money moves. Easiest: choose <strong>Netbanking</strong>, pick any bank, then press{" "}
+          <strong>Success</strong> on Razorpay's test bank page (<strong>Failure</strong> shows a failed payment). If UPI is offered, use{" "}
+          <code>success@razorpay</code>.
+        </p>
+      ) : (
+        <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">Test payment screen. No real money moves. Choose what the payment does.</p>
+      )}
       <FormError message={error} />
       <div className="flex flex-wrap gap-3">
         <button
@@ -84,11 +126,13 @@ function PaymentPanel({ order, payment }: { order: Order; payment: PaymentStep }
           disabled={!!busy}
           className="rounded-lg bg-brand-600 px-4 py-2 font-medium text-white hover:bg-brand-700 disabled:opacity-60"
         >
-          {busy === "pay" ? "Paying…" : `Pay ${formatINR(payment.amount)} (test)`}
+          {busy === "pay" ? (razorpay ? "Waiting for Razorpay…" : "Paying…") : razorpay ? `Pay ${formatINR(payment.amount)} with Razorpay` : `Pay ${formatINR(payment.amount)} (test)`}
         </button>
-        <button type="button" onClick={() => run("fail")} disabled={!!busy} className="rounded-lg border border-slate-300 px-4 py-2 hover:bg-slate-50 disabled:opacity-60">
-          Simulate a failed payment
-        </button>
+        {!razorpay && (
+          <button type="button" onClick={() => run("fail")} disabled={!!busy} className="rounded-lg border border-slate-300 px-4 py-2 hover:bg-slate-50 disabled:opacity-60">
+            Simulate a failed payment
+          </button>
+        )}
         <button type="button" onClick={() => run("cancel")} disabled={!!busy} className="ml-auto text-sm text-slate-600 underline hover:text-red-700">
           Cancel this order
         </button>
@@ -212,6 +256,12 @@ export function OrderPage() {
               </li>
             ))}
           </ul>
+          {part.refund && (
+            <p className="text-sm text-slate-600">
+              Refund of {formatINR(part.refund.amount)}:{" "}
+              {part.refund.status === "processed" ? "sent to your original payment method" : part.refund.status === "failed" ? "couldn't be sent yet; it will be retried" : "being processed"}
+            </p>
+          )}
           {part.canCancel && <CancelPart order={order} partId={part.id} storeName={part.vendor.storeName} />}
         </section>
       ))}
@@ -235,6 +285,12 @@ export function OrderPage() {
             <dt>Total</dt>
             <dd>{formatINR(order.grandTotal)}</dd>
           </div>
+          {order.payment.refundedAmount > 0 && (
+            <div className="flex justify-between text-emerald-700">
+              <dt>Refunded</dt>
+              <dd>{formatINR(order.payment.refundedAmount)}</dd>
+            </div>
+          )}
         </dl>
       </section>
     </div>

@@ -21,6 +21,17 @@ const vendorSchema = new Schema(
     rejectionReason: { type: String },
     // Overrides the category's commission when set (Day 8 admin page).
     commissionRateBp: { type: Number, default: null, min: 0, max: 5000 },
+    // Where the vendor's earnings go. Only the last 4 digits of the account are kept; the full number goes to the
+    // payout provider once, which hands back a beneficiary reference used for every payout.
+    payout: {
+      accountHolder: { type: String },
+      bankLast4: { type: String },
+      ifsc: { type: String },
+      provider: { type: String },
+      beneficiaryRef: { type: String },
+      status: { type: String, enum: ["not_started", "active"], default: "not_started" },
+      updatedAt: { type: Date },
+    },
     ratingAvg: { type: Number, default: 0 },
     ratingCount: { type: Number, default: 0 },
     submittedAt: { type: Date, default: () => new Date() },
@@ -57,6 +68,10 @@ export const toOwnStore = (v: VendorDoc, storage: Storage) => ({
   phone: v.phone,
   gstin: v.gstin ?? null,
   commissionRateBp: v.commissionRateBp ?? null,
+  payout:
+    v.payout?.status === "active"
+      ? { accountHolder: v.payout.accountHolder ?? "", bankLast4: v.payout.bankLast4 ?? "", ifsc: v.payout.ifsc ?? "", provider: v.payout.provider ?? "mock" }
+      : null,
   submittedAt: (v.submittedAt as Date).toISOString(),
   approvedAt: v.approvedAt ? (v.approvedAt as Date).toISOString() : null,
 });

@@ -5,6 +5,7 @@ import type { OwnStore } from "../../api/catalog";
 import { applyForStore, myStoreKey, updateStore, useMyProducts, useMyStore } from "../../api/vendor";
 import { useAuth } from "../../auth/AuthContext";
 import { LoadError, Loading, StatusBadge } from "../../components/Catalog";
+import { PayoutDetails } from "./PayoutDetails";
 import { StoreForm } from "./StoreForm";
 
 function Banner({ tone, title, children }: { tone: "amber" | "red" | "emerald"; title: string; children?: React.ReactNode }) {
@@ -51,7 +52,6 @@ function ApprovedStore({ store }: { store: OwnStore }) {
           View your store page
         </Link>
       </div>
-      <p className="text-sm text-slate-500">Earnings (held, released and paid out) arrive with payments.</p>
     </div>
   );
 }
@@ -123,6 +123,7 @@ export function VendorDashboard() {
       {store?.status === "approved" && (
         <>
           <ApprovedStore store={store} />
+          <PayoutDetails store={store} />
           <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="font-semibold">Store details</h2>

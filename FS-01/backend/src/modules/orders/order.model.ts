@@ -8,7 +8,10 @@ export const SUB_ORDER_STATUSES = ["awaiting_payment", "placed", "packed", "ship
 export type SubOrderStatus = (typeof SUB_ORDER_STATUSES)[number];
 
 export const PAYMENT_STATUSES = ["created", "paid", "failed", "refunded", "partially_refunded"] as const;
-export const ACTOR_ROLES = ["customer", "vendor", "admin", "system"] as const;
+export const PAYOUT_STATUSES = ["held", "released", "paid", "reversed", "failed"] as const;
+export type PayoutStatus = (typeof PAYOUT_STATUSES)[number];
+export const REFUND_STATUSES = ["pending", "processed", "failed"] as const;
+export const ACTOR_ROLES =["customer", "vendor", "admin", "system"] as const;
 export type ActorRole = (typeof ACTOR_ROLES)[number];
 
 // One product line, copied at purchase time: later price or title changes never alter a placed order.
@@ -56,6 +59,8 @@ const orderSchema = new Schema(
       providerPaymentId: { type: String },
       status: { type: String, enum: PAYMENT_STATUSES, default: "created" },
       paidAt: { type: Date },
+      // Sum of the refunds made so far (cancelled parts, or the whole payment if it arrived too late).
+      refundedAmount: { type: Number, default: 0 },
     },
     status: { type: String, enum: ORDER_STATUSES, default: "pending_payment" },
     // Reserved stock goes back on sale if the order isn't paid by then.
@@ -111,6 +116,25 @@ const subOrderSchema = new Schema(
       carrier: { type: String, maxlength: 60 },
       number: { type: String, maxlength: 60 },
     },
+    // The vendor's share in escrow: held when paid → released on delivery → paid out; or reversed if cancelled.
+    payout: {
+      amount: { type: Number },
+      status: { type: String, enum: PAYOUT_STATUSES },
+      provider: { type: String },
+      providerRef: { type: String },
+      releasedAt: { type: Date },
+      paidAt: { type: Date },
+      lastError: { type: String },
+    },
+    // Money back to the customer for a cancelled part (through Razorpay).
+    refund: {
+      amount: { type: Number },
+      status: { type: String, enum: REFUND_STATUSES },
+      providerRef: { type: String },
+      requestedAt: { type: Date },
+      processedAt: { type: Date },
+      lastError: { type: String },
+    },
     // Set when the order is paid: from then on the vendor sees this part.
     placedAt: { type: Date },
     deliveredAt: { type: Date },
@@ -122,6 +146,8 @@ const subOrderSchema = new Schema(
 
 subOrderSchema.index({ vendorId: 1, status: 1, createdAt: -1 });
 subOrderSchema.index({ vendorId: 1, placedAt: -1 });
+// Shares waiting to be paid out (e.g. once a vendor adds payout details).
+subOrderSchema.index({ "payout.status": 1, vendorId: 1 });
 
 export type SubOrderDoc = HydratedDocument<InferSchemaType<typeof subOrderSchema>>;
 export const SubOrder = model("SubOrder", subOrderSchema);

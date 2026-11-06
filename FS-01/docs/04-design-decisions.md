@@ -20,7 +20,7 @@ Each decision lists what was chosen, the alternatives, and why.
   | **Another gateway's split product** | Not in the required stack, and the same RBI rules apply in production. |
 
 - **Why this design:** everything a customer touches is genuine Razorpay, and everything that makes a *marketplace* (commission, per-vendor shares, escrow, refunds, payouts, reconciliation) is built and tested in our code instead of hidden inside a gateway. A business that qualifies can add a `route` or `razorpayx` payout driver without touching orders, the ledger or the UI.
-- **Offline and in CI:** Razorpay has no official mock server, so payment collection also has a `PaymentProvider` with `razorpay` and `mock` drivers. The mock signs webhooks exactly like Razorpay, so the app, the tests and CI run without any account; `PAYMENT_PROVIDER=razorpay` switches to real test mode.
+- **Offline and in CI:** Razorpay has no official mock server, so payment collection also has a `PaymentProvider` with `razorpay` and `mock` drivers. The mock signs payments exactly like Razorpay, and the tests sign sample webhook events the same way Razorpay does, so the app, the tests and CI run without any account; `PAYMENT_PROVIDER=razorpay` switches to real test mode. How it all works: [Payments](09-payments.md).
 
 ## 2. One order, one sub-order per vendor
 
@@ -93,4 +93,4 @@ Each decision lists what was chosen, the alternatives, and why.
 ## 13. A test payment gateway that plays Razorpay's part
 
 - **Chosen:** `PaymentProvider` has a `mock` driver for local work, tests and CI. Its "popup" is an API endpoint that signs a payment exactly the way Razorpay does (HMAC-SHA256 of `order id|payment id`), and the app verifies it through the same `/checkout/verify` used for Razorpay.
-- **Why:** the whole buying flow, including the signature check, runs with no account, no internet and no keys, so CI and reviewers can try it. The mock endpoint only exists when `PAYMENT_PROVIDER=mock`; the live site uses Razorpay test mode (Day 6).
+- **Why:** the whole buying flow, including the signature check, runs with no account, no internet and no keys, so CI and reviewers can try it. The mock endpoint only exists when `PAYMENT_PROVIDER=mock`; the live site uses Razorpay test mode.

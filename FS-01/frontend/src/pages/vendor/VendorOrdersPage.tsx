@@ -2,7 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link } from "react-router";
 import { ApiError } from "../../api/client";
-import { advancePart, PART_STATUS_LABEL, useVendorOrders, type VendorPart, type VendorPartStatus } from "../../api/orders";
+import { advancePart, PART_STATUS_LABEL, PAYOUT_TEXT, useVendorOrders, type VendorPart, type VendorPartStatus } from "../../api/orders";
 import { LoadError, Loading, Pagination, StatusBadge } from "../../components/Catalog";
 import { Field, FormError } from "../../components/Field";
 import { OrderTimeline } from "../../components/OrderTimeline";
@@ -106,6 +106,12 @@ function PartCard({ part }: { part: VendorPart }) {
             <dt>You receive</dt>
             <dd>{formatINR(part.vendorNet)}</dd>
           </div>
+          {part.payout && (
+            <div className="flex justify-between text-slate-600">
+              <dt>Payout</dt>
+              <dd>{PAYOUT_TEXT[part.payout.status]}</dd>
+            </div>
+          )}
         </dl>
       </div>
       {part.tracking && (

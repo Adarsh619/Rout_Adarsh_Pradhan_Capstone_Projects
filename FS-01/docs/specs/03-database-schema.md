@@ -35,7 +35,7 @@ Indexes: `email` unique.
 | status | `pending` \| `approved` \| `rejected` \| `suspended` | |
 | rejectionReason | string | Shown to the vendor |
 | commissionRateBp | int \| null | Overrides the category rate when set |
-| payout | object | `{ accountHolder, bankLast4, ifsc, provider: "mock", beneficiaryRef, status: "not_started" \| "active" }`. The full account number goes only to the payout provider, never into our database |
+| payout | object | `{ accountHolder, bankLast4, ifsc, provider: "mock", beneficiaryRef, status: "not_started" \| "active", updatedAt }`. The full account number goes only to the payout provider, never into our database |
 | ratingAvg, ratingCount | number | Average over the vendor's product reviews |
 | submittedAt | date | Last time the application was sent; pending applications are reviewed oldest first |
 | approvedAt, approvedBy | date, ObjectId | Audit |
@@ -83,7 +83,7 @@ Search itself runs on Elasticsearch (index `products`), which holds a flattened 
 | shippingAddress | object | Copied from the user's address |
 | itemsTotal, discount, shipping, grandTotal | int (paise) | `grandTotal = itemsTotal − discount + shipping`; shipping is 0 in v1 |
 | coupon | object \| null | `{ couponId, code, scope, vendorId, discount }` |
-| payment | object | `{ provider, providerOrderId, providerPaymentId, status: "created" \| "paid" \| "failed" \| "refunded" \| "partially_refunded", paidAt }` |
+| payment | object | `{ provider, providerOrderId, providerPaymentId, status: "created" \| "paid" \| "failed" \| "refunded" \| "partially_refunded", paidAt, refundedAmount }` |
 | status | `pending_payment` \| `confirmed` \| `completed` \| `cancelled` \| `expired` | `completed` when every sub-order is delivered or cancelled |
 | reservationExpiresAt | date | Stock is returned if unpaid by then |
 
@@ -107,12 +107,12 @@ Order numbers come from `counters` (`{ _id: "order-2026", seq }`), incremented o
 | status | `awaiting_payment` \| `placed` \| `packed` \| `shipped` \| `delivered` \| `cancelled` | `awaiting_payment` until the order is paid |
 | statusHistory | array | `{ status, at, byUserId, byRole, note }` |
 | tracking | object | `{ carrier, number }`, required for `shipped` |
-| payout | object | `{ amount, status: "held" \| "released" \| "paid" \| "reversed" \| "failed", provider, providerRef, releasedAt, paidAt }`. `amount` = `vendorNet` |
-| refund | object \| null | `{ id, amount, at }`; `id` is the Razorpay refund id |
+| payout | object | `{ amount, status: "held" \| "released" \| "paid" \| "reversed" \| "failed", provider, providerRef, releasedAt, paidAt, lastError }`. `amount` = `vendorNet` |
+| refund | object \| null | `{ amount, status: "pending" \| "processed" \| "failed", providerRef, requestedAt, processedAt }`; `providerRef` is the Razorpay refund id |
 | placedAt | date | When the order was paid; vendors only see parts that have it |
 | deliveredAt, cancelledAt, cancelReason | date, date, string | |
 
-Indexes: `{ vendorId, status, createdAt: -1 }`, `{ vendorId, placedAt: -1 }`, `orderId`; from Day 6 `{ "payout.status", vendorId }`, `payout.providerRef` (sparse).
+Indexes: `{ vendorId, status, createdAt: -1 }`, `{ vendorId, placedAt: -1 }`, `orderId`, `{ "payout.status", vendorId }`.
 
 **Escrow states:** `held` (paid, not yet delivered) → `released` (delivered) → `paid` (payout done), or `held` → `reversed` (cancelled and refunded). A failed payout stays `failed` and is retried by the job.
 
@@ -129,12 +129,14 @@ Indexes: `{ vendorId, status, createdAt: -1 }`, `{ vendorId, placedAt: -1 }`, `o
 | Field | Type | Notes |
 |---|---|---|
 | orderId, subOrderId, vendorId | ObjectId | `subOrderId`, `vendorId` empty for order-level entries |
-| type | `payment` \| `commission` \| `vendor_hold` \| `vendor_release` \| `vendor_reversal` \| `payout` \| `refund` \| `platform_discount` | |
-| amount | int (paise) | Positive = money in for the platform |
+| key | string | **unique**, `<type>:<part or order id>`: one entry of each type per part, so nothing is recorded twice |
+| type | `payment` \| `refund` \| `commission` \| `commission_reversal` \| `vendor_hold` \| `vendor_release` \| `vendor_reversal` \| `payout` (+ `platform_discount` with coupons on Day 7) | |
+| amount | int (paise) | Always positive; the type says which way it went |
 | providerRef | string | Razorpay payment or refund id, or the payout reference |
 | note | string | |
 
-Never updated or deleted; corrections are new entries. Powers vendor earnings and admin analytics.
+Never updated or deleted; corrections are new entries. Powers vendor earnings and admin analytics. It balances:
+`payment − refund = (vendor_hold − vendor_reversal) + (commission − commission_reversal)` ([Payments](../09-payments.md)).
 
 ## reviews
 
@@ -175,10 +177,10 @@ Indexes: `{ productId, userId }` **unique**, `{ productId, status, createdAt: -1
 
 | Field | Type | Notes |
 |---|---|---|
-| provider | `razorpay` \| `mock` | |
-| eventId | string | **unique** with provider, so a repeated delivery is ignored |
-| type | string | e.g. `payment.captured`, `payment.failed`, `refund.processed`; `payout.processed` from the payout provider |
-| status | `processed` \| `ignored` \| `failed` | |
+| provider | `razorpay` | |
+| eventId | string | **unique** with provider (`X-Razorpay-Event-Id`), so a repeated delivery is ignored |
+| type | string | e.g. `payment.captured`, `payment.failed`, `refund.processed`, `refund.failed` |
+| status | `processing` \| `processed` \| `ignored` \| `failed` | A failed event is processed again when Razorpay redelivers it |
 | receivedAt, processedAt | date | |
 
 ## What lives in Redis (not MongoDB)

@@ -58,14 +58,16 @@ Started **Tue 3 Nov 2026**. Day 4 finished a day early (Thu 5 Nov), so Days 5–
 - [x] ✅ Cart with items from 2 vendors → 1 order, 2 sub-orders
 
 ## Day 6 · Sat 7 Nov · Razorpay payments + split engine (brief step 6)
-- [ ] 🛠 `PaymentProvider` (`razorpay`, `mock`) and `PayoutProvider` (`mock`, labelled "simulated payout")
-- [ ] 🛠 Razorpay Order at checkout, Checkout popup (UPI `success@razorpay`), signature check
-- [ ] 🛠 Webhook: signature verified, safe against repeats and out-of-order events (tested locally with signed sample events; the real webhook is connected once the site is live on Day 9)
-- [ ] 🛠 After payment: ledger entries; each vendor's share (subtotal − commission) **held**
-- [ ] 🛠 Delivered → release that share → payout job pays it out; cancel → reverse the hold + real Razorpay test refund
-- [ ] 🛠 Vendor payout details (only last 4 digits stored); tests for split maths, escrow states and webhooks; doc 09 (payments)
-- [ ] 👤 Generate Razorpay **test** keys and put them in `.env` yourself (never in chat or Git); Oracle VM retry
-- [ ] ✅ Pay with real Razorpay test UPI → 2 vendor shares held → deliver → released → paid out (simulated); payment and refund visible in the Razorpay test dashboard
+- [x] 🛠 `PaymentProvider` (`razorpay`, `mock`) and `PayoutProvider` (`mock`, labelled "simulated payout")
+- [x] 🛠 Razorpay Order at checkout, Checkout popup (test Netbanking → Success; UPI `success@razorpay` when offered), signature check (+ capture check)
+- [x] 🛠 Webhook: signature verified, safe against repeats and out-of-order events (tested locally with signed sample events; the real webhook is connected once the site is live on Day 9)
+- [x] 🛠 After payment: ledger entries; each vendor's share (subtotal − commission) **held**
+- [x] 🛠 Delivered → release that share → payout job pays it out; cancel → reverse the hold + real Razorpay test refund
+- [x] 🛠 Vendor payout details (only last 4 digits stored); tests for split maths, escrow states and webhooks; doc 09 (payments)
+- [x] 👤 Generate Razorpay **test** keys and put them in `.env` yourself (never in chat or Git)
+- [ ] 👤 Oracle VM retry
+- [x] ✅ Pay with real Razorpay test UPI → 2 vendor shares held → deliver → released → paid out (simulated); payment and refund visible in the Razorpay test dashboard
+  - Paid with test Netbanking (UPI isn't offered on this account); payment captured and visible in the dashboard. Refunds are refused by Razorpay for this test account, dashboard included ("invalid request sent"), so the refund shows as failed and is retried hourly ([doc 09](../09-payments.md#known-limit-razorpay-test-accounts-may-refuse-refunds))
 
 ## Day 7 · Sun 8 Nov · Reviews, coupons, invoices (brief step 7, part 1)
 - [ ] 🛠 Reviews only from buyers whose order was delivered; rating updates product + search

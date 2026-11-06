@@ -3,7 +3,9 @@ import { createApp, type AppDeps } from "../../src/app.js";
 import { loadEnv } from "../../src/config/env.js";
 import { createElasticsearch } from "../../src/lib/elasticsearch.js";
 import { noReservations } from "../../src/modules/orders/reservations.js";
+import { noMoneyJobs } from "../../src/modules/payments/money-jobs.js";
 import { createPaymentProvider } from "../../src/modules/payments/payment-provider.js";
+import { MockPayoutProvider } from "../../src/modules/payments/payout-provider.js";
 import { noSearchSync } from "../../src/modules/search/search-sync.js";
 import { memoryStorage } from "./memory-storage.js";
 
@@ -18,6 +20,8 @@ export function unitApp(overrides: Partial<AppDeps> = {}) {
     es: createElasticsearch("http://localhost:9200"),
     searchSync: noSearchSync,
     payments: createPaymentProvider("mock", "unit-test-secret"),
+    payouts: new MockPayoutProvider(),
+    moneyJobs: noMoneyJobs,
     reservations: noReservations,
     healthChecks: {},
     ...overrides,
