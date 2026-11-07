@@ -77,7 +77,7 @@ Each decision lists what was chosen, the alternatives, and why.
 - **Chosen:** frontend on Vercel; backend (API, worker, Redis, Elasticsearch) on its own Oracle Cloud Always Free ARM VM with Caddy for HTTPS; MongoDB Atlas; AWS S3.
 - **Alternatives:** Render's free tier sleeps after 15 minutes (30–60 s first load), and hosted Elasticsearch trials expire after 14 days.
 - **Why:** the brief asks for separate deployments, and reviewers may open the link at any time, weeks later.
-- **Fallback:** Oracle's A1 capacity in Hyderabad was full every day of the first week. If no VM can be created by Day 8, the same Docker setup runs on an AWS EC2 t4g.small in Mumbai (2 vCPU, 2 GB plus swap, Elasticsearch heap 512 MB), paid from the AWS free-plan credits with a zero-spend budget alert. Render was dropped as the fallback because its free tier sleeps and can't run Elasticsearch.
+- **Fallback (taken on 7 Nov):** Oracle's A1 capacity in Hyderabad was full every day of the first week, so the same Docker setup runs on an AWS EC2 t4g.small in Mumbai (2 vCPU, 2 GB plus swap, Elasticsearch heap 512 MB), paid from the AWS free-plan credits with a zero-spend budget alert. Render was dropped as the fallback because its free tier sleeps and can't run Elasticsearch.
 
 ## 11. TypeScript and Zod on the backend
 

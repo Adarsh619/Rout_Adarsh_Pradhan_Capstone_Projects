@@ -82,7 +82,8 @@ Started **Tue 3 Nov 2026**. Day 4 finished a day early (Thu 5 Nov), so Days 5–
 - [ ] 🛠 Vendor earnings page (held / released / settled)
 - [ ] 🛠 Admin pages: vendors, commission rates, refunds, review moderation
 - [ ] 🛠 UI polish: loading, empty and error states; mobile layout; doc 07 (frontend)
-- [ ] 👤 **Hosting decision:** Oracle VM if it was created by now, otherwise the AWS fallback (EC2 t4g.small in Mumbai on free-plan credits). Create the S3 bucket and a limited access key
+- [x] 👤 **Hosting decision:** Oracle VM if it was created by now, otherwise the AWS fallback (EC2 t4g.small in Mumbai on free-plan credits). **Decided Sat 7 Nov: AWS** (Oracle out of capacity every day since 3 Nov)
+- [ ] 👤 Create the S3 bucket and a limited access key
 - [ ] ✅ Dashboards show correct numbers for the seeded data
 
 ## Day 9 · Tue 10 Nov · Live deployment & performance (brief step 7, part 3)
