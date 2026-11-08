@@ -38,6 +38,7 @@ RUN sed -i 's/\r$//' /usr/local/bin/taskflow-start /etc/supervisor/taskflow.conf
     && chmod +x /usr/local/bin/taskflow-start
 
 # Live-site defaults; secrets (DATABASE_URL, DJANGO_SECRET_KEY) come from the host's environment settings.
+# TRUSTED_PROXY_COUNT=4, measured on Render: Cloudflare edge -> Render load balancer -> Render proxy -> our nginx.
 ENV PORT=10000 \
     DJANGO_DEBUG=false \
     DEMO_MODE=true \
@@ -45,7 +46,7 @@ ENV PORT=10000 \
     STRIPE_MOCK=true \
     STRIPE_API_BASE=http://127.0.0.1:12111 \
     REDIS_URL=redis://127.0.0.1:6379/0 \
-    TRUSTED_PROXY_COUNT=2 \
+    TRUSTED_PROXY_COUNT=4 \
     MEDIA_ROOT=/app/media
 EXPOSE 10000
 CMD ["taskflow-start"]

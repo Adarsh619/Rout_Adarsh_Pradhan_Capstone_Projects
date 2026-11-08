@@ -250,12 +250,23 @@ jobs:
           BACKEND_DEPLOY_HOOK: ${{ secrets.BACKEND_DEPLOY_HOOK }}
           LIVE_URL: ${{ vars.LIVE_URL }}
         run: |
-          if [ -z "$BACKEND_DEPLOY_HOOK" ] || [ -z "$LIVE_URL" ]; then
+          # Pasted values often carry an invisible space or line break; strip them before use.
+          hook=$(printf '%s' "$BACKEND_DEPLOY_HOOK" | tr -d '[:space:]')
+          if [ -z "$hook" ] || [ -z "$LIVE_URL" ]; then
             echo "::error::DEPLOY_ENABLED is true but BACKEND_DEPLOY_HOOK (secret) or LIVE_URL (variable) isn't set."
             exit 1
           fi
+          case "$hook" in
+            https://api.render.com/deploy/*'?key='*) ;;
+            *) echo "::error::BACKEND_DEPLOY_HOOK doesn't look like a Render deploy hook (https://api.render.com/deploy/srv-...?key=...)."; exit 1 ;;
+          esac
           # Render deploy hooks accept ref=<commit> to deploy exactly this commit.
-          curl -fsS -X POST "${BACKEND_DEPLOY_HOOK}&ref=${GITHUB_SHA}" -o /dev/null
+          status=$(curl -sS -o /dev/null -w '%{http_code}' -X POST "${hook}&ref=${GITHUB_SHA}")
+          if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+            echo "::error::Render refused the deploy hook (HTTP $status)."
+            exit 1
+          fi
+          echo "Render accepted the deploy of $GITHUB_SHA (HTTP $status)"
       - name: Wait until the live site runs this commit
         env:
           LIVE_URL: ${{ vars.LIVE_URL }}

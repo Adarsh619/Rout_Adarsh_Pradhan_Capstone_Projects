@@ -132,7 +132,7 @@ flowchart LR
 
 **Container start-up** (`deploy/render/start.sh`): derives allowed hosts and CSRF origins from Render's `RENDER_EXTERNAL_HOSTNAME`, applies migrations, then starts supervisord. A one-off `seed` program creates the demo companies if they're missing. A cold start takes about 2 minutes on 0.1 CPU; that only happens on a deploy or a platform restart. Render's health check uses `/healthz`, which nginx answers itself.
 
-**Settings on the live site** (image defaults, plus two secrets set on Render): `DJANGO_DEBUG=false`, `DEMO_MODE=true`, `SECURE_PROXY_SSL=true`, `STRIPE_MOCK=true`, `TRUSTED_PROXY_COUNT=2` (Render's proxy + our nginx), and the secrets `DATABASE_URL` (Neon) and `DJANGO_SECRET_KEY`.
+**Settings on the live site** (image defaults, plus two secrets set on Render): `DJANGO_DEBUG=false`, `DEMO_MODE=true`, `SECURE_PROXY_SSL=true`, `STRIPE_MOCK=true`, `TRUSTED_PROXY_COUNT=4` (measured on the live site: Cloudflare's edge, Render's load balancer, Render's proxy and our nginx each add an `X-Forwarded-For` entry; with 4 the audit log records the visitor's real IP and a spoofed header is ignored), and the secrets `DATABASE_URL` (Neon) and `DJANGO_SECRET_KEY`.
 
 **Demo mode:** the published demo logins can't change their password or profile. The demo companies are rebuilt every night at 02:30 IST, and accounts or workspaces visitors create are removed after 7 days (see [Security](10-security.md)).
 
