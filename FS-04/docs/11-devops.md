@@ -128,6 +128,8 @@ flowchart LR
 
 **Deploys:** after the published release is verified, the `deploy-server` job calls the Render deploy hook with `ref=<commit>`, waits until `/api/health/` reports that commit (`APP_VERSION`, taken from Render's `RENDER_GIT_COMMIT`), then runs `scripts/smoke-test.sh --read-only` against the live site (it signs in with the demo login and creates nothing). Render's own auto-deploy is turned off, so only tested commits go live.
 
+**Inside the container:** every program runs as the non-root user `app` with `HOME=/home/app` (supervisord would otherwise keep root's `HOME`, which breaks SSL database connections), the system resolver prefers IPv4 (Render has no IPv6 route; Neon publishes both), and Redis and stripe-mock listen only inside the container.
+
 **Container start-up** (`deploy/render/start.sh`): derives allowed hosts and CSRF origins from Render's `RENDER_EXTERNAL_HOSTNAME`, applies migrations, then starts supervisord. A one-off `seed` program creates the demo companies if they're missing. A cold start takes about 2 minutes on 0.1 CPU; that only happens on a deploy or a platform restart. Render's health check uses `/healthz`, which nginx answers itself.
 
 **Settings on the live site** (image defaults, plus two secrets set on Render): `DJANGO_DEBUG=false`, `DEMO_MODE=true`, `SECURE_PROXY_SSL=true`, `STRIPE_MOCK=true`, `TRUSTED_PROXY_COUNT=2` (Render's proxy + our nginx), and the secrets `DATABASE_URL` (Neon) and `DJANGO_SECRET_KEY`.

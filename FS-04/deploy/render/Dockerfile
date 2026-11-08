@@ -21,6 +21,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
 RUN apt-get update \
     && apt-get install -y --no-install-recommends nginx redis-server supervisor gettext-base \
     && rm -rf /var/lib/apt/lists/* /etc/nginx/sites-enabled/default
+# Prefer IPv4: the platform has no IPv6 route, and database hosts (Neon) also publish IPv6 addresses.
+RUN echo "precedence ::ffff:0:0/96  100" >> /etc/gai.conf
 WORKDIR /app
 COPY backend/requirements.txt ./
 RUN pip install -r requirements.txt
