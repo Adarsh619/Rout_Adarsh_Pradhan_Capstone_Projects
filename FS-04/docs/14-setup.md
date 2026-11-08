@@ -56,6 +56,17 @@ npm install
 npm run dev        # http://localhost:5173
 ```
 
+## Live demo deployment
+
+The public site runs the all-in-one image from `deploy/render/` on a free Render web service, with a free Neon Postgres database; the full setup is in [DevOps · Live deployment](11-devops.md#live-deployment-free-always-on). To try that image locally with Render's limits:
+
+```bash
+docker build -f deploy/render/Dockerfile -t taskflow-live .
+docker run --rm -p 3005:10000 --memory 512m --cpus 0.1 \
+  -e DATABASE_URL=postgres://user:pass@host:5432/db -e DJANGO_SECRET_KEY=change-me taskflow-live
+bash scripts/smoke-test.sh --read-only http://localhost:3005
+```
+
 ## Environment variables (`.env`)
 
 | Variable | Default | Purpose |
@@ -70,6 +81,9 @@ npm run dev        # http://localhost:5173
 | `WEBHOOK_ALLOW_PRIVATE_URLS` | `false` | `true` lets webhooks target internal addresses, only for testing against a receiver on your own machine |
 | `WEBHOOK_DELIVERY_RETENTION_DAYS` | `30` | How long webhook delivery logs are kept |
 | `FRONTEND_PORT` | `3000` | Host port for the app; change it if 3000 is in use |
+| `DEMO_MODE` | `false` | `true` on the public demo: locks the demo logins, nightly reset, visitor clean-up |
+| `DEMO_VISITOR_RETENTION_DAYS` | `7` | Demo mode: days before visitors' own workspaces and accounts are removed |
+| `SECURE_PROXY_SSL` | `false` | `true` behind an HTTPS proxy: trust its `X-Forwarded-Proto`, secure cookies |
 | `TASKFLOW_TAG` | `latest` | Only for `docker-compose.release.yml`: which published version to run (`latest`, `1.0.0`, `sha-<commit>`). Set it in `.env`, which works on every OS |
 | `WEB_CONCURRENCY` | `3` | Gunicorn web worker processes |
 | `VITE_DEMO_HINT` | `true` | Shows the demo login on the sign-in page; `false` hides it. Read when the frontend is built, so rebuild the `frontend` image after changing it |

@@ -21,6 +21,16 @@ DEBUG = env_bool("DJANGO_DEBUG", True)
 ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "*").split(",")
 CSRF_TRUSTED_ORIGINS = [o for o in os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",") if o]
 
+# Behind an HTTPS-terminating proxy (the live deployment): trust its X-Forwarded-Proto and send cookies over HTTPS only.
+if env_bool("SECURE_PROXY_SSL", False):
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+
+# Public demo site: the published demo logins are locked and the demo data resets nightly (apps/accounts/demo.py).
+DEMO_MODE = env_bool("DEMO_MODE", False)
+DEMO_VISITOR_RETENTION_DAYS = int(os.environ.get("DEMO_VISITOR_RETENTION_DAYS", 7))
+
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -78,6 +88,8 @@ DATABASES = {
     "default": dj_database_url.config(
         default=os.environ.get("DATABASE_URL", f"sqlite:///{BASE_DIR / 'db.sqlite3'}"),
         conn_max_age=60,
+        # A scale-to-zero database (Neon on the live site) drops idle connections; check before reusing one.
+        conn_health_checks=True,
     )
 }
 
@@ -171,6 +183,11 @@ CELERY_BEAT_SCHEDULE = {
     "daily-webhook-delivery-cleanup": {
         "task": "apps.integrations.tasks.delete_old_webhook_deliveries",
         "schedule": crontab(hour=3, minute=30),
+    },
+    # Only acts when DEMO_MODE is on: 21:00 UTC is 02:30 in India, when the demo is least likely to be in use.
+    "nightly-demo-reset": {
+        "task": "apps.tracker.tasks.reset_demo_data",
+        "schedule": crontab(hour=21, minute=0),
     },
 }
 

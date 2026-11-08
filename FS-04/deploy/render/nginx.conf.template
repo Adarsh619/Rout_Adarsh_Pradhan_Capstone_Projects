@@ -1,0 +1,55 @@
+# nginx for the all-in-one live container. ${PORT} is filled in by start.sh (Render sets PORT).
+user www-data;
+worker_processes 1;
+pid /tmp/nginx.pid;
+error_log /dev/stderr warn;
+
+events { worker_connections 256; }
+
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+    sendfile on;
+    server_tokens off;
+    client_max_body_size 20m;
+    access_log off;  # gunicorn already logs API requests
+
+    gzip on;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+    gzip_min_length 1024;
+
+    server {
+        listen ${PORT};
+        root /usr/share/taskflow-web;
+
+        add_header X-Content-Type-Options nosniff always;
+        add_header X-Frame-Options DENY always;
+        add_header Referrer-Policy strict-origin-when-cross-origin always;
+
+        # Platform health check: answered by nginx itself, so it works whatever Host header the platform sends.
+        location = /healthz { access_log off; default_type text/plain; return 200 "ok\n"; }
+
+        location ~ ^/(api|admin|static)/ {
+            proxy_pass http://127.0.0.1:8000;
+            proxy_set_header Host $host;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            # The platform's proxy terminates HTTPS and says so; pass that on (our own hop is plain HTTP).
+            proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
+            proxy_read_timeout 60s;
+        }
+
+        location /assets/ {
+            add_header Cache-Control "public, max-age=31536000, immutable";
+            add_header X-Content-Type-Options nosniff always;
+            try_files $uri =404;
+        }
+
+        location / {
+            add_header Cache-Control "no-cache";
+            add_header X-Content-Type-Options nosniff always;
+            add_header X-Frame-Options DENY always;
+            add_header Referrer-Policy strict-origin-when-cross-origin always;
+            try_files $uri /index.html;
+        }
+    }
+}

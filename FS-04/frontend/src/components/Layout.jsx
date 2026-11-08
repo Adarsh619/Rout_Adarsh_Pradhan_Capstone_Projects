@@ -102,7 +102,9 @@ export default function Layout() {
         </aside>
         <main className="main">
           <header className="topbar">
-            <div />
+            {user.demo_mode
+              ? <span className="demo-banner">Shared live demo · anyone can use these logins · data resets every night</span>
+              : <div />}
             <Notifications />
           </header>
           <div className="content"><Outlet /></div>

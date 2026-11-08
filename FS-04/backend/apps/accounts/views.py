@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
 from rest_framework import generics, permissions, serializers, status
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
@@ -9,7 +10,8 @@ from rest_framework_simplejwt.views import TokenBlacklistView, TokenObtainPairVi
 
 from apps.tenancy.services import create_workspace
 
-from .serializers import PasswordChangeSerializer, RegisterSerializer, UserSerializer
+from .demo import DEMO_ACCOUNT_MESSAGE, is_locked_demo_account
+from .serializers import MeSerializer, PasswordChangeSerializer, RegisterSerializer
 
 
 class AuthThrottleMixin:
@@ -48,7 +50,7 @@ class RegisterView(AuthThrottleMixin, generics.GenericAPIView):
             workspace = create_workspace(name=data["workspace_name"], owner=user)
         return Response(
             {
-                "user": UserSerializer(user).data,
+                "user": MeSerializer(user).data,
                 **token_pair(user),
                 "workspace": workspace.slug if workspace else None,
             },
@@ -65,10 +67,15 @@ class LogoutView(TokenBlacklistView):
 
 
 class MeView(generics.RetrieveUpdateAPIView):
-    serializer_class = UserSerializer
+    serializer_class = MeSerializer
 
     def get_object(self):
         return self.request.user
+
+    def perform_update(self, serializer):
+        if is_locked_demo_account(self.request.user):
+            raise PermissionDenied(DEMO_ACCOUNT_MESSAGE)
+        super().perform_update(serializer)
 
 
 class PasswordChangeView(AuthThrottleMixin, generics.GenericAPIView):
@@ -78,6 +85,8 @@ class PasswordChangeView(AuthThrottleMixin, generics.GenericAPIView):
 
     @transaction.atomic
     def post(self, request):
+        if is_locked_demo_account(request.user):
+            raise PermissionDenied(DEMO_ACCOUNT_MESSAGE)
         ser = self.get_serializer(data=request.data)
         ser.is_valid(raise_exception=True)
         user = request.user

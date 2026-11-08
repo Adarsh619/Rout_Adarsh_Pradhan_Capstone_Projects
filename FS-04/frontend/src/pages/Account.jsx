@@ -9,6 +9,8 @@ export default function Account() {
   const { user, updateProfile, changePassword } = useAuth();
   const location = useLocation();
   const back = location.state?.from || "/";
+  // On the public demo site the shared demo logins can't be changed (the server refuses too).
+  const locked = Boolean(user.is_demo_account);
 
   const [name, setName] = useState(user.full_name ?? "");
   const [nameMsg, setNameMsg] = useState("");
@@ -56,7 +58,13 @@ export default function Account() {
           <h2>Your account</h2>
           <Link to={back} className="small">← Back</Link>
         </div>
+        {locked && (
+          <div className="notice" role="note">
+            <span>🔒 <strong>Shared demo account.</strong> Everyone signs in with it, so its name and password can't be changed. Create your own account to try these settings.</span>
+          </div>
+        )}
 
+        <fieldset className="plain" disabled={locked}>
         <form className="stack" onSubmit={saveName}>
           <h3>Profile</h3>
           <label>Email<input value={user.email} disabled /></label>
@@ -98,6 +106,7 @@ export default function Account() {
           {pwMsg && <div className="toast static" role="status">{pwMsg}</div>}
           <button className="primary" disabled={savingPw || mismatch}>{savingPw ? "Changing…" : "Change password"}</button>
         </form>
+        </fieldset>
       </div>
     </div>
   );

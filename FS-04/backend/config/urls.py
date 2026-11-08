@@ -1,3 +1,5 @@
+import os
+
 from django.contrib import admin
 from django.http import JsonResponse
 from django.urls import include, path
@@ -31,7 +33,9 @@ router.register("reports", ReportViewSet, basename="report")
 
 
 def health(_request):
-    return JsonResponse({"status": "ok"})
+    # Doesn't touch the database, so uptime checks don't keep a scale-to-zero database awake.
+    # APP_VERSION (the deployed commit) lets CI wait until a new deploy is actually live.
+    return JsonResponse({"status": "ok", "version": os.environ.get("APP_VERSION", "")})
 
 
 urlpatterns = [

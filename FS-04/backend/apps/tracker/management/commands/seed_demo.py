@@ -17,6 +17,7 @@ from django.db import transaction
 from django.utils import timezone
 from faker import Faker
 
+from apps.accounts.demo import DEMO_WORKSPACES
 from apps.audit.models import AuditLog
 from apps.integrations.models import Notification, Report
 from apps.integrations.notify import MESSAGES
@@ -71,7 +72,7 @@ class Command(BaseCommand):
         random.seed(42)
         User = get_user_model()
         if opts["reset"]:
-            for ws in Workspace.objects.filter(slug__in=["acme", "globex"]):
+            for ws in Workspace.objects.filter(slug__in=DEMO_WORKSPACES):
                 delete_workspace(ws)
 
         for slug, company in [("acme", "Acme Corp"), ("globex", "Globex Inc")]:

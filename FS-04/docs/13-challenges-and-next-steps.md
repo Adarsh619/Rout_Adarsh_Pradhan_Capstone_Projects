@@ -48,19 +48,21 @@ All code was first committed together, so instead of re-committing it file by fi
 | 13 | Docker and CI | `7f58ebb` | Images never started in CI (now a Compose smoke test); `.venv` copied into the image; workers could start before migrations; database port open to the network; nginx caching and headers |
 | 14 | Docs | `74ac210` | README, index, overview, features and this log brought up to date with Days 2–13 |
 | 14+ | Account page | `73583a9` | Password change was API-only: added an account page (name, password) and fixed password hints being read as part of the field's name |
-| 14+ | Release pipeline | this commit | "Deploy" did nothing but print a notice: the pipeline now publishes multi-arch images, **verifies the published images by running them**, records the deployment, and turns `v*` tags into GitHub Releases; `docker-compose.release.yml` runs any release with one command |
+| 14+ | Release pipeline | `f723be1` | "Deploy" did nothing but print a notice: the pipeline now publishes multi-arch images, **verifies the published images by running them**, records the deployment, and turns `v*` tags into GitHub Releases; `docker-compose.release.yml` runs any release with one command |
+
+| 14+ | Live site | this commit | Free, always-on hosting: all-in-one container on Render + Neon Postgres + UptimeRobot, verified under Render's 512 MB / 0.1 CPU limits first; demo mode (locked demo logins, nightly reset, visitor clean-up); CI deploys tested commits and smoke-tests the live site. **Found on the way:** `kombu` 5.7.0 (released after v1.0.1) imports `packaging` without declaring it, so any fresh image had a Celery worker that crashed on start. Pinned `kombu==5.6.2`, and the smoke test now runs a real Celery job so this can't slip through again |
 
 ## Known limits
 
 - Tokens are kept in `localStorage`; a production launch should move them to httpOnly cookies (see [Security](10-security.md)).
 - A webhook host whose DNS changes between our check and the request (DNS rebinding) isn't fully covered.
 - Rate limits use the in-memory cache, so they count per gunicorn worker until a shared Redis cache is configured.
-- Attachments are stored on the server's disk volume.
+- Attachments are stored on the server's disk volume; on the free live site that disk isn't permanent, so uploads disappear on redeploy.
+- The live site runs on 0.1 CPU: pages are slower than locally, and a deploy or platform restart means about 2 minutes of start-up.
 - The board doesn't update live; other people's moves appear after a reload or the next action.
 
 ## Next steps
 
-- A live public server (for example Oracle Cloud's free ARM tier) using the ready `deploy-server` job, with HTTPS and protected demo accounts
 - Email invitations for people who don't have an account yet
 - Real-time board updates with WebSockets
 - Attachment storage on S3-compatible object storage

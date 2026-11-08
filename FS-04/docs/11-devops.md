@@ -91,6 +91,51 @@ This repository also holds another capstone project, so GitHub's "latest release
 
 **A live server (optional):** the `deploy-server` job is ready for a server or platform with a deploy hook. Set the repository variable `DEPLOY_ENABLED=true` and the hook secrets to switch it on; images already run on ARM servers such as Oracle Cloud's free tier.
 
+## Live deployment (free, always on)
+
+The public demo runs on free tiers only. Every option was compared first; the others failed on cost, capacity or "always on":
+
+| Option (checked Nov 2026) | Why not |
+|---|---|
+| Oracle Cloud Always Free ARM | No ARM capacity in the Indian region for weeks |
+| AWS Free plan EC2 | Credits only, account closes after 6 months; already used by another project |
+| Google Cloud e2-micro | 1 GB RAM, US only, a billed account after the trial |
+| Hugging Face Spaces (Docker) | Docker Spaces now need a paid plan |
+| Fly.io, Railway, Koyeb | Trial credit or a card hold, not a free tier |
+| Vercel, Netlify, Cloudflare Pages | Static sites only: no Django, Celery, Postgres or Redis |
+| Your own PC + Cloudflare Tunnel | Only online while the PC is on |
+
+```mermaid
+flowchart LR
+  V[Visitor] -->|HTTPS| R
+  subgraph R[Render free web service · one container · supervisord]
+    N[nginx<br/>React build + /api proxy] --> G[gunicorn<br/>Django]
+    C[Celery worker<br/>+ embedded beat] --> RD[Redis<br/>in-memory]
+    G --> RD
+    G --> SM[stripe-mock]
+  end
+  G --> DB[(Neon Postgres<br/>free, permanent)]
+  C --> DB
+  U[UptimeRobot<br/>every 5 min] -->|/api/health/| R
+  GH[GitHub Actions] -->|deploy hook + read-only smoke test| R
+```
+
+| Piece | Free tier | Why it fits |
+|---|---|---|
+| **Render web service** | 512 MB RAM, 0.1 CPU, 750 instance hours a month; sleeps after 15 min without traffic | Free plans have no background workers, so `deploy/render/Dockerfile` runs **every process in one container** under supervisord: nginx, gunicorn (1 worker, 4 threads), Celery `--pool=solo -B` (worker and beat in one process), Redis and the stripe-mock binary. Measured: **about 200–240 MB** in use under a 512 MB / 0.1 CPU limit |
+| **Neon Postgres** | 1 GB, permanent, no card; scales to zero after 5 min idle | Render's free Postgres expires after 30 days; Neon doesn't. Connections are health-checked (`conn_health_checks`), since a sleeping database drops them |
+| **UptimeRobot** | 5-minute checks, email alerts | Its checks keep the Render service awake 24/7 (~744 of the 750 free hours). `/api/health/` doesn't touch the database, so Neon still sleeps when nobody uses the app |
+
+**Deploys:** after the published release is verified, the `deploy-server` job calls the Render deploy hook with `ref=<commit>`, waits until `/api/health/` reports that commit (`APP_VERSION`, taken from Render's `RENDER_GIT_COMMIT`), then runs `scripts/smoke-test.sh --read-only` against the live site (it signs in with the demo login and creates nothing). Render's own auto-deploy is turned off, so only tested commits go live.
+
+**Container start-up** (`deploy/render/start.sh`): derives allowed hosts and CSRF origins from Render's `RENDER_EXTERNAL_HOSTNAME`, applies migrations, then starts supervisord. A one-off `seed` program creates the demo companies if they're missing. A cold start takes about 2 minutes on 0.1 CPU; that only happens on a deploy or a platform restart. Render's health check uses `/healthz`, which nginx answers itself.
+
+**Settings on the live site** (image defaults, plus two secrets set on Render): `DJANGO_DEBUG=false`, `DEMO_MODE=true`, `SECURE_PROXY_SSL=true`, `STRIPE_MOCK=true`, `TRUSTED_PROXY_COUNT=2` (Render's proxy + our nginx), and the secrets `DATABASE_URL` (Neon) and `DJANGO_SECRET_KEY`.
+
+**Demo mode:** the published demo logins can't change their password or profile. The demo companies are rebuilt every night at 02:30 IST, and accounts or workspaces visitors create are removed after 7 days (see [Security](10-security.md)).
+
+**Limits:** pages are slower than locally (0.1 CPU); attachments uploaded on the live site are lost on redeploy (the container disk isn't permanent); free tiers can change, and UptimeRobot emails you if the site goes down.
+
 ## Cost
 
-Everything uses free tiers: Docker Desktop, GitHub Actions minutes, GitHub Container Registry (public images) and Stripe test mode / stripe-mock. The server deploy stays switched off unless you enable it.
+Everything uses free tiers: Docker Desktop, GitHub Actions minutes, GitHub Container Registry (public images), Stripe's stripe-mock, and for the live site Render (free web service), Neon (free Postgres) and UptimeRobot (free monitoring). Nothing is billed unless a plan is upgraded by hand.

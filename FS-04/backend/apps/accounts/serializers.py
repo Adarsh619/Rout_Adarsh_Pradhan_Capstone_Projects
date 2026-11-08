@@ -1,7 +1,10 @@
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
+
+from .demo import is_locked_demo_account
 
 User = get_user_model()
 
@@ -21,6 +24,22 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = ["id", "email", "full_name", "display_name"]
         read_only_fields = ["id", "email"]
+
+
+class MeSerializer(UserSerializer):
+    """The signed-in user, plus what the app needs to know about the public demo."""
+
+    demo_mode = serializers.SerializerMethodField()
+    is_demo_account = serializers.SerializerMethodField()
+
+    class Meta(UserSerializer.Meta):
+        fields = [*UserSerializer.Meta.fields, "demo_mode", "is_demo_account"]
+
+    def get_demo_mode(self, _user) -> bool:
+        return settings.DEMO_MODE
+
+    def get_is_demo_account(self, user) -> bool:
+        return is_locked_demo_account(user)
 
 
 class RegisterSerializer(serializers.Serializer):

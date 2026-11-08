@@ -15,7 +15,7 @@ jobs and **Stripe subscription billing** (test mode).
 | Frontend | React 18 · Vite · React Router · @hello-pangea/dnd |
 | Infra | Docker Compose · nginx · GitHub Actions (test → smoke-test → publish images → verify the published release → GitHub Release) |
 
-**Status:** all seven steps of the brief are built, reviewed day by day and tested: **176 backend tests (96% coverage)**, **61 frontend tests**, and a CI smoke test that starts the whole Docker stack on every push.
+**Status:** all seven steps of the brief are built, reviewed day by day and tested: **185 backend tests (96% coverage)**, **62 frontend tests**, and a CI smoke test that starts the whole Docker stack on every push.
 
 ![Architecture](docs/assets/architecture.png)
 
@@ -130,8 +130,8 @@ Django reads `.env` through VS Code's launch config. In a plain terminal, set th
 ## Tests
 
 ```bash
-cd backend && pytest            # 176 tests, 96% coverage (fails below 90%), PostgreSQL + stripe-mock, ~45 s
-cd frontend && npm test         # 61 tests: Vitest + Testing Library
+cd backend && pytest            # 185 tests, 96% coverage (fails below 90%), PostgreSQL + stripe-mock, ~45 s
+cd frontend && npm test         # 62 tests: Vitest + Testing Library
 ```
 
 Results and performance numbers: [docs/12-testing.md](docs/12-testing.md).

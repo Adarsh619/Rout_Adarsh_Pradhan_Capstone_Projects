@@ -230,25 +230,43 @@ jobs:
           gh release create "$GITHUB_REF_NAME" FS-04/docker-compose.release.yml taskflow.env.example \
             --title "TaskFlow ${GITHUB_REF_NAME}" --notes-file notes.md --verify-tag
 
-  # Optional live-server deploy (Level B). Switched off until a server exists: set the repository
-  # variable DEPLOY_ENABLED=true and the deploy secrets. Until then it is skipped and records nothing.
+  # Live site (Level B): after the published release is verified, deploy this commit to the free Render web
+  # service (all-in-one image from FS-04/deploy/render, database on Neon), wait until the site reports this
+  # commit, then smoke-test it read-only. Switched on by the repository variable DEPLOY_ENABLED=true, with
+  # LIVE_URL (variable) and BACKEND_DEPLOY_HOOK (secret). Only pushes to main deploy.
   deploy-server:
-    name: Deploy to server
+    name: Deploy live site
     needs: [verify-release]
-    if: vars.DEPLOY_ENABLED == 'true'
+    if: vars.DEPLOY_ENABLED == 'true' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    environment: production
+    timeout-minutes: 30
+    environment:
+      name: production
+      url: ${{ vars.LIVE_URL }}
     steps:
-      - name: Trigger deploy hooks (Render / Railway / any platform with a deploy webhook)
+      - uses: actions/checkout@v4
+      - name: Trigger the deploy of this commit
         env:
           BACKEND_DEPLOY_HOOK: ${{ secrets.BACKEND_DEPLOY_HOOK }}
-          FRONTEND_DEPLOY_HOOK: ${{ secrets.FRONTEND_DEPLOY_HOOK }}
+          LIVE_URL: ${{ vars.LIVE_URL }}
         run: |
-          if [ -z "$BACKEND_DEPLOY_HOOK" ]; then
-            echo "::error::DEPLOY_ENABLED is true but BACKEND_DEPLOY_HOOK isn't set."
+          if [ -z "$BACKEND_DEPLOY_HOOK" ] || [ -z "$LIVE_URL" ]; then
+            echo "::error::DEPLOY_ENABLED is true but BACKEND_DEPLOY_HOOK (secret) or LIVE_URL (variable) isn't set."
             exit 1
           fi
-          curl -fsS -X POST "$BACKEND_DEPLOY_HOOK"
-          # A configured frontend hook that fails must fail the job, not be swallowed.
-          if [ -n "$FRONTEND_DEPLOY_HOOK" ]; then curl -fsS -X POST "$FRONTEND_DEPLOY_HOOK"; fi
+          # Render deploy hooks accept ref=<commit> to deploy exactly this commit.
+          curl -fsS -X POST "${BACKEND_DEPLOY_HOOK}&ref=${GITHUB_SHA}" -o /dev/null
+      - name: Wait until the live site runs this commit
+        env:
+          LIVE_URL: ${{ vars.LIVE_URL }}
+        run: |
+          for i in $(seq 1 100); do
+            version=$(curl -fsS "$LIVE_URL/api/health/" 2>/dev/null | python3 -c "import json,sys; print(json.load(sys.stdin).get('version',''))" 2>/dev/null || true)
+            if [ "$version" = "$GITHUB_SHA" ]; then echo "Live site runs $GITHUB_SHA"; exit 0; fi
+            echo "waiting ($i): live version is '${version:-unreachable}'"
+            sleep 15
+          done
+          echo "::error::The live site didn't switch to $GITHUB_SHA within 25 minutes."
+          exit 1
+      - name: Smoke-test the live site (read-only)
+        run: bash FS-04/scripts/smoke-test.sh --read-only "${{ vars.LIVE_URL }}"

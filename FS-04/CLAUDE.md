@@ -1,7 +1,7 @@
 # CLAUDE.md — FS-04 TaskFlow
 
 Multi-tenant, Jira-style project management SaaS (capstone FS-04). Every company gets an isolated workspace with projects, drag-and-drop Kanban boards, sprints, workflows, an audit log, webhooks, background jobs and Stripe billing.
-Status: build complete, released as **v1.0.1**. Full docs: [`docs/README.md`](docs/README.md).
+Status: build complete, released as **v1.0.1**; free always-on live demo (Render + Neon, see below). Full docs: [`docs/README.md`](docs/README.md).
 
 ## Working rules
 
@@ -22,6 +22,7 @@ Status: build complete, released as **v1.0.1**. Full docs: [`docs/README.md`](do
 | Frontend | React 18, Vite 5, React Router 6 (v7 flags on), @hello-pangea/dnd, Vitest 2 + Testing Library, ESLint 9 |
 | Infra | Docker Compose (7 services: db, redis, stripe-mock, backend, worker, beat, frontend/nginx), gunicorn, WhiteNoise, GitHub Actions, GHCR images (amd64 + arm64) |
 | Tooling | ruff (line length 110), pytest + pytest-django + pytest-cov (coverage gate 90%) |
+| Live demo | Render free web service running `deploy/render/Dockerfile` (all processes in one container under supervisord, 512 MB / 0.1 CPU) + Neon free Postgres + UptimeRobot keep-alive; `DEMO_MODE=true` locks the demo logins and resets the demo nightly |
 
 Roles per workspace: viewer < member < admin < owner. Demo logins (from `seed_demo`, password `demo12345`): `owner@acme.test`, `admin1@`, `member2@`, `member3@`, `viewer4@acme.test`, and `owner@globex.test`.
 
@@ -57,7 +58,7 @@ bash scripts/smoke-test.sh http://localhost:3000                 # same checks C
 export DATABASE_URL=postgres://taskflow:taskflow@localhost:5432/taskflow DJANGO_SECRET_KEY=ci-secret STRIPE_MOCK_URL=http://localhost:12111
 .venv/Scripts/python -m ruff check .
 .venv/Scripts/python manage.py makemigrations --check --dry-run
-.venv/Scripts/python -m pytest -p no:cacheprovider -W ignore --cov-fail-under=90     # 176 tests, ~96%, ~45 s
+.venv/Scripts/python -m pytest -p no:cacheprovider -W ignore --cov-fail-under=90     # 185 tests, ~96%, ~45 s
 .venv/Scripts/python -m pytest tests/test_issues_api.py --no-cov                     # one suite
 .venv/Scripts/python manage.py spectacular --file ../docs/openapi.yaml               # regenerate the API schema (expect 0 errors)
 ```
@@ -67,9 +68,17 @@ export DATABASE_URL=postgres://taskflow:taskflow@localhost:5432/taskflow DJANGO_
 ```bash
 npm ci
 npm run lint
-npx vitest run          # 61 tests (npm test does the same)
+npx vitest run          # 62 tests (npm test does the same)
 npm run build
 npm run dev             # http://localhost:5173, proxies /api to :8000
+```
+
+**Live-site image** (from `FS-04/`; mirrors Render's free limits)
+
+```bash
+docker build -f deploy/render/Dockerfile -t taskflow-live .
+docker run --rm -p 3005:10000 --memory 512m --cpus 0.1 -e DATABASE_URL=postgres://... -e DJANGO_SECRET_KEY=... taskflow-live
+bash scripts/smoke-test.sh --read-only http://localhost:3005   # read-only: signs in, creates nothing (use on the live site)
 ```
 
 **Run a published release** (no build; settings such as `TASKFLOW_TAG` and `FRONTEND_PORT` go in `.env`)
@@ -95,4 +104,5 @@ curl -s "https://api.github.com/repos/Adarsh619/Rout_Adarsh_Pradhan_Capstone_Pro
 - Docker Desktop sometimes stops mid-session; if tests hang on Postgres, check `docker info` first.
 - A source-built stack and a release stack both bind the API to `127.0.0.1:8000`; stop one before starting the other.
 - Tests use the fast MD5 password hasher and fake DNS for webhooks (autouse fixtures in `backend/tests/conftest.py`); shared helpers `new_issue`, `move`, `new_sprint` and `stripe_live` live there too.
-- Pending and optional: "Level B" live server (Oracle Cloud free ARM VM; `deploy-server` job ready, switched off).
+- `kombu` is pinned to 5.6.2: 5.7.0 imports `packaging` without declaring it and the Celery worker crashes in a fresh image. The full smoke test runs a real Celery job to catch this.
+- The live container takes ~2 min to start on 0.1 CPU; Render's health check uses `/healthz` (answered by nginx), CI waits on `/api/health/` `version` = the deployed commit.

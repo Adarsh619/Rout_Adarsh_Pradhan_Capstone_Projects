@@ -22,6 +22,19 @@ Security rests on four checks run on every request: who you are, which tenant yo
 | Client IP | Browsers can send any `X-Forwarded-For` header, and nginx appends the real address to it. `TRUSTED_PROXY_COUNT` (1 in Docker Compose, 0 by default) says how many proxies to trust, and the address is read from the right-hand end, the entry our own proxy added. The audit log and the rate limits (DRF `NUM_PROXIES`) use the same rule, so a made-up header can neither fake an audit IP nor dodge the login limit | `config/settings.py`, `apps/audit/services.py::client_ip` |
 | CSV export | Cells that start with `=`, `+`, `-` or `@` are prefixed with `'`, so a spreadsheet shows a formula-like issue title or sprint name as text instead of running it | `apps/audit/views.py::csv_safe` |
 
+## Public demo site (`DEMO_MODE=true`)
+
+The live demo publishes its logins (`owner@acme.test` / `demo12345` and the other seeded users), so anyone can use them:
+
+| Risk | Protection |
+|---|---|
+| A visitor changes a demo password and locks everyone else out | Demo logins (`@acme.test`, `@globex.test`) can't change their password or profile: 403 with an explanation, and the Account page is read-only for them (`apps/accounts/demo.py`) |
+| Visitors delete or vandalise the demo data | Every night at 02:30 IST, Celery beat rebuilds both demo companies and resets their passwords (`apps/tracker/tasks.py::reset_demo_data`) |
+| Visitors' own sign-ups pile up | Workspaces and accounts visitors create are deleted after `DEMO_VISITOR_RETENTION_DAYS` (7) |
+| Someone thinks it's private data | A banner on every page says it's a shared demo that resets nightly |
+
+Outside demo mode (local, CI) these accounts behave like any other.
+
 ## Before a real production launch
 
 - Set `DJANGO_DEBUG=false`, a long random `DJANGO_SECRET_KEY`, and exact `DJANGO_ALLOWED_HOSTS` / `CORS_ALLOWED_ORIGINS`.

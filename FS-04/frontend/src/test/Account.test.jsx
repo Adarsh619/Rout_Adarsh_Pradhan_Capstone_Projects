@@ -8,12 +8,12 @@ import Account from "../pages/Account";
 const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 const USER = { id: 1, email: "owner@acme.test", full_name: "Allison Hill", display_name: "Allison Hill" };
 
-function renderAccount(handlers) {
+function renderAccount(handlers, user = USER) {
   tokens.set({ access: "a1", refresh: "r1" });
   const fetch = vi.fn(async (url, opts = {}) => {
     for (const [pattern, handler] of Object.entries(handlers)) if (url.endsWith(pattern) && opts.method === "POST") return handler(opts);
     if (url.endsWith("/auth/me/") && opts.method === "PATCH") return json(200, { ...USER, ...JSON.parse(opts.body), display_name: JSON.parse(opts.body).full_name });
-    return json(200, USER);
+    return json(200, user);
   });
   vi.stubGlobal("fetch", fetch);
   render(
@@ -72,4 +72,13 @@ it("saves a new display name", async () => {
   type("Full name", "Allison H.");
   fireEvent.click(screen.getByRole("button", { name: "Save name" }));
   expect(await screen.findByText("Name saved.")).toBeInTheDocument();
+});
+
+it("locks the shared demo login on the live demo site", async () => {
+  const fetch = renderAccount({}, { ...USER, demo_mode: true, is_demo_account: true });
+  expect(await screen.findByText(/Shared demo account/)).toBeInTheDocument();
+  expect(screen.getByLabelText("Full name")).toBeDisabled();
+  expect(screen.getByLabelText("Current password")).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Change password" })).toBeDisabled();
+  expect(fetch.mock.calls.some(([url, o]) => url.endsWith("/auth/password/") && o?.method === "POST")).toBe(false);
 });

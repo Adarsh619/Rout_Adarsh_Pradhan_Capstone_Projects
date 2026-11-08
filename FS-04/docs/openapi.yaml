@@ -285,7 +285,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/User'
+                $ref: '#/components/schemas/Me'
           description: ''
     put:
       operationId: auth_me_update
@@ -295,13 +295,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/User'
+              $ref: '#/components/schemas/Me'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/User'
+              $ref: '#/components/schemas/Me'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/User'
+              $ref: '#/components/schemas/Me'
       security:
       - jwtAuth: []
       responses:
@@ -309,7 +309,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/User'
+                $ref: '#/components/schemas/Me'
           description: ''
     patch:
       operationId: auth_me_partial_update
@@ -319,13 +319,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PatchedUser'
+              $ref: '#/components/schemas/PatchedMe'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/PatchedUser'
+              $ref: '#/components/schemas/PatchedMe'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/PatchedUser'
+              $ref: '#/components/schemas/PatchedMe'
       security:
       - jwtAuth: []
       responses:
@@ -333,7 +333,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/User'
+                $ref: '#/components/schemas/Me'
           description: ''
   /api/auth/password/:
     post:
@@ -3609,6 +3609,36 @@ components:
       description: |-
         * `kanban` - Kanban
         * `scrum` - Scrum
+    Me:
+      type: object
+      description: The signed-in user, plus what the app needs to know about the public
+        demo.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+        full_name:
+          type: string
+          maxLength: 150
+        display_name:
+          type: string
+          readOnly: true
+        demo_mode:
+          type: boolean
+          readOnly: true
+        is_demo_account:
+          type: boolean
+          readOnly: true
+      required:
+      - demo_mode
+      - display_name
+      - email
+      - id
+      - is_demo_account
     Membership:
       type: object
       properties:
@@ -4194,6 +4224,30 @@ components:
           type: string
           format: date-time
           readOnly: true
+    PatchedMe:
+      type: object
+      description: The signed-in user, plus what the app needs to know about the public
+        demo.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+        full_name:
+          type: string
+          maxLength: 150
+        display_name:
+          type: string
+          readOnly: true
+        demo_mode:
+          type: boolean
+          readOnly: true
+        is_demo_account:
+          type: boolean
+          readOnly: true
     PatchedMembership:
       type: object
       properties:
@@ -4311,22 +4365,6 @@ components:
         created_at:
           type: string
           format: date-time
-          readOnly: true
-    PatchedUser:
-      type: object
-      properties:
-        id:
-          type: integer
-          readOnly: true
-        email:
-          type: string
-          format: email
-          readOnly: true
-        full_name:
-          type: string
-          maxLength: 150
-        display_name:
-          type: string
           readOnly: true
     PatchedWebhook:
       type: object
