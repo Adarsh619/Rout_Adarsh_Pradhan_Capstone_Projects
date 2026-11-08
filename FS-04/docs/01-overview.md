@@ -38,7 +38,7 @@ In numbers: **185 backend tests at 96% coverage**, **62 frontend tests**, the bo
 
 | Deliverable | Where |
 |---|---|
-| Working demo | Run locally with Docker ([14](14-setup.md)); record the screen for the demo video (script in the [presentation outline](guides/PRESENTATION_OUTLINE.md)) |
+| Working demo | **Live: [taskflow-fs04.onrender.com](https://taskflow-fs04.onrender.com)** (demo logins in the README; [hosting](11-devops.md#live-deployment-free-always-on)); also runs locally with Docker ([14](14-setup.md)); demo video script in the [presentation outline](guides/PRESENTATION_OUTLINE.md) |
 | GitHub repo with clean commits, README, setup | Repository root `README.md`; [commit plan](guides/COMMIT_PLAN.md) |
 | Architecture diagram + data/API docs | [03](03-architecture.md), [05](05-data-model.md), [06](06-api.md), [`openapi.yaml`](openapi.yaml) |
 | Test results + performance numbers | [12](12-testing.md) |

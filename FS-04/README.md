@@ -2,6 +2,20 @@
 
 [![FS-04 CI/CD](https://github.com/Adarsh619/Rout_Adarsh_Pradhan_Capstone_Projects/actions/workflows/fs04-ci.yml/badge.svg?branch=main)](https://github.com/Adarsh619/Rout_Adarsh_Pradhan_Capstone_Projects/actions/workflows/fs04-ci.yml)
 
+## 🔗 Live demo: [taskflow-fs04.onrender.com](https://taskflow-fs04.onrender.com)
+
+Sign in with any of these (password `demo12345`) to see each role:
+
+| Role | Login |
+|---|---|
+| Owner (billing, everything) | `owner@acme.test` |
+| Admin | `admin1@acme.test` |
+| Member | `member2@acme.test` |
+| Viewer (read-only) | `viewer4@acme.test` |
+| Owner of a second, isolated company | `owner@globex.test` |
+
+It's a **shared demo**: the demo logins can't change their password, the demo data resets every night (02:30 IST), and accounts you create yourself are removed after 7 days. Billing runs in Stripe mock mode, so no real payment is ever taken. Every tested push to `main` is deployed here automatically ([how it's hosted](docs/11-devops.md#live-deployment-free-always-on)).
+
 A Jira-style product where every company gets its own **isolated workspace** with projects, drag-and-drop
 Kanban boards, sprints, custom workflows, comments, attachments, an audit log, outgoing webhooks, background
 jobs and **Stripe subscription billing** (test mode).
