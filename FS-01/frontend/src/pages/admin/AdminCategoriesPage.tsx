@@ -2,7 +2,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router";
 import { createCategory, deleteCategory, updateCategory, useAdminCategories, type AdminCategory } from "../../api/admin";
+import { setCategoryCommission } from "../../api/analytics";
 import { ApiError } from "../../api/client";
+import { CommissionEditor } from "../../components/CommissionEditor";
 import { LoadError, Loading, StatusBadge } from "../../components/Catalog";
 import { FormError } from "../../components/Field";
 
@@ -56,6 +58,17 @@ export function AdminCategoriesPage() {
             <StatusBadge status="inactive" label="Hidden" />
           </span>
         )}
+        <span className="ml-3 font-normal">
+          <CommissionEditor
+            label={c.name}
+            rateBp={c.commissionRateBp}
+            inherited={child ? "(department's rate)" : "(10% platform default)"}
+            onSave={async (rate) => {
+              await setCategoryCommission(c.id, rate);
+              await refresh();
+            }}
+          />
+        </span>
       </span>
       <span className="flex gap-3 text-sm">
         <button type="button" disabled={busy} onClick={() => void act(() => updateCategory(c.id, { isActive: !c.isActive }))} className="text-brand-700 hover:underline">
@@ -106,6 +119,10 @@ export function AdminCategoriesPage() {
 
       <FormError message={error} />
 
+      <p className="text-sm text-slate-600">
+        Commission for new orders: a store's own rate if it has one, else the category's, else its department's, else 10%. Orders already placed keep the
+        rate they were placed with.
+      </p>
       <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white px-5 shadow-sm">
         {departments.map((d) => (
           <li key={d.id} className="py-2">

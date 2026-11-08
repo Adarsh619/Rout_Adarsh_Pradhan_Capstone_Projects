@@ -10,10 +10,10 @@ Read the files in order, or jump to the topic you need. Topics without a link ar
 | 01 | [Overview](01-overview.md) | Problem, tech stack, scope against the brief | ✓ |
 | 02 | [Features and roles](02-features-and-roles.md) | What customers, vendors and admins can do | ✓ |
 | 03 | [System architecture](03-architecture.md) | Components, request flow, diagram, local vs live | ✓ |
-| 04 | [Design decisions](04-design-decisions.md) | Razorpay + own split engine (and why not Route), sub-orders, escrow, paise, Elasticsearch sync, S3 uploads, stock reservation, test payment gateway, coupons, ratings, invoices | ✓ |
+| 04 | [Design decisions](04-design-decisions.md) | Razorpay + own split engine (and why not Route), sub-orders, escrow, paise, Elasticsearch sync, S3 uploads, stock reservation, test payment gateway, coupons, ratings, invoices, live reports | ✓ |
 | 05 | [Data model](05-data-model.md) | Collections, relationships, ER diagram, money rules | ✓ |
-| 06 | [API reference](06-api-reference.md) | Conventions, errors, vendors, categories, products, uploads, search, addresses, cart, checkout, orders, coupons, reviews, invoices (with examples) | ✓ |
-| 07 | Frontend | React structure, pages, state | Day 8 |
+| 06 | [API reference](06-api-reference.md) | Conventions, errors, vendors, categories, products, uploads, search, addresses, cart, checkout, orders, reports, admin tools, coupons, reviews, invoices (with examples) | ✓ |
+| 07 | [Frontend](07-frontend.md) | Layout, screens by role, state and the API client, payments in the browser, charts, loading/empty/error states, phones and accessibility, tests | ✓ |
 | 08 | [Background jobs and search](08-background-jobs.md) | BullMQ queues and retries; keeping Elasticsearch in step; giving back stock from unpaid orders; invoice PDFs; zero-downtime reindex; how search scores | ✓ |
 | 09 | [Payments, escrow and payouts](09-payments.md) | Razorpay test-mode checkout, signature and capture checks, webhooks, the ledger and why it balances, held → released → paid shares, refunds, coupons and who pays for them, simulated payouts | ✓ |
 | 10 | [Security](10-security.md) | Passwords, tokens and sessions, roles, rate limits, CSRF | ✓ |

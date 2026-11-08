@@ -13,5 +13,7 @@ export default defineConfig({
     environment: "jsdom",
     setupFiles: ["src/test/setup.ts"],
     css: false,
+    // Page tests type into forms with user-event, which is slow in jsdom when many files run in parallel (and on CI).
+    testTimeout: 15_000,
   },
 });

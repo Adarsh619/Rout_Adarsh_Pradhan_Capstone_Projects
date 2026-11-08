@@ -1,6 +1,6 @@
 # 08 · Background jobs and search
 
-[← API reference](06-api-reference.md) · [Index](README.md) · [Next: Payments, escrow and payouts →](09-payments.md)
+[← Frontend](07-frontend.md) · [Index](README.md) · [Next: Payments, escrow and payouts →](09-payments.md)
 
 Slow or retryable work runs in a separate **worker** process (`backend/src/worker.ts`), not inside API requests.
 The API puts a job on a **BullMQ** queue in Redis and answers straight away; the worker picks the job up, and retries

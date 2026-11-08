@@ -79,7 +79,10 @@ retried job or a repeated webhook can never record the same movement twice.
 
 > money kept = `payment` − `refund` = (`vendor_hold` − `vendor_reversal`) + (`commission` − `commission_reversal`)
 
-The integration tests check this after payment, after delivery and after a cancellation.
+The integration tests check this after payment, after delivery and after a cancellation. One thing sits outside it
+for a while: a refund promised but not yet made by Razorpay. Until it goes through, its amount is still in `payment −
+refund`, so the two sides differ by exactly the refunds owed, which the admin dashboard shows (`refundsOwed`). On the
+local demo data on 8 Nov they differed by ₹3,399: the one Razorpay test refund that was refused.
 
 **Worked example** (from the tests): a ₹20,000 phone from Vikram Electronics and two ₹299 cables from Meera Gadgets, 15% commission.
 

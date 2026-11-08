@@ -111,3 +111,9 @@ Each decision lists what was chosen, the alternatives, and why.
 - **Chosen:** when an order is paid the worker renders one PDF per store's part with pdfkit (built-in PDF fonts, nothing to bundle) and stores it under a private `invoices/` key. The API hands the buyer, the seller and admins a 5-minute signed download link on request.
 - **Alternatives:** render on every download (slow, and the invoice could differ later); a headless browser (hundreds of MB in the image).
 - **Why:** the payment request stays fast, an invoice never changes once issued, and nobody can guess a link to someone else's invoice.
+
+## 17. Reports computed live from the ledger
+
+- **Chosen:** the admin analytics and vendor earnings pages are aggregation queries run on request over the append-only ledger (what money moved), the parts' payout status (where each share is now) and orders (counts). Days are counted in Indian time.
+- **Alternatives:** a separate statistics table updated on every event, or a nightly roll-up job.
+- **Why:** the figures can never drift from the money records they summarise, there's nothing extra to keep in step, and at this scale (thousands of orders) each report takes milliseconds with the existing indexes. A roll-up is the next step if order volume grows by orders of magnitude.

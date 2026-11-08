@@ -2,10 +2,16 @@
 
 const inr = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 });
 const inrWhole = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 });
+const inrCompact = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", notation: "compact", maximumFractionDigits: 1 });
 
 // ₹1,999 or ₹1,999.50 (decimals only when there are paise).
 export function formatINR(paise: number): string {
   return (paise % 100 === 0 ? inrWhole : inr).format(paise / 100);
+}
+
+// Short amounts for chart axes: ₹950, ₹12K, ₹2.1L, ₹1.2Cr.
+export function formatCompactINR(paise: number): string {
+  return inrCompact.format(paise / 100);
 }
 
 // What a vendor types ("1,999", "₹ 1999.5") → paise, or undefined if it isn't an amount.

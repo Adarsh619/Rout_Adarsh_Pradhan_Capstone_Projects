@@ -22,6 +22,7 @@ held until delivery. Self-contained: never share servers, files or code with FS-
 docker compose up -d --build
 docker compose exec api node dist/scripts/seed-users.js
 docker compose exec api node dist/scripts/seed-catalog.js            # --no-images keeps existing photos
+docker compose exec api node dist/scripts/seed-orders.js             # 40 backdated demo orders (runs once; needs photos/active products)
 docker compose exec api node dist/scripts/reindex.js                 # rebuild search behind the alias
 
 # Backend (from backend/)

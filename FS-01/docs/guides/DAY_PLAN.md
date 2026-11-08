@@ -1,7 +1,7 @@
 # FS-01 · ShopSphere: 10-Day Build Tracker
 
 Tick a box (`[x]`) when an item is done. Each day ends with something that works, a commit (approved first), and the matching doc.
-Started **Tue 3 Nov 2026**. Day 4 finished a day early (Thu 5 Nov), so Days 5–10 were re-dated on 5 Nov. Final deadline: **20 Nov 2026**.
+Started **Tue 3 Nov 2026**. Days 4 and 7 each finished a day early, so the remaining days were re-dated on 5 and 8 Nov. Final deadline: **20 Nov 2026**.
 
 **Legend:** 🛠 build (Claude + you) · 👤 your own task (accounts, recording, writing) · ✅ end-of-day proof
 
@@ -74,19 +74,20 @@ Started **Tue 3 Nov 2026**. Day 4 finished a day early (Thu 5 Nov), so Days 5–
 - [x] 🛠 Coupons: platform or vendor, % or flat, minimum order, usage limits, expiry
 - [x] 🛠 PDF invoice per sub-order, generated in the background, stored in S3, download link
 - [x] 🛠 Tests for review rules, coupon maths, invoices
-- [ ] 👤 Oracle VM retry; create MongoDB Atlas M0 (Mumbai), DuckDNS name, Vercel and UptimeRobot accounts
+- [x] 👤 Create MongoDB Atlas M0 (Mumbai), DuckDNS name, Vercel and UptimeRobot accounts (Oracle retries ended: no capacity)
 - [x] ✅ Buy with a coupon → invoice PDF downloads → leave a review
 
-## Day 8 · Mon 9 Nov · Admin analytics & polish (brief step 7, part 2)
-- [ ] 🛠 Admin analytics: sales total (GMV), commission earned, orders by status, daily sales chart, top vendors/products
-- [ ] 🛠 Vendor earnings page (held / released / settled)
-- [ ] 🛠 Admin pages: vendors, commission rates, refunds, review moderation
-- [ ] 🛠 UI polish: loading, empty and error states; mobile layout; doc 07 (frontend)
+## Day 8 · Sun 8 Nov · Admin analytics & polish (brief step 7, part 2)
+- [x] 🛠 Admin analytics: sales total (GMV), commission earned, orders by status, daily sales chart, top vendors/products
+- [x] 🛠 Vendor earnings page (held / released / settled)
+- [x] 🛠 Admin pages: vendors, commission rates, refunds, review moderation
+- [x] 🛠 UI polish: loading, empty and error states; mobile layout; doc 07 (frontend)
 - [x] 👤 **Hosting decision:** Oracle VM if it was created by now, otherwise the AWS fallback (EC2 t4g.small in Mumbai on free-plan credits). **Decided Sat 7 Nov: AWS** (Oracle out of capacity every day since 3 Nov)
 - [ ] 👤 Create the S3 bucket and a limited access key
-- [ ] ✅ Dashboards show correct numbers for the seeded data
+- [x] 🛠 Demo order history: `seed-orders` (40 orders over 30 days through the real checkout, payment, delivery, payout and refund code)
+- [x] ✅ Dashboards show correct numbers for the seeded data (checked against direct database sums)
 
-## Day 9 · Tue 10 Nov · Live deployment & performance (brief step 7, part 3)
+## Day 9 · Mon 9 Nov · Live deployment & performance (brief step 7, part 3)
 - [ ] 🛠 `docker-compose.prod.yml`, `deploy/Caddyfile`, `deploy/server-setup.sh`
 - [ ] 🛠 Server (Oracle VM or AWS EC2): Docker, swap, Elasticsearch setting, ports 80/443, HTTPS via Caddy + DuckDNS
 - [ ] 🛠 Backend live on the server; frontend live on Vercel; Atlas, S3, Razorpay test webhook connected
@@ -94,7 +95,7 @@ Started **Tue 3 Nov 2026**. Day 4 finished a day early (Thu 5 Nov), so Days 5–
 - [ ] 🛠 Performance: k6 search speed (with ~20k Amazon products), cache hit vs miss; one Playwright end-to-end test
 - [ ] ✅ Live links run the full demo; results recorded
 
-## Day 10 · Wed 11 Nov · Deliverables
+## Day 10 · Tue 10 Nov · Deliverables
 - [ ] 🛠 Finish docs 01–14 + `openapi.yaml`, README with setup instructions, root README row
 - [ ] 🛠 Test and coverage report, performance numbers in doc 12
 - [ ] 🛠 Presentation outline (10 min: problem, design, challenges, results, next steps) and reflection template
@@ -119,8 +120,8 @@ Started **Tue 3 Nov 2026**. Day 4 finished a day early (Thu 5 Nov), so Days 5–
 3. Vendor coupons → platform coupons only
 4. Neither Oracle nor AWS works out → fallback C (recorded demo, run locally)
 
-## Buffer · Thu 12 – Fri 20 Nov
-- [ ] Thu 12 – Fri 13: catch up on anything that slipped, then put back whatever was cut above (20k dataset first)
+## Buffer · Wed 11 – Fri 20 Nov
+- [ ] Wed 11 – Fri 13: catch up on anything that slipped, then put back whatever was cut above (20k dataset first); FS-04's optional live site
 - [ ] Sat 14 – Sun 15: watch the live site for two nights (uptime, nightly reset, credits used); fix what shows up
 - [ ] Mon 16 – Tue 17: rehearse the 10-minute presentation twice; write the reflection
 - [ ] Wed 18 – Thu 19: final read of the docs and README; re-record the demo if the app changed

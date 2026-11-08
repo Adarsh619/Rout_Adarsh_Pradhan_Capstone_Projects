@@ -1,8 +1,8 @@
 # 06 · API reference
 
-[← Data model](05-data-model.md) · [Index](README.md) · [Next: Background jobs and search →](08-background-jobs.md)
+[← Data model](05-data-model.md) · [Index](README.md) · [Next: Frontend →](07-frontend.md)
 
-This page documents the endpoints that exist today, with real request and response shapes (Days 1–7). The full plan, including
+This page documents the endpoints that exist today, with real request and response shapes (Days 1–8). The full plan, including
 endpoints still to come, is the [API list](specs/04-api-list.md). A machine-readable `openapi.yaml` follows on Day 10.
 
 ## Conventions
@@ -355,6 +355,57 @@ Delivering releases the store's share and the worker pays it out.
 Registers the account with the payout provider (simulated) and keeps only the last 4 digits. Shares already released
 and waiting for these details are sent straight away (`payoutsStarted`).
 
+## Reports
+
+All amounts in paise; days are **Indian time** (midnight to midnight IST). `from` and `to` are `YYYY-MM-DD`, both
+included, default the last 30 days, at most 366 days.
+
+### `GET /admin/analytics?from=&to=` (admin)
+
+```json
+{ "range": { "from": "2026-10-10", "to": "2026-11-08" },
+  "totals": { "gmv": 51333200, "cancelledValue": 13873000, "collected": 37721102, "refunds": 5032198,
+              "paidOrders": 41, "averageOrderValue": 1042763, "commission": 3746020, "platformDiscounts": 78998,
+              "platformRevenue": 3667022, "payoutsSent": 25505910 },
+  "ordersByStatus": { "completed": 28, "confirmed": 9, "cancelled": 5, "expired": 2 },
+  "partsByStatus": { "delivered": …, "shipped": …, "packed": …, "placed": …, "cancelled": … },
+  "daily": [{ "day": "2026-10-10", "sales": …, "orders": … }, …],
+  "topVendors": [{ "storeName": "Meera Fashion House", "sales": …, "orders": …, "commission": … }],
+  "topProducts": [{ "title": "…", "storeName": "…", "units": 4, "sales": … }],
+  "escrow": { "held": 8208270, "released": 0, "paid": 25505910, "reversed": 4835790, "counts": { … } },
+  "failingRefunds": 1, "refundsOwed": 339900 }
+```
+
+| Figure | Meaning | From |
+|---|---|---|
+| `gmv` | Value of everything sold (paid parts, before discounts); `cancelledValue` = how much of it was later cancelled | Parts paid in the range |
+| `collected` | Payments received minus refunds | Ledger |
+| `commission` | Commission earned minus commission given up on cancellations | Ledger |
+| `platformDiscounts` | What platform coupons cost | Ledger |
+| `platformRevenue` | `commission − platformDiscounts`: what ShopSphere keeps | Ledger |
+| `paidOrders`, `averageOrderValue` | Orders paid in the range, average amount paid | Ledger |
+| `daily` | Payments received per day, every day of the range (0 where none) | Ledger |
+| `topVendors`, `topProducts` | Top 5 by sales, cancelled parts left out | Parts paid in the range |
+| `escrow` | Where vendors' money is **now**: held until delivery, released (waiting for payout), paid, reversed | Parts' payout status |
+| `refundsOwed` | Refunds promised but not yet made by the payment provider | Parts |
+
+### `GET /vendor/earnings?from=&to=&page=` (vendor)
+
+The store's `totals` (`sales`, `couponDiscounts` it paid for, `commission`, `net` share, `orders`), its `escrow` now,
+`daily` share, `payoutAccount` (whether payouts can be sent) and the paid parts of the range, newest first, with each
+one's payout status and reference.
+
+## Admin tools
+
+| Method | Path | Body | Does |
+|---|---|---|---|
+| PATCH | `/admin/vendors/:id/commission` | `{ "commissionRateBp": 500 }` or `null` | A store's own rate (0–50%), used instead of its categories' rates for **new** orders; `null` goes back to the category rates |
+| PATCH | `/admin/categories/:id` | `{ "commissionRateBp": 1500 }` or `null` | A category's rate (a sub-category without one uses its department's, then 10%) |
+| GET | `/admin/orders?q=&refund=&page=` | | Find orders by order number (or its last digits) or customer email; `refund=failed` lists refunds that haven't gone through. Each part says whether support can refund it |
+| POST | `/admin/sub-orders/:subId/refund` | `{ "reason": "Parcel lost in transit" }` | Support cancels a part that's **placed, packed or shipped** (not delivered) and refunds it: same money rules as a customer cancellation; the reason is shown on the order's timeline |
+| POST | `/admin/sub-orders/:subId/refund/retry` | | Tries a refused refund again now instead of waiting for the hourly retry; `409` if it was already sent |
+| GET · PATCH | `/admin/reviews[/:id]` | `{ "status": "hidden" }` | Review moderation (above) |
+
 ## Coupons
 
 ### In the cart: `POST /cart/coupon` · `DELETE /cart/coupon`
@@ -520,4 +571,5 @@ the product save re-checks the stored object, which matters because the local S3
 | Commission and splitting, status rules, payment signatures | `backend/tests/order-units.test.ts` |
 | Razorpay driver, webhooks, escrow, ledger balance, refunds, payouts | `backend/tests/payment-units.test.ts`, `backend/tests/integration/payments.test.ts` |
 | Coupon maths and rules, invoice PDF; reviews, coupons and invoices end to end | `backend/tests/coupon-units.test.ts`, `backend/tests/integration/reviews-coupons-invoices.test.ts` |
+| Report date ranges; analytics and earnings totals, commission rates, support refunds and retries | `backend/tests/analytics-units.test.ts`, `backend/tests/integration/analytics.test.ts` |
 | The whole flow through nginx, S3 included, from guest cart to the vendor packing a paid order | `scripts/smoke-test.sh` (CI) |

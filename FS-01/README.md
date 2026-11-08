@@ -14,7 +14,7 @@ An Amazon-style marketplace where **many vendors sell**, **customers buy from se
 | Payments | Razorpay test mode (UPI, cards, webhooks, refunds) + own split-and-escrow ledger; built-in mock needs no account ([how it works](docs/09-payments.md)) |
 | Infra | Docker Compose · nginx · GitHub Actions |
 
-**Status:** Day 7 of 10. Sign-in and roles work end to end; vendors apply for a store, admins approve or suspend it, vendors list products with photos uploaded straight to S3, and shoppers search 214 seeded products across 5 stores with typo-tolerant Elasticsearch search. Shoppers fill one cart from several stores (as guests too), check out once with stock held for 15 minutes, pay through Razorpay's test-mode popup, and follow each store's part from placed to delivered while vendors pack and ship their own part. Each store's share is held until delivery, then paid out (simulated); cancelling a part refunds it through Razorpay. Coupons (platform or store), an invoice PDF for each store's part, and reviews from customers whose order was delivered. Progress is tracked in the [10-day build tracker](docs/guides/DAY_PLAN.md).
+**Status:** Day 8 of 10. Sign-in and roles work end to end; vendors apply for a store, admins approve or suspend it, vendors list products with photos uploaded straight to S3, and shoppers search 214 seeded products across 5 stores with typo-tolerant Elasticsearch search. Shoppers fill one cart from several stores (as guests too), check out once with stock held for 15 minutes, pay through Razorpay's test-mode popup, and follow each store's part from placed to delivered while vendors pack and ship their own part. Each store's share is held until delivery, then paid out (simulated); cancelling a part refunds it through Razorpay. Coupons (platform or store), an invoice PDF for each store's part, and reviews from customers whose order was delivered. Admins see live analytics (sales, commission, daily chart, top stores and products) and can refund and moderate; vendors see their earnings. Progress is tracked in the [10-day build tracker](docs/guides/DAY_PLAN.md).
 
 ![Architecture](docs/assets/architecture.png)
 
@@ -39,13 +39,14 @@ Create the demo accounts, then the demo catalogue (27 categories, 5 stores, 214 
 ```bash
 docker compose exec api node dist/scripts/seed-users.js
 docker compose exec api node dist/scripts/seed-catalog.js
+docker compose exec api node dist/scripts/seed-orders.js     # optional: 40 demo orders over the last 30 days
 ```
 
 | Email | Role | What to try |
 |---|---|---|
 | `customer@shopsphere.test` | Customer | Fill a cart from two stores, check out, pay (Razorpay: UPI `success@razorpay`; or the mock screen), follow the order, cancel a part to see the refund |
 | `vendor@shopsphere.test` | Vendor | Vikram Electronics: add a payout account, then pack, ship and deliver paid orders under **Orders to ship** and watch the share go held → paid out |
-| `admin@shopsphere.test` | Admin | Review the waiting application from Kavya Handicrafts; manage categories |
+| `admin@shopsphere.test` | Admin | Analytics (after `seed-orders`); orders and refunds; commission rates; review the waiting application from Kavya Handicrafts |
 | `meera@`, `arjun@`, `sana@`, `rohan@shopsphere.test` | Vendor | The other four approved stores |
 | `kavya@shopsphere.test` | Vendor | A store application waiting for approval |
 

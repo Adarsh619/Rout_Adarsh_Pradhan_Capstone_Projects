@@ -40,7 +40,7 @@ The **Day** column says when each endpoint is built; ✓ means it exists now.
 | GET | `/stores/:slug` | P | Public store page with products | ✓ 3 |
 | GET | `/admin/vendors?status=` | A | Applications and vendors, with owner, product count and counts per status | ✓ 3 |
 | POST | `/admin/vendors/:id/approve` · `/reject` · `/suspend` · `/restore` | A | Change vendor status (reject and suspend need a reason) | ✓ 3 |
-| PATCH | `/admin/vendors/:id/commission` | A | Set or clear the vendor's commission rate | 8 |
+| PATCH | `/admin/vendors/:id/commission` | A | Set or clear the vendor's commission rate | ✓ 8 |
 
 ## Categories
 
@@ -115,9 +115,11 @@ Guests are identified by an httpOnly `ss_guest` cookie; their cart merges into t
 
 | Method | Path | Role | Purpose | Day |
 |---|---|---|---|---|
-| GET | `/vendor/earnings?from=&to=` | V | Held, released and paid-out totals, commission, per sub-order list | 8 |
-| GET | `/admin/analytics?from=&to=` | A | GMV, commission, orders by status, daily sales, top vendors and products | 8 |
-| POST | `/admin/sub-orders/:subId/refund` | A | Cancel and refund a part of an order | 8 |
+| GET | `/vendor/earnings?from=&to=` | V | Held, released and paid-out totals, commission, per sub-order list | ✓ 8 |
+| GET | `/admin/analytics?from=&to=` | A | GMV, commission, orders by status, daily sales, top vendors and products, escrow, refunds owed | ✓ 8 |
+| POST | `/admin/sub-orders/:subId/refund` | A | Cancel and refund a part of an order (placed, packed or shipped) | ✓ 8 |
+| POST | `/admin/sub-orders/:subId/refund/retry` | A | Retry a refund the payment provider refused | ✓ 8 |
+| GET | `/admin/orders?q=&refund=` | A | Find orders by number or customer email; refunds not yet sent | ✓ 8 |
 
 ## Common error codes
 

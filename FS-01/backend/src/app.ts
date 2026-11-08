@@ -14,6 +14,7 @@ import { errorHandler, notFound } from "./middleware/errors.js";
 import { CSRF_HEADER } from "./middleware/csrf.js";
 import { authRouter } from "./modules/auth/auth.routes.js";
 import { addressRouter } from "./modules/account/address.routes.js";
+import { analyticsRouter } from "./modules/analytics/analytics.routes.js";
 import { CartStore } from "./modules/cart/cart-store.js";
 import { cartRouter, mergeGuestCartOnSignIn } from "./modules/cart/cart.routes.js";
 import { categoryRouter } from "./modules/catalog/category.routes.js";
@@ -133,6 +134,7 @@ export function createApp(deps: AppDeps): Express {
     reviewRouter(ctx),
     couponRouter(ctx),
     invoiceRouter(ctx),
+    analyticsRouter(ctx),
   );
 
   app.use(notFound);

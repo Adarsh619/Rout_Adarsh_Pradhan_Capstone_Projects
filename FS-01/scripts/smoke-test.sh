@@ -156,6 +156,10 @@ if [ -n "${DEMO_PASSWORD:-}" ]; then
     sleep 1
   done
   as_shopper "$BASE/api/v1/orders/$ORDER_ID" | grep -q '"status":"partially_refunded"' && check "cancelling a paid part refunds it (after ${i}s)"
+
+  # The dashboards see all of it: the admin's sales and commission, the vendor's paid-out share.
+  as_admin "$BASE/api/v1/admin/analytics" | grep -q '"paidOrders":[1-9]' && check "admin analytics counts the paid order"
+  as_vendor "$BASE/api/v1/vendor/earnings" | grep -q '"escrow":{"held":[0-9]*,"released":[0-9]*,"paid":[1-9]' && check "the vendor's earnings show the share paid out"
   rm -f "$GUEST_JAR"
 fi
 

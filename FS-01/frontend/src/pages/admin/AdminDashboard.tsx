@@ -42,7 +42,9 @@ export function AdminDashboard() {
         />
         <Card title="Categories" to="/admin/categories" text="Departments and categories shoppers browse by." />
         <Card title="Coupons" to="/admin/coupons" text="Platform-wide discount codes, paid for by ShopSphere." />
-        <Card title="Analytics" text="Sales, commission earned and orders by status (coming with checkout)." />
+        <Card title="Analytics" to="/admin/analytics" text="Sales, commission earned, daily sales, orders by status, top stores and products." />
+        <Card title="Orders and refunds" to="/admin/orders" text="Find any order; cancel and refund a part; retry refunds that didn't go through." />
+        <Card title="Reviews" to="/admin/reviews" text="Hide or show reviews; ratings follow at once." />
       </div>
       <Link to="/account" className="text-sm text-brand-700 underline">
         Account settings

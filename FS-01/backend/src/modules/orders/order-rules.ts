@@ -62,6 +62,10 @@ export const canVendorMove = (from: SubOrderStatus, to: SubOrderStatus) => VENDO
 export const CUSTOMER_CANCELLABLE: readonly SubOrderStatus[] = ["placed", "packed"];
 export const canCustomerCancel = (status: SubOrderStatus) => CUSTOMER_CANCELLABLE.includes(status);
 
+// An admin can also cancel and refund a part that's already on its way (e.g. lost in transit), but not one delivered.
+export const ADMIN_CANCELLABLE: readonly SubOrderStatus[] = ["placed", "packed", "shipped"];
+export const canAdminCancel = (status: SubOrderStatus) => ADMIN_CANCELLABLE.includes(status);
+
 // A paid order is completed once every part is delivered or cancelled (cancelled if none was delivered).
 export function rollUpOrderStatus(parts: SubOrderStatus[]): Extract<OrderStatus, "confirmed" | "completed" | "cancelled"> {
   const finished = parts.every((s) => s === "delivered" || s === "cancelled");

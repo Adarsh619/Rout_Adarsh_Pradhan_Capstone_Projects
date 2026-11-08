@@ -3,7 +3,9 @@ import { useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { useAdminVendors, vendorAction, type AdminVendor, type VendorAction } from "../../api/admin";
 import type { StoreStatus } from "../../api/catalog";
+import { setVendorCommission } from "../../api/analytics";
 import { ApiError } from "../../api/client";
+import { CommissionEditor } from "../../components/CommissionEditor";
 import { LoadError, Loading, Pagination, StatusBadge } from "../../components/Catalog";
 import { FormError } from "../../components/Field";
 
@@ -70,6 +72,19 @@ function VendorRow({ vendor, onDone }: { vendor: AdminVendor; onDone: () => Prom
             )}
           </p>
           {vendor.rejectionReason && <p className="mt-1 text-sm text-red-800">Reason given: {vendor.rejectionReason}</p>}
+          {(vendor.status === "approved" || vendor.status === "suspended") && (
+            <p className="mt-1">
+              <CommissionEditor
+                label={vendor.storeName}
+                rateBp={vendor.commissionRateBp}
+                inherited="(each category's rate)"
+                onSave={async (rate) => {
+                  await setVendorCommission(vendor.id, rate);
+                  await onDone();
+                }}
+              />
+            </p>
+          )}
         </div>
         <div className="flex gap-2">
           {ACTIONS[vendor.status].map((a) => (

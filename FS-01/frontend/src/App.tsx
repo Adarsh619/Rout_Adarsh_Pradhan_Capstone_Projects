@@ -9,9 +9,13 @@ import { CouponsPage } from "./pages/CouponsPage";
 import { CheckoutPage } from "./pages/CheckoutPage";
 import { OrderPage } from "./pages/OrderPage";
 import { OrdersPage } from "./pages/OrdersPage";
+import { VendorEarningsPage } from "./pages/vendor/VendorEarningsPage";
 import { VendorOrdersPage } from "./pages/vendor/VendorOrdersPage";
 import { AdminCategoriesPage } from "./pages/admin/AdminCategoriesPage";
+import { AdminAnalyticsPage } from "./pages/admin/AdminAnalyticsPage";
 import { AdminDashboard } from "./pages/admin/AdminDashboard";
+import { AdminOrdersPage } from "./pages/admin/AdminOrdersPage";
+import { AdminReviewsPage } from "./pages/admin/AdminReviewsPage";
 import { AdminVendorsPage } from "./pages/admin/AdminVendorsPage";
 import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
@@ -48,11 +52,15 @@ export function App() {
         <Route path="vendor/products/:id" element={only(["vendor"], <ProductEditorPage />)} />
         <Route path="vendor/orders" element={only(["vendor"], <VendorOrdersPage />)} />
         <Route path="vendor/coupons" element={only(["vendor"], <CouponsPage owner="vendor" />)} />
+        <Route path="vendor/earnings" element={only(["vendor"], <VendorEarningsPage />)} />
 
         <Route path="admin" element={only(["admin"], <AdminDashboard />)} />
         <Route path="admin/vendors" element={only(["admin"], <AdminVendorsPage />)} />
         <Route path="admin/categories" element={only(["admin"], <AdminCategoriesPage />)} />
         <Route path="admin/coupons" element={only(["admin"], <CouponsPage owner="admin" />)} />
+        <Route path="admin/analytics" element={only(["admin"], <AdminAnalyticsPage />)} />
+        <Route path="admin/orders" element={only(["admin"], <AdminOrdersPage />)} />
+        <Route path="admin/reviews" element={only(["admin"], <AdminReviewsPage />)} />
 
         <Route path="*" element={<NotFoundPage />} />
       </Route>

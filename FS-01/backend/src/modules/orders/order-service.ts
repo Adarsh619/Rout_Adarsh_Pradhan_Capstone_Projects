@@ -16,7 +16,7 @@ import type { PaymentProvider } from "../payments/payment-provider.js";
 import type { SearchSync } from "../search/search-sync.js";
 import { User } from "../users/user.model.js";
 import { Order, SubOrder, nextOrderNumber, type ActorRole, type OrderDoc, type SubOrderDoc, type SubOrderStatus } from "./order.model.js";
-import { canCustomerCancel, canVendorMove, rollUpOrderStatus, splitByVendor, VENDOR_NEXT } from "./order-rules.js";
+import { canAdminCancel, canCustomerCancel, canVendorMove, rollUpOrderStatus, splitByVendor, VENDOR_NEXT } from "./order-rules.js";
 import { priceLines } from "./pricing.js";
 import type { ReservationScheduler } from "./reservations.js";
 
@@ -324,15 +324,17 @@ async function rollUp(orderId: Types.ObjectId, session: ClientSession) {
 // the platform's commission are reversed, and what the customer paid for it is refunded through the payment provider.
 export async function cancelPart(
   deps: Pick<OrderDeps, "redis" | "searchSync" | "moneyJobs">,
-  input: { orderId: string; subOrderId: string; actor: Actor & { userId: string }; reason?: string },
+  input: { orderId?: string; subOrderId: string; actor: Actor & { userId: string }; reason?: string },
 ): Promise<SubOrderDoc> {
-  const sub = await SubOrder.findOne({ _id: input.subOrderId, orderId: input.orderId, customerId: input.actor.userId });
+  const admin = input.actor.role === "admin";
+  // A customer can only reach their own parts; an admin any part.
+  const sub = await SubOrder.findOne({ _id: input.subOrderId, ...(input.orderId && { orderId: input.orderId }), ...(!admin && { customerId: input.actor.userId }) });
   if (!sub) throw new AppError(404, "not_found", "Order not found");
   const from = sub.status as SubOrderStatus;
-  if (!canCustomerCancel(from)) {
+  if (!(admin ? canAdminCancel(from) : canCustomerCancel(from))) {
     throw new AppError(409, "invalid_transition", from === "awaiting_payment" ? "This order isn't paid yet; cancel the whole order instead" : `This part is already ${from} and can't be cancelled`, { from });
   }
-  const reason = input.reason || "Cancelled by the customer";
+  const reason = input.reason || (admin ? "Cancelled and refunded by ShopSphere support" : "Cancelled by the customer");
   const now = new Date();
   const updated = await inTransaction(async (session) => {
     const doc = await SubOrder.findOneAndUpdate(

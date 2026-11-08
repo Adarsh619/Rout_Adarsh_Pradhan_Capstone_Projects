@@ -19,6 +19,7 @@
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "seed:users": "tsx src/scripts/seed-users.ts",
     "seed:catalog": "tsx src/scripts/seed-catalog.ts",
+    "seed:orders": "tsx src/scripts/seed-orders.ts",
     "seed:snapshot": "tsx src/scripts/fetch-catalog-snapshot.ts",
     "reindex": "tsx src/scripts/reindex.ts"
   },
