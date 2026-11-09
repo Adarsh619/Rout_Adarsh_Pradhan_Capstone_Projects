@@ -1,7 +1,7 @@
 # CLAUDE.md — FS-04 TaskFlow
 
 Multi-tenant, Jira-style project management SaaS (capstone FS-04). Every company gets an isolated workspace with projects, drag-and-drop Kanban boards, sprints, workflows, an audit log, webhooks, background jobs and Stripe billing.
-Status: build complete, released as **v1.0.1**; free always-on live demo (Render + Neon, see below). Full docs: [`docs/README.md`](docs/README.md).
+Status: build complete, released as **v1.0.1**, live at **https://taskflow-fs04.onrender.com** (free, always on, auto-deployed by CI; see "Live site"). Full docs: [`docs/README.md`](docs/README.md).
 
 ## Working rules
 
@@ -31,7 +31,8 @@ Roles per workspace: viewer < member < admin < owner. Demo logins (from `seed_de
 ```
 backend/   config/ (settings, urls, celery) · apps/{accounts,tenancy,tracker,audit,integrations,billing} · tests/
 frontend/  src/{api.js,auth.jsx,workspace.jsx,boardLogic.js} · components/ · pages/ · test/
-scripts/   smoke-test.sh
+scripts/   smoke-test.sh (full, or --read-only for the live site)
+deploy/render/  all-in-one live image: Dockerfile, supervisord.conf, nginx.conf.template, start.sh
 docs/      01–14 topic docs, specs/, guides/, assets/, openapi.yaml
 docker-compose.yml          build from source
 docker-compose.release.yml  run a published release (no build)
@@ -90,13 +91,31 @@ docker compose -f docker-compose.release.yml up -d --wait
 ## CI/CD (`../.github/workflows/fs04-ci.yml`)
 
 Triggered by pushes and PRs touching `FS-04/**` and by `v*` tags:
-backend (ruff, migration check, pytest with Postgres/Redis/stripe-mock) + frontend (lint, Vitest, build) → smoke (build + `docker compose up` + `scripts/smoke-test.sh`) → publish (amd64/arm64 images to GHCR: `latest`, `sha-<commit>`, semver on tags) → verify-release (pull the published images, run `docker-compose.release.yml`, smoke-test; records a `release` deployment) → release (GitHub Release, `v*` tags only) → deploy-server (off unless repo variable `DEPLOY_ENABLED=true`).
+backend (ruff, migration check, pytest with Postgres/Redis/stripe-mock) + frontend (lint, Vitest, build) → smoke (build + `docker compose up` + `scripts/smoke-test.sh`) → publish (amd64/arm64 images to GHCR: `latest`, `sha-<commit>`, semver on tags) → verify-release (pull the published images, run `docker-compose.release.yml`, smoke-test; records a `release` deployment) → release (GitHub Release, `v*` tags only) → deploy-server (main only, on: Render deploy hook with `ref=<commit>`, wait until `/api/health/` reports the commit, then `smoke-test.sh --read-only` on the live site; records a `production` deployment).
 
 Check runs without the `gh` CLI (not installed) via the public API:
 
 ```bash
 curl -s "https://api.github.com/repos/Adarsh619/Rout_Adarsh_Pradhan_Capstone_Projects/actions/workflows/fs04-ci.yml/runs?per_page=3"
 ```
+
+## Live site
+
+| Piece | Setup |
+|---|---|
+| **Render** web service `taskflow-fs04` (Singapore, Free) | Root dir `FS-04`, Dockerfile `./deploy/render/Dockerfile`, health check `/healthz`, **auto-deploy off** (only CI deploys). Env vars: `DATABASE_URL` (Neon), `DJANGO_SECRET_KEY`; everything else is an image default (`DEMO_MODE=true`, `DJANGO_DEBUG=false`, `SECURE_PROXY_SSL=true`, `TRUSTED_PROXY_COUNT=4`, ...) |
+| **Neon** project `taskflow` (Singapore, Free) | Direct connection string (pooling off), `sslmode=require` |
+| **UptimeRobot** monitor "TaskFlow live" | `/api/health/` every 5 min: keeps Render awake (~744 of 750 free hours), emails on downtime |
+| **GitHub** repo settings | Secret `BACKEND_DEPLOY_HOOK`; variables `LIVE_URL=https://taskflow-fs04.onrender.com`, `DEPLOY_ENABLED=true` |
+
+Check the live site from here:
+
+```bash
+curl -s https://taskflow-fs04.onrender.com/api/health/          # {"status": "ok", "version": "<deployed commit>"}
+bash scripts/smoke-test.sh --read-only https://taskflow-fs04.onrender.com
+```
+
+Never run the full smoke test or create test data on the live site unless the user agrees; visitor data is purged after 7 days and the demo resets nightly (21:00 UTC).
 
 ## Gotchas
 
@@ -106,3 +125,6 @@ curl -s "https://api.github.com/repos/Adarsh619/Rout_Adarsh_Pradhan_Capstone_Pro
 - Tests use the fast MD5 password hasher and fake DNS for webhooks (autouse fixtures in `backend/tests/conftest.py`); shared helpers `new_issue`, `move`, `new_sprint` and `stripe_live` live there too.
 - `kombu` is pinned to 5.6.2: 5.7.0 imports `packaging` without declaring it and the Celery worker crashes in a fresh image. The full smoke test runs a real Celery job to catch this.
 - The live container takes ~2 min to start on 0.1 CPU; Render's health check uses `/healthz` (answered by nginx), CI waits on `/api/health/` `version` = the deployed commit.
+- Live-container programs run as `app` with `HOME=/home/app` (set in `supervisord.conf`): with root's HOME, libpq hits "permission denied" on `/root/.postgresql` and every SSL (Neon) connection fails, which a local non-SSL Postgres won't show. Test SSL with `postgres:16 -c ssl=on` (snakeoil cert; prefix with `MSYS_NO_PATHCONV=1` in Git Bash).
+- `TRUSTED_PROXY_COUNT=4` was measured on Render (Cloudflare edge → Render LB → Render proxy → nginx); the container prefers IPv4 (`/etc/gai.conf`) because Render has no IPv6 route.
+- Render's port scan triggers a harmless Redis "Possible SECURITY ATTACK" log line; Redis listens on 127.0.0.1 only.
