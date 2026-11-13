@@ -1,0 +1,120 @@
+# ShopSphere live server (AWS EC2 t4g.small, Mumbai). On the server, from FS-01/:
+#   cp deploy/production.env.example .env   # then fill in the secrets (never committed)
+#   docker compose -f docker-compose.prod.yml up -d --build
+# One public domain: Caddy gets the HTTPS certificate and sends /api/* to the API and everything else to the web app,
+# so the app and the API share one origin (first-party cookies, no CORS for API calls).
+# MongoDB is Atlas (MONGO_URL); files are in AWS S3 through the instance role (no AWS keys anywhere).
+# Nothing but Caddy publishes a port.
+name: shopsphere
+
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "10m", max-file: "3" }
+
+x-backend-env: &backend-env
+  NODE_ENV: production
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  MONGO_URL: ${MONGO_URL:?set MONGO_URL (MongoDB Atlas connection string) in .env}
+  REDIS_URL: redis://redis:6379/0
+  ELASTICSEARCH_URL: http://elasticsearch:9200
+  S3_REGION: ap-south-1
+  S3_BUCKET: ${S3_BUCKET:?set S3_BUCKET in .env}
+  S3_FORCE_PATH_STYLE: "false"
+  CORS_ORIGINS: https://${DOMAIN:?set DOMAIN in .env}
+  PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-razorpay}
+  RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-}
+  RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-}
+  RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET:-}
+  JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?set JWT_ACCESS_SECRET in .env}
+  # HTTPS only; the app and the API are on the same site, so Lax cookies work.
+  COOKIE_SECURE: "true"
+  COOKIE_SAME_SITE: lax
+
+services:
+  redis:
+    image: redis:7.4.12-alpine
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "128mb", "--maxmemory-policy", "noeviction"]
+    volumes: [redis-data:/data]
+    restart: unless-stopped
+    logging: *logging
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.19.23
+    environment:
+      discovery.type: single-node
+      # Reachable only on the private Docker network (no published port).
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+    volumes: [es-data:/usr/share/elasticsearch/data]
+    restart: unless-stopped
+    logging: *logging
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs 'http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s' || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 30
+      start_period: 60s
+
+  api:
+    build: ./backend
+    environment:
+      <<: *backend-env
+      PORT: "4000"
+      DEMO_PASSWORD: ${DEMO_PASSWORD:-}
+    depends_on:
+      redis: { condition: service_healthy }
+      elasticsearch: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:4000/api/v1/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+    logging: *logging
+
+  worker:
+    build: ./backend
+    command: ["node", "dist/worker.js"]
+    environment: *backend-env
+    depends_on:
+      api: { condition: service_healthy }
+    restart: unless-stopped
+    logging: *logging
+
+  # The React app (built into nginx). The API address is the same origin, so VITE_API_URL stays empty.
+  web:
+    build: ./frontend
+    depends_on:
+      api: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
+      interval: 15s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    logging: *logging
+
+  caddy:
+    image: caddy:2.10.2-alpine
+    environment:
+      DOMAIN: ${DOMAIN}
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on: [api, web]
+    restart: unless-stopped
+    logging: *logging
+
+volumes:
+  redis-data:
+  es-data:
+  caddy-data:
+  caddy-config:

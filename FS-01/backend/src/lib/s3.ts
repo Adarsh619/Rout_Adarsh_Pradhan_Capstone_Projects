@@ -20,8 +20,18 @@ export function createS3(env: Env, endpoint = env.S3_ENDPOINT): S3Client {
     // Otherwise the SDK puts a checksum of an *empty* body into presigned upload links, and real S3 then
     // rejects the browser's upload (the local mock doesn't check, so only AWS would show the bug).
     requestChecksumCalculation: "WHEN_REQUIRED",
-    credentials: { accessKeyId: env.S3_ACCESS_KEY_ID, secretAccessKey: env.S3_SECRET_ACCESS_KEY },
+    ...s3Credentials(env, endpoint),
   });
+}
+
+// Keys given → use them. No keys and a local endpoint → the mock's dummy keys. No keys and real AWS → nothing, so
+// the SDK's default chain finds the EC2 instance role (temporary credentials it renews itself).
+export function s3Credentials(env: Env, endpoint = env.S3_ENDPOINT) {
+  if (env.S3_ACCESS_KEY_ID && env.S3_SECRET_ACCESS_KEY) {
+    return { credentials: { accessKeyId: env.S3_ACCESS_KEY_ID, secretAccessKey: env.S3_SECRET_ACCESS_KEY } };
+  }
+  if (endpoint) return { credentials: { accessKeyId: "local", secretAccessKey: "local" } };
+  return {};
 }
 
 export async function pingS3(s3: S3Client, bucket: string): Promise<void> {

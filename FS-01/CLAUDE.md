@@ -13,7 +13,7 @@ held until delivery. Self-contained: never share servers, files or code with FS-
 | Payments | Razorpay **test mode only** (`rzp_live_` keys are refused) + own ledger/escrow; `mock` provider for local/CI; simulated payouts |
 | Tests | Vitest + Supertest (backend), Vitest + Testing Library (frontend), `scripts/smoke-test.sh` (whole stack) |
 | CI | `../.github/workflows/fs01-ci.yml` (repo root): backend, frontend, Docker smoke test |
-| Hosting | Frontend on Vercel; backend on AWS EC2 t4g.small, Mumbai (Docker + Caddy + DuckDNS); MongoDB Atlas M0; S3 ap-south-1 |
+| Hosting | AWS EC2 t4g.small, Mumbai: `docker-compose.prod.yml` (Caddy HTTPS on `shopsphere-adarsh.duckdns.org` → `/api` to the API, the rest to the web app, one origin); MongoDB Atlas M0; S3 `shopsphere-media-2026` (ap-south-1) via the EC2 role, no AWS keys. Vercel not used (cross-site cookies and shared proxy IPs) |
 
 ## Commands
 
@@ -75,3 +75,28 @@ PAYMENT_PROVIDER=mock docker compose up -d api worker   # temporarily, when .env
 - Commit or push only after the user approves; end commit messages with the Co-Authored-By line.
 - Keys, passwords, tokens and connection strings never go into chat or Git (`.env` is git-ignored); only test keys.
 - Don't enable anything billable (Oracle PAYG, paid Atlas tiers, AWS upgrades) without the user deciding.
+
+## Progress and pending (as of Sat 14 Nov 2026; deadline Fri 20 Nov, one submission)
+
+**Done:** Days 1–8 built, tested, documented (docs 01–10) and green on CI; last FS-01 commits `c3b9b4d`, `2da4515`,
+`c2d00e3`, `07d0345`, `84595bf` (8 Nov). Hosting decided: AWS (see stack table). Accounts ready: MongoDB Atlas M0,
+DuckDNS, Vercel, AWS (free plan, $100 credits, MFA, budget alert).
+
+**Waiting on the user:**
+- S3 bucket `shopsphere-media-2026` (named; user creating it): public read only for `products/*` and `stores/*` (`invoices/*` stays private). CORS for `https://shopsphere-adarsh.duckdns.org`.
+- IAM policy `shopsphere-s3-access` (PutObject, GetObject, DeleteObject on the bucket; ListBucket for the HeadBucket health ping) and role `shopsphere-ec2-role` for EC2. No IAM user or access key.
+- DuckDNS subdomain: `shopsphere-adarsh`. Finish UptimeRobot signup.
+
+**Day 9 (deploy, Sat 14 – Sun 15):**
+- Code (written 14 Nov): empty S3 keys → SDK default credentials (`s3Credentials()`); `docker-compose.prod.yml`, `deploy/Caddyfile`, `deploy/server-setup.sh`, `deploy/production.env.example`.
+- Launch EC2 t4g.small (Ubuntu arm64, Mumbai) with the role; security group 22 (user's IP only), 80, 443. DuckDNS → server IP; Caddy HTTPS.
+- Atlas: allow the server IP. S3 CORS for the DuckDNS origin. Seed users, catalog, orders on Atlas.
+- Razorpay test webhook + secret; UptimeRobot on `/api/v1/health`.
+- CI auto-deploy; nightly demo reset at 03:00 IST; k6 load test (20k-product dataset can be dropped); one Playwright end-to-end test (can be dropped).
+- Check whether the refused ₹3,399 test refund (order SS-2026-000010) went through after the 9 Nov settlement.
+
+**Day 10 (Mon 16 – Thu 19):** docs 11–14 (DevOps/CI, testing and performance, challenges and next steps, setup) +
+`openapi.yaml`, test and coverage report, presentation outline, reflection template, bug sweep; user records the demo
+video (Drive link, anyone with the link). Re-date the remaining days in `docs/guides/DAY_PLAN.md`.
+
+**Fri 20 Nov:** submit once: GitHub link, live URL `https://shopsphere-adarsh.duckdns.org`, FS-04 live link in notes, Drive folder link.

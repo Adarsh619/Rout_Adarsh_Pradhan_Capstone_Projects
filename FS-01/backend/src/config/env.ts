@@ -30,8 +30,10 @@ const schema = z.object({
   S3_ENDPOINT: z.string().url().optional().or(z.literal("").transform(() => undefined)),
   S3_REGION: z.string().default("ap-south-1"),
   S3_BUCKET: z.string().min(3).default("shopsphere-local"),
-  S3_ACCESS_KEY_ID: z.string().default("local"),
-  S3_SECRET_ACCESS_KEY: z.string().default("local"),
+  // Empty on the live server: the API then uses the EC2 instance role, so no AWS key exists anywhere.
+  // With a local endpoint and no keys, the mock's dummy "local" keys are used.
+  S3_ACCESS_KEY_ID: optionalString,
+  S3_SECRET_ACCESS_KEY: optionalString,
   S3_FORCE_PATH_STYLE: bool.default(true),
   // Create the bucket on start-up if it is missing (local only; real buckets are created in AWS).
   S3_CREATE_BUCKET: bool.default(false),
