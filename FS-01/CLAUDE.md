@@ -88,6 +88,7 @@ DuckDNS, Vercel, AWS (free plan, $100 credits, MFA, budget alert).
 - DuckDNS subdomain: `shopsphere-adarsh`. Finish UptimeRobot signup.
 
 **Day 9 (deploy, Sat 14 – Sun 15):**
+- **LIVE since Sat 14 Nov ~03:00 IST: https://shopsphere-adarsh.duckdns.org** (EC2 t4g.small, Ubuntu 24.04 arm64, repo cloned at `~/Rout_Adarsh_Pradhan_Capstone_Projects`, secrets in `FS-01/.env` on the server only). Seeded on Atlas; health ok; S3 photos public, invoices 403. Run compose there with `-f docker-compose.prod.yml`. Next (user, morning of 14 Nov): Razorpay test webhook + `RAZORPAY_WEBHOOK_SECRET` in the server `.env`, then `up -d api worker`; UptimeRobot on `/api/v1/health`.
 - Code (written 14 Nov): empty S3 keys → SDK default credentials (`s3Credentials()`); `docker-compose.prod.yml`, `deploy/Caddyfile`, `deploy/server-setup.sh`, `deploy/production.env.example`.
 - Launch EC2 t4g.small (Ubuntu arm64, Mumbai) with the role; security group 22 (user's IP only), 80, 443. DuckDNS → server IP; Caddy HTTPS.
 - Atlas: allow the server IP. S3 CORS for the DuckDNS origin. Seed users, catalog, orders on Atlas.
