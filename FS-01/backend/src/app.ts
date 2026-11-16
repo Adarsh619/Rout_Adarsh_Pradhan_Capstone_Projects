@@ -80,7 +80,14 @@ export function createApp(deps: AppDeps): Express {
     }),
   );
   app.use(cookieParser());
-  app.use(pinoHttp({ logger, autoLogging: { ignore: (req) => req.url === "/api/v1/health" } }));
+  app.use(
+    pinoHttp({
+      logger,
+      autoLogging: { ignore: (req) => req.url === "/api/v1/health" },
+      // The client address after the trusted proxies (remoteAddress is only the nearest proxy).
+      customProps: (req) => ({ clientIp: (req as express.Request).ip }),
+    }),
+  );
 
   const tokens = new AccessTokens(env.JWT_ACCESS_SECRET, env.ACCESS_TOKEN_TTL_SECONDS);
   const sessions = new SessionStore(deps.redis, env.REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60);

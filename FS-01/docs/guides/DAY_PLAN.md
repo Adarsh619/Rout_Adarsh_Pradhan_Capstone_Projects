@@ -91,7 +91,7 @@ Started **Tue 3 Nov 2026**. Days 4 and 7 each finished a day early, so the remai
 - [x] 🛠 `docker-compose.prod.yml`, `deploy/Caddyfile`, `deploy/server-setup.sh`
 - [x] 🛠 Server (AWS EC2 t4g.small, Mumbai): Docker, swap, Elasticsearch setting, ports 80/443, HTTPS via Caddy + DuckDNS
 - [x] 🛠 Backend live on the server (14 Nov); Atlas, S3 (instance role), Razorpay test webhook connected (16 Nov)
-- [ ] 👤 Frontend live on Vercel (`/api` rewrite to the server)
+- [x] 👤 Frontend live on Vercel (`/api` rewrite to the server): https://shopsphere-fs01.vercel.app
 - [x] 🛠 UptimeRobot on `/api/v1/health`; automatic deploy of commits that pass CI; nightly demo reset (03:00 IST) — scripts written, timers to install
 - [x] 🛠 Performance: k6 browse test on the live site (214 products, 50 users, cache hit vs miss). The 20k-product dataset and the Playwright test were dropped for time
 - [ ] ✅ Live links run the full demo; results recorded

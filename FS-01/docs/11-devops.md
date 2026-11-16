@@ -8,7 +8,7 @@ an AWS server in Mumbai.
 
 | | Address |
 |---|---|
-| Web app (Vercel) | the project's `*.vercel.app` address (in the submission) |
+| Web app (Vercel) | https://shopsphere-fs01.vercel.app |
 | API server (AWS) | `https://shopsphere-adarsh.duckdns.org/api/v1/health` |
 
 ## Live architecture
@@ -126,7 +126,7 @@ Logs: `journalctl -u shopsphere-deploy -n 50`. Force a rebuild: `bash deploy/aut
 Reviewers use shared demo accounts, so the demo goes back to a known state every night at **03:00 IST**
 (`shopsphere-reset.timer` → `deploy/demo-reset.sh`):
 
-1. Once, after seeding, `bash deploy/demo-reset.sh --save` takes a snapshot of the database (`mongodump`, ~1 MB
+1. Once, after seeding, `bash deploy/demo-reset.sh --save` takes a snapshot of the database (`mongodump`, ~85 KB
    gzipped) into `~/.shopsphere/`.
 2. Each night: stop the API and worker → drop every collection → restore the snapshot (`mongorestore`, indexes
    included) → empty Redis (sessions, carts, caches, queues) → start the API and worker → rebuild the search index.

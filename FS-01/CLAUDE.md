@@ -85,12 +85,10 @@ server's `FS-01/.env`; compose with `-f docker-compose.prod.yml`). Seeded on Atl
 (16 Nov, 50 users): 0 errors, p95 104 ms overall, search p95 115 ms, product p95 cache hit 82 ms / miss 144 ms
 (`perf/results-live.json`). Doc 11 (DevOps) written.
 
-**Written 16 Nov, waiting to go live:** `deploy/auto-deploy.sh` (server pulls newest commit whose CI passed),
-`deploy/demo-reset.sh` (snapshot/restore, nightly 03:00 IST), `deploy/install-timers.sh` (systemd timers),
-`frontend/vercel.json`, `TRUST_PROXY_HOPS`. User steps after the push: on the server `git pull`, `bash deploy/demo-reset.sh
---save`, `sudo bash deploy/install-timers.sh`, `docker compose -f docker-compose.prod.yml up -d --build` (picks up hops=2 +
-Caddy trust); import the repo in Vercel (root `FS-01/frontend`); add the Vercel origin to S3 CORS; check that req.ip is
-the visitor via Vercel.
+**Live 17 Nov:** frontend on Vercel at https://shopsphere-fs01.vercel.app (sign-in survives reload, photos load; S3
+CORS allows it). Server runs the auto-deploy timer (5 min) and the nightly reset (03:00 IST, baseline ~84 KB saved 17 Nov,
+after the live test purchase, which the user later cancelled). Request logs carry `clientIp` (req.ip after 2 hops): after
+the next deploy, check on the server that it shows the visitor's address, and that `/api/v1/health` shows the commit.
 
 **Day 10 (Tue 17 – Thu 19):** docs 12 (testing + performance), 13 (challenges, next steps), 14 (setup) + `openapi.yaml`,
 test and coverage report, presentation outline, reflection template, bug sweep, README live links; Wed: user records

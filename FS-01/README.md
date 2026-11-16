@@ -16,6 +16,8 @@ An Amazon-style marketplace where **many vendors sell**, **customers buy from se
 
 **Status:** Day 8 of 10. Sign-in and roles work end to end; vendors apply for a store, admins approve or suspend it, vendors list products with photos uploaded straight to S3, and shoppers search 214 seeded products across 5 stores with typo-tolerant Elasticsearch search. Shoppers fill one cart from several stores (as guests too), check out once with stock held for 15 minutes, pay through Razorpay's test-mode popup, and follow each store's part from placed to delivered while vendors pack and ship their own part. Each store's share is held until delivery, then paid out (simulated); cancelling a part refunds it through Razorpay. Coupons (platform or store), an invoice PDF for each store's part, and reviews from customers whose order was delivered. Admins see live analytics (sales, commission, daily chart, top stores and products) and can refund and moderate; vendors see their earnings. Progress is tracked in the [10-day build tracker](docs/guides/DAY_PLAN.md).
 
+**Live demo:** https://shopsphere-fs01.vercel.app (frontend, Vercel) · API: https://shopsphere-adarsh.duckdns.org/api/v1/health (AWS, Mumbai) · demo logins below; the live demo password is given with the submission. The demo resets every night at 03:00 IST.
+
 ![Architecture](docs/assets/architecture.png)
 
 ## Quick start (Docker)
