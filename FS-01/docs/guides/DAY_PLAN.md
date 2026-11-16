@@ -98,7 +98,7 @@ Started **Tue 3 Nov 2026**. Days 4 and 7 each finished a day early, so the remai
 
 ## Day 10 · Tue 17 – Thu 19 Nov · Deliverables
 - [x] 🛠 Brief changed (17 Nov): data layer moved from MongoDB + Mongoose to **PostgreSQL + Prisma** (branch `fs01-postgres`; all tests and the smoke test green; CI, production compose, nightly reset and docs updated)
-- [ ] 👤 Go live on PostgreSQL: `POSTGRES_PASSWORD` in the server `.env`, merge, re-seed, save the reset baseline, test purchase
+- [x] 👤 Live on PostgreSQL (17 Nov): PR #1 merged, server redeployed itself, re-seeded, reset baseline saved, test purchase confirmed by the webhook, ledger balances
 - [ ] 🛠 Finish docs 01–14 + `openapi.yaml`, README with setup instructions, root README row
 - [ ] 🛠 Test and coverage report, performance numbers in doc 12
 - [ ] 🛠 Presentation outline (10 min: problem, design, challenges, results, next steps) and reflection template

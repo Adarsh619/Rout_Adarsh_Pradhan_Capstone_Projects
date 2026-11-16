@@ -87,18 +87,15 @@ PAYMENT_PROVIDER=mock docker compose up -d api worker   # temporarily, when .env
 https://shopsphere-adarsh.duckdns.org (EC2 t4g.small, Ubuntu 24.04 arm64; repo at `~/Rout_Adarsh_Pradhan_Capstone_Projects`
 on the server; secrets only in the server's `FS-01/.env`; compose with `-f docker-compose.prod.yml`). Auto-deploy timer
 (5 min, commits whose CI passed), nightly reset (03:00 IST), UptimeRobot, Razorpay test webhook (200s), `clientIp` via
-Vercel verified. k6 on live (16 Nov, 50 users): 0 errors, p95 104 ms, search p95 115 ms (`perf/results-live.json`;
+Vercel verified. k6 on live (16 Nov, 50 users): 0 errors, p95 104 ms, search p95 115 ms (`perf/results-live-mongodb.json`,
 measured on the MongoDB build).
 
-**17 Nov: brief changed to PostgreSQL + Prisma.** Done on branch `fs01-postgres` (not merged, live site still MongoDB
-on Atlas): whole backend, seeds, tests (94 unit, 102 integration, 62 frontend, smoke), CI, `docker-compose.prod.yml`
-(postgres service), `deploy/demo-reset.sh` (pg_dump/pg_restore, tested locally), docs 03/04/05/06/08–11 + schema spec +
-ER diagram. Plan: `docs/specs/05-postgres-migration-plan.md`.
-**Go-live steps (with the user):** push the branch, check CI → user adds `POSTGRES_PASSWORD` to the server `.env`
-**before** merging (else compose fails and the old containers keep serving) → merge to main → auto-deploy → on the
-server seed users, catalog (photos re-copied under new UUID store ids), orders, reindex → `bash deploy/demo-reset.sh
---save` (old `baseline.archive.gz` is Mongo, unused) → check health/login/test purchase → re-run k6 for doc 12 →
-later remove the Atlas cluster/IP rule. Old S3 photos under old store ids become unused.
+**17 Nov: brief changed to PostgreSQL + Prisma — LIVE.** PR #1 merged (5e665e7) after green CI; server auto-deployed
+(Postgres container, `POSTGRES_PASSWORD` in the server `.env`); re-seeded (214 products, 40 orders), reset baseline
+`~/.shopsphere/baseline.dump` (156K) saved; live test purchase via Vercel: confirmed by the webhook ("order
+confirmed"), invoice opened, ledger balances, 41 orders. `main` has a ruleset blocking force pushes and deletion (PRs
+and direct pushes still allowed). Leftovers to tidy later: Atlas cluster + IP rule, old S3 photos under old store ids,
+`~/.shopsphere/baseline.archive.gz`. k6 results: `perf/results-live.json` (Postgres), `perf/results-live-mongodb.json` (before).
 
 **Day 10 (Tue 17 – Thu 19):** docs 12 (testing + performance), 13 (challenges, next steps; include the DB switch), 14
 (setup) + `openapi.yaml`, test and coverage report, presentation outline, reflection template, bug sweep; Wed: user
