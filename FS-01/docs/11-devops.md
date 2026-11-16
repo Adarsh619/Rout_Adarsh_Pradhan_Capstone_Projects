@@ -22,13 +22,13 @@ flowchart LR
   subgraph EC2 ["AWS EC2 t4g.small · Mumbai · Docker Compose"]
     C["Caddy<br/>HTTPS (Let's Encrypt)"] --> A[API]
     C --> W2["web (nginx)<br/>fallback copy"]
+    A --> PG[(PostgreSQL)]
+    K --> PG
     A --> RE[(Redis)]
     A --> ES[(Elasticsearch)]
     K[Worker] --> RE
     K --> ES
   end
-  A --> M[(MongoDB Atlas M0<br/>Mumbai)]
-  K --> M
   A -->|instance role| S3[(S3 ap-south-1)]
   K -->|instance role| S3
   B -->|"photos (public), uploads + invoices (signed links)"| S3
@@ -39,7 +39,7 @@ flowchart LR
 | React app | **Vercel** (`frontend/vercel.json`) | Separate deployment, global CDN, builds from GitHub |
 | API, worker, Redis, Elasticsearch | **AWS EC2 t4g.small** (2 vCPU, 2 GB + 2 GB swap), Ubuntu 24.04 arm64, `docker-compose.prod.yml` | Always on (no cold starts); Elasticsearch needs a real machine |
 | HTTPS | **Caddy** on the server, certificate from Let's Encrypt for a free **DuckDNS** name | Automatic certificates and renewal, no domain to buy |
-| Database | **MongoDB Atlas M0** (Mumbai) | Managed replica set, so checkout's transactions work; free |
+| Database | **PostgreSQL 17** container on the same server (data in a Docker volume) | Required by the brief; free; private network only; snapshot saved for the nightly reset |
 | Files | **S3** `shopsphere-media-2026` (ap-south-1) | Product photos public (`products/*`, `stores/*` only); invoices private |
 | Monitoring | **UptimeRobot**, health check every 5 minutes | Email if the site goes down |
 
@@ -70,7 +70,7 @@ the two site origins only.
 
 The EC2 security group allows **80 and 443** from anywhere and **22 (SSH) only from the owner's IP**. Inside the server
 only Caddy publishes ports; Redis, Elasticsearch and the API are reachable only on the private Docker network. Secrets
-(Atlas URL, sign-in secret, Razorpay test keys, webhook secret, demo password) are in `FS-01/.env` on the server only,
+(database password, sign-in secret, Razorpay test keys, webhook secret, demo password) are in `FS-01/.env` on the server only,
 never in Git or CI.
 
 ### Memory on a 2 GB machine
@@ -90,7 +90,7 @@ Plus 2 GB of swap (`vm.swappiness=10`) for builds. Container logs are capped at 
 
 | Job | What it proves |
 |---|---|
-| Backend | Lint, typecheck, unit tests with coverage, integration tests against real MongoDB (replica set), Redis, Elasticsearch and S3Mock |
+| Backend | Lint, typecheck, unit tests with coverage, integration tests against real PostgreSQL (own test database, real migrations), Redis, Elasticsearch and S3Mock |
 | Frontend | Lint, 62 component tests, production build |
 | Docker Compose smoke test | Builds the real images, starts the whole stack, seeds it, and runs `scripts/smoke-test.sh` through nginx: sign-in, store approval, uploads, search, cart, checkout, payment, coupon, invoice, review, payout, refund, dashboards |
 
@@ -126,16 +126,15 @@ Logs: `journalctl -u shopsphere-deploy -n 50`. Force a rebuild: `bash deploy/aut
 Reviewers use shared demo accounts, so the demo goes back to a known state every night at **03:00 IST**
 (`shopsphere-reset.timer` → `deploy/demo-reset.sh`):
 
-1. Once, after seeding, `bash deploy/demo-reset.sh --save` takes a snapshot of the database (`mongodump`, ~85 KB
-   gzipped) into `~/.shopsphere/`.
-2. Each night: stop the API and worker → drop every collection → restore the snapshot (`mongorestore`, indexes
-   included) → empty Redis (sessions, carts, caches, queues) → start the API and worker → rebuild the search index.
+1. Once, after seeding, `bash deploy/demo-reset.sh --save` takes a snapshot of the database (`pg_dump`, custom format, ~160 KB) into `~/.shopsphere/`.
+2. Each night: stop the API and worker → drop and recreate the schema → restore the snapshot in one transaction (`pg_restore`: tables, indexes, sequences
+   and the migration history) → empty Redis (sessions, carts, caches, queues) → start the API and worker → rebuild the search index.
 
 Restoring keeps every id, so the product photos already in S3 stay valid and nothing is downloaded again. The site is
 down for about a minute at 03:00. Logs: `journalctl -u shopsphere-reset -n 50`.
 
-Tested locally against a scratch database: a deleted product came back, a changed one was reverted, and collections
-created after the snapshot were removed.
+Tested locally against a scratch database: a deleted photo came back, a changed price was reverted, and a table
+created after the snapshot was removed.
 
 ## Server setup, from nothing
 
@@ -143,7 +142,7 @@ created after the snapshot were removed.
 |---|---|
 | 1. S3 bucket + policy, IAM policy + role | AWS console (bucket policy and role policy in this doc's history and `deploy/`) |
 | 2. EC2 t4g.small, Ubuntu 24.04 arm64, 20 GB gp3, role attached, security group 22 (own IP) / 80 / 443 | AWS console |
-| 3. DuckDNS name → server IP; Atlas network access → server IP | DuckDNS, Atlas |
+| 3. DuckDNS name → server IP | DuckDNS |
 | 4. Docker, swap, Elasticsearch kernel setting, automatic security updates | `sudo bash deploy/server-setup.sh` |
 | 5. Secrets | `cp deploy/production.env.example .env && nano .env` |
 | 6. Start | `docker compose -f docker-compose.prod.yml up -d --build` |
@@ -162,7 +161,7 @@ Covered by the AWS free-plan credits ($100, valid to July 2027), with a zero-spe
 | 20 GB gp3 disk | $2 |
 | Public IPv4 address | $3.6 |
 | S3 (a few hundred MB) and requests | < $0.10 |
-| Vercel Hobby, Atlas M0, DuckDNS, UptimeRobot | free |
+| Vercel Hobby, DuckDNS, UptimeRobot | free |
 
 ## Why not …
 

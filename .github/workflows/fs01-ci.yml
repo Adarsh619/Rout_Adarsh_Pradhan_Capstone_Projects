@@ -22,6 +22,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     services:
+      postgres:
+        image: postgres:17.7-alpine
+        env:
+          POSTGRES_USER: shopsphere
+          POSTGRES_PASSWORD: shopsphere
+          POSTGRES_DB: shopsphere
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U shopsphere" --health-interval 5s --health-timeout 3s --health-retries 20
       redis:
         image: redis:7.4.12-alpine
         ports: ["6379:6379"]
@@ -39,7 +48,8 @@ jobs:
         image: adobe/s3mock:5.2
         ports: ["9090:9090"]
     env:
-      MONGO_URL: mongodb://localhost:27017/shopsphere_test?replicaSet=rs0&directConnection=true
+      # The integration tests create and migrate their own database (shopsphere_test) on this server.
+      DATABASE_URL: postgresql://shopsphere:shopsphere@localhost:5432/shopsphere
       REDIS_URL: redis://localhost:6379/0
       ELASTICSEARCH_URL: http://localhost:9200
       S3_ENDPOINT: http://localhost:9090
@@ -49,29 +59,6 @@ jobs:
         working-directory: FS-01/backend
     steps:
       - uses: actions/checkout@v7
-      # Service containers can't take a command, and MongoDB must run as a replica set for transactions.
-      - name: Start MongoDB as a single-node replica set
-        working-directory: .
-        # Waits until mongod answers, starts the replica set, then waits until it can take writes;
-        # fails with the container's logs if any of that doesn't happen.
-        run: |
-          # On any failure below, show what MongoDB itself said before the job stops.
-          trap 'echo "--- MongoDB container ---"; docker ps -a --filter name=mongo; docker logs mongo 2>&1 | tail -80' ERR
-          uname -r
-          docker run -d --name mongo -p 27017:27017 mongo:7.0.45 --replSet rs0 --bind_ip_all
-          for i in $(seq 1 60); do
-            [ "$(docker inspect -f '{{.State.Running}}' mongo)" = true ] || { echo "MongoDB exited"; false; }
-            docker exec mongo mongosh --quiet --eval "db.adminCommand('ping').ok" >/dev/null 2>&1 && break
-            sleep 2
-          done
-          docker exec mongo mongosh --quiet --eval "rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'localhost:27017' }] })"
-          for i in $(seq 1 30); do
-            if docker exec mongo mongosh --quiet --eval "db.hello().isWritablePrimary" | grep -q true; then
-              echo "MongoDB replica set is ready"; exit 0
-            fi
-            sleep 2
-          done
-          echo "MongoDB did not become primary"; false
       - uses: actions/setup-node@v7
         with:
           node-version: 24
@@ -82,7 +69,7 @@ jobs:
       - run: npm run typecheck
       - name: Unit tests with coverage
         run: npx vitest run --coverage --reporter=default --reporter=junit --outputFile.junit=test-results.xml
-      - name: Integration tests (real MongoDB, Redis, Elasticsearch, S3)
+      - name: Integration tests (real PostgreSQL, Redis, Elasticsearch, S3)
         run: npm run test:integration
       - run: npm run build
       - uses: actions/upload-artifact@v7

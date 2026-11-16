@@ -5,7 +5,7 @@
 Slow or retryable work runs in a separate **worker** process (`backend/src/worker.ts`), not inside API requests.
 The API puts a job on a **BullMQ** queue in Redis and answers straight away; the worker picks the job up, and retries
 it if it fails. This page covers the queues, and in detail the first one built: keeping **Elasticsearch search** in step
-with MongoDB, and handing back stock from unpaid orders. Refunds and payouts are described in [Payments](09-payments.md); invoice PDFs are made here too, one per store's part, as soon as an order is paid.
+with PostgreSQL, and handing back stock from unpaid orders. Refunds and payouts are described in [Payments](09-payments.md); invoice PDFs are made here too, one per store's part, as soon as an order is paid.
 
 ## Queues
 
@@ -25,7 +25,7 @@ stored in Redis (with append-only persistence on), not in memory.
 sequenceDiagram
   participant V as Vendor / Admin
   participant A as API
-  participant M as MongoDB
+  participant M as PostgreSQL
   participant Q as Redis (BullMQ)
   participant W as Worker
   participant E as Elasticsearch
@@ -50,7 +50,7 @@ These are the same rules the product page uses, so search never shows something 
 ### Why jobs carry only an id
 
 The job says *which* product changed, not *what* it changed to. The worker always reads the current state from
-MongoDB, so:
+PostgreSQL, so:
 
 - **Retries are safe.** Running a job twice gives the same result.
 - **Order doesn't matter.** If two edits' jobs run in the wrong order, both read the latest data anyway.
@@ -61,9 +61,9 @@ MongoDB, so:
 | Situation | What happens |
 |---|---|
 | Elasticsearch restarting or briefly down | The job fails and is retried with exponential backoff (1 s, 2 s, 4 s … 8 attempts, about 4 minutes) |
-| Redis down when the API adds the job | The change is still saved in MongoDB; the error is logged; `npm run reindex` puts search right |
+| Redis down when the API adds the job | The change is still saved in PostgreSQL; the error is logged; `npm run reindex` puts search right |
 | Worker stopped | Jobs wait in Redis and run when it starts again |
-| Search down while shopping | `GET /search` answers `503 search_unavailable`; browsing by category, store pages and product pages use MongoDB and keep working |
+| Search down while shopping | `GET /search` answers `503 search_unavailable`; browsing by category, store pages and product pages use PostgreSQL and keep working |
 
 Finished jobs are kept for an hour and failed ones for a week, for debugging. The worker runs 4 search jobs at a time.
 In the smoke test, a product published through the API is searchable **about 1 second later**.
@@ -94,7 +94,7 @@ Searches always go through an **alias**, `products`. The real index behind it is
 `npm run reindex` (or `docker compose exec api node dist/scripts/reindex.js`):
 
 1. creates a new, empty index with the current mapping and synonyms (refreshing switched off for speed);
-2. streams every active product from MongoDB and bulk-loads the ones shoppers may see, 500 at a time;
+2. reads every active product from PostgreSQL (500 at a time, by id) and bulk-loads the ones shoppers may see, 500 at a time;
 3. switches the alias from the old index to the new one in **one atomic step**;
 4. deletes the old index.
 
@@ -105,7 +105,7 @@ catalogue seed runs it at the end, and the API and worker create an empty index 
 ## The index
 
 One document per searchable product, with everything a result card or a filter needs, so a search never queries
-MongoDB. Definition: `backend/src/modules/search/search-mapping.ts`.
+PostgreSQL. Definition: `backend/src/modules/search/search-mapping.ts`.
 
 | Field | Type | Used for |
 |---|---|---|

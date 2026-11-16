@@ -14,7 +14,7 @@ The **Day** column says when each endpoint is built; ✓ means it exists now.
 
 | Method | Path | Role | Purpose | Day |
 |---|---|---|---|---|
-| GET | `/health` | P | Status of MongoDB, Redis, Elasticsearch and S3; 503 if any is down | ✓ 1 |
+| GET | `/health` | P | Status of PostgreSQL, Redis, Elasticsearch and S3; 503 if any is down | ✓ 1 |
 
 ## Auth and account
 
@@ -53,7 +53,7 @@ The **Day** column says when each endpoint is built; ✓ means it exists now.
 
 | Method | Path | Role | Purpose | Day |
 |---|---|---|---|---|
-| GET | `/products?category=&sort=&page=` | P | Browse active products by category (MongoDB; search moves to Elasticsearch on Day 4) | ✓ 3 |
+| GET | `/products?category=&sort=&page=` | P | Browse active products by category (PostgreSQL; full-text search is on Elasticsearch) | ✓ 3 |
 | GET | `/products/:id` | P | Product page (cached in Redis) | ✓ 3 |
 | GET | `/vendor/products` | V | My products, any status, with title search and counts | ✓ 3 |
 | GET | `/vendor/products/:id` | V (owner) | One product for the edit form | ✓ 3 |
