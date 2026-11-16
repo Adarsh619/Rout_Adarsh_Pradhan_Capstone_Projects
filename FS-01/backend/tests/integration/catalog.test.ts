@@ -2,12 +2,8 @@ import type { Express } from "express";
 import type { Redis } from "ioredis";
 import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { disconnectMongo } from "../../src/lib/mongo.js";
+import { disconnectDb, prisma } from "../../src/lib/db.js";
 import type { Storage } from "../../src/lib/s3.js";
-import { Category } from "../../src/modules/catalog/category.model.js";
-import { Product } from "../../src/modules/catalog/product.model.js";
-import { User } from "../../src/modules/users/user.model.js";
-import { Vendor } from "../../src/modules/vendors/vendor.model.js";
 import { approvedVendor, bearer, register, signInAdmin, startTestServices, storeApplication, uploadImage, wipe } from "./helpers.js";
 
 let app: Express;
@@ -16,7 +12,6 @@ let storage: Storage;
 
 beforeAll(async () => {
   ({ app, redis, storage } = await startTestServices());
-  await Promise.all([User.init(), Vendor.init(), Category.init(), Product.init()]);
 });
 
 beforeEach(async () => {
@@ -25,7 +20,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await wipe(redis);
-  await Promise.allSettled([disconnectMongo(), redis.quit()]);
+  await Promise.allSettled([disconnectDb(), redis.quit()]);
 });
 
 const api = () => request(app);
@@ -196,7 +191,7 @@ describe("vendor products", () => {
       counts: { draft: 1, active: 0, inactive: 0 },
     });
     expect((await api().delete(`/api/v1/vendor/products/${id}`).set(bearer(vendor.token))).status).toBe(204);
-    expect(await Product.countDocuments()).toBe(0);
+    expect(await prisma.product.count()).toBe(0);
   });
 
   it("won't attach a photo from another store or one that was never uploaded", async () => {

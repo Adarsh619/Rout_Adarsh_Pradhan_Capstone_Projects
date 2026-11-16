@@ -21,12 +21,17 @@
     "seed:catalog": "tsx src/scripts/seed-catalog.ts",
     "seed:orders": "tsx src/scripts/seed-orders.ts",
     "seed:snapshot": "tsx src/scripts/fetch-catalog-snapshot.ts",
-    "reindex": "tsx src/scripts/reindex.ts"
+    "reindex": "tsx src/scripts/reindex.ts",
+    "postinstall": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1161.0",
     "@aws-sdk/s3-request-presigner": "^3.1161.0",
     "@elastic/elasticsearch": "^8.19.2",
+    "@prisma/adapter-pg": "^7.10.1",
+    "@prisma/client": "^7.10.1",
     "bcryptjs": "^3.0.3",
     "bullmq": "^5.81.5",
     "cookie-parser": "^1.4.7",
@@ -35,10 +40,11 @@
     "helmet": "^8.3.0",
     "ioredis": "^5.11.1",
     "jose": "^6.2.15",
-    "mongoose": "^9.11.4",
     "pdfkit": "^0.17.2",
+    "pg": "^8.23.1",
     "pino": "^10.4.0",
     "pino-http": "^11.0.0",
+    "prisma": "^7.10.1",
     "zod": "^4.6.7"
   },
   "devDependencies": {
@@ -48,6 +54,7 @@
     "@types/express": "^5.0.6",
     "@types/node": "^24.19.2",
     "@types/pdfkit": "^0.17.7",
+    "@types/pg": "^8.23.1",
     "@types/supertest": "^7.2.1",
     "@vitest/coverage-v8": "^4.1.12",
     "eslint": "^10.14.0",

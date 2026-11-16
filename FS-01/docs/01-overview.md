@@ -18,13 +18,13 @@ ShopSphere builds all three sides, with real search, a real order lifecycle and 
 |---|---|---|
 | Frontend | React 19 · Vite · React Router · TanStack Query · Tailwind CSS | Fast builds, server-state caching, consistent styling |
 | API | Node.js 24 LTS · Express 5 · TypeScript · Zod | Typed code for money and order logic; validated input |
-| Database | MongoDB 7.0 (replica set) · Mongoose | Flexible product attributes; transactions for checkout |
+| Database | PostgreSQL 17 · Prisma 7 | Required by the brief; relational orders and ledger, transactions and constraints for checkout |
 | Search | Elasticsearch 8.19 | Typo-tolerant full-text search, filters, facets, sorting |
 | Cache, sessions, queues | Redis 7.4 · BullMQ | Carts, refresh sessions, caching, rate limits, background jobs |
 | Files | AWS S3 (Adobe S3Mock locally) | Product images and invoice PDFs through presigned URLs |
 | Payments | Razorpay test mode (Orders, Checkout, webhooks, refunds) · own split-and-escrow engine · simulated vendor payouts | INR + UPI; one payment split into per-vendor shares, released on delivery |
 | Infra | Docker Compose · nginx · GitHub Actions | One-command local stack; CI on every push |
-| Live hosting | Vercel (frontend) · AWS EC2 t4g.small in Mumbai with Docker Compose + Caddy (backend) · MongoDB Atlas · AWS S3 | Frontend and backend deployed separately; always on; the server deploys each commit that passes CI ([DevOps](11-devops.md)) |
+| Live hosting | Vercel (frontend) · AWS EC2 t4g.small in Mumbai with Docker Compose + Caddy (backend, with PostgreSQL) · AWS S3 | Frontend and backend deployed separately; always on; the server deploys each commit that passes CI ([DevOps](11-devops.md)) |
 
 ## Scope against the brief
 
@@ -40,7 +40,7 @@ ShopSphere builds all three sides, with real search, a real order lifecycle and 
 
 ## What works today (Day 2)
 
-- `docker compose up --build` starts MongoDB, Redis, Elasticsearch, the S3 mock, the API, the worker and the web app.
+- `docker compose up --build` starts PostgreSQL, Redis, Elasticsearch, the S3 mock, the API, the worker and the web app.
 - `GET /api/v1/health` checks all four backing services; the home page shows their status.
 - Sign-up (customer or vendor), sign-in, staying signed in across reloads, sign-out, name and password changes; each role lands on its own page and is kept out of the others.
 - CI runs lint, unit tests, integration tests against real services, and a Docker smoke test that signs up and signs in.

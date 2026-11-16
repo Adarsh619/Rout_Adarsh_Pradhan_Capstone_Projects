@@ -4,7 +4,8 @@
 # The frontend is deployed separately on Vercel (frontend/vercel.json), which forwards /api/* here, so for the browser
 # the app and the API share one origin (first-party cookies, no CORS). Caddy gets the HTTPS certificate for DOMAIN and
 # sends /api/* to the API; everything else gets a copy of the web app, so DOMAIN also works on its own.
-# MongoDB is Atlas (MONGO_URL); files are in AWS S3 through the instance role (no AWS keys anywhere).
+# PostgreSQL runs here in its own container (private network, data in a volume); files are in AWS S3 through the
+# instance role (no AWS keys anywhere).
 # Nothing but Caddy publishes a port.
 name: shopsphere
 
@@ -15,7 +16,7 @@ x-logging: &logging
 x-backend-env: &backend-env
   NODE_ENV: production
   LOG_LEVEL: ${LOG_LEVEL:-info}
-  MONGO_URL: ${MONGO_URL:?set MONGO_URL (MongoDB Atlas connection string) in .env}
+  DATABASE_URL: postgresql://shopsphere:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/shopsphere
   REDIS_URL: redis://redis:6379/0
   ELASTICSEARCH_URL: http://elasticsearch:9200
   S3_REGION: ap-south-1
@@ -34,6 +35,23 @@ x-backend-env: &backend-env
   COOKIE_SAME_SITE: lax
 
 services:
+  postgres:
+    image: postgres:17.7-alpine
+    # Sized for a 2 GB machine shared with Elasticsearch.
+    command: ["postgres", "-c", "shared_buffers=64MB", "-c", "max_connections=40", "-c", "work_mem=4MB"]
+    environment:
+      POSTGRES_USER: shopsphere
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: shopsphere
+    volumes: [pg-data:/var/lib/postgresql/data]
+    restart: unless-stopped
+    logging: *logging
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shopsphere -d shopsphere"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
   redis:
     image: redis:7.4.12-alpine
     command: ["redis-server", "--appendonly", "yes", "--maxmemory", "128mb", "--maxmemory-policy", "noeviction"]
@@ -73,6 +91,7 @@ services:
       PORT: "4000"
       DEMO_PASSWORD: ${DEMO_PASSWORD:-}
     depends_on:
+      postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
       elasticsearch: { condition: service_healthy }
     healthcheck:
@@ -120,6 +139,7 @@ services:
     logging: *logging
 
 volumes:
+  pg-data:
   redis-data:
   es-data:
   caddy-data:

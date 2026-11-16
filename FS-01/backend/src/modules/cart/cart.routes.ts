@@ -2,14 +2,13 @@ import { Router, type CookieOptions, type Request, type Response } from "express
 import { z } from "zod";
 import { requireCsrfHeader } from "../../middleware/csrf.js";
 import { AppError } from "../../middleware/errors.js";
-import { objectId, validateBody } from "../../middleware/validate.js";
-import { Product } from "../catalog/product.model.js";
+import { entityId, validateBody } from "../../middleware/validate.js";
+import { prisma } from "../../lib/db.js";
 import { applyCoupon } from "../coupons/coupon-rules.js";
 import { couponKeyFor, couponSummary, evaluateCoupon, normaliseCode, termsOf } from "../coupons/coupon-service.js";
 import { splitByVendor } from "../orders/order-rules.js";
 import { priceLines } from "../orders/pricing.js";
 import type { RouteContext } from "../context.js";
-import { Vendor } from "../vendors/vendor.model.js";
 import {
   CART_TTL_SECONDS,
   CartStore,
@@ -28,7 +27,7 @@ const qty = z
   .int()
   .min(1, "At least 1")
   .max(MAX_LINE_QTY, `Up to ${MAX_LINE_QTY} of each product`);
-const addSchema = z.object({ productId: objectId, qty: qty.default(1) });
+const addSchema = z.object({ productId: entityId, qty: qty.default(1) });
 const updateSchema = z.object({ qty });
 const couponSchema = z.object({ code: z.string().trim().min(1, "Enter a code").max(30) });
 
@@ -106,8 +105,8 @@ export function cartRouter(ctx: RouteContext): Router {
   }
 
   async function buyableProduct(productId: string) {
-    const product = await Product.findById(productId);
-    const vendor = product ? await Vendor.findById(product.vendorId) : null;
+    const product = await prisma.product.findUnique({ where: { id: productId }, include: { vendor: true } });
+    const vendor = product?.vendor ?? null;
     if (!product || !isBuyable(product, vendor)) {
       throw new AppError(404, "not_found", "This product isn't available any more");
     }
@@ -162,7 +161,7 @@ export function cartRouter(ctx: RouteContext): Router {
   });
 
   router.patch("/cart/items/:productId", ...write, validateBody(updateSchema), async (req, res) => {
-    const productId = objectId.safeParse(req.params.productId);
+    const productId = entityId.safeParse(req.params.productId);
     const key = cartKey(req, res, false);
     const line = key && productId.success ? (await store.read(key)).find((l) => l.productId === productId.data) : undefined;
     if (!key || !line) throw new AppError(404, "not_found", "That product isn't in your cart");

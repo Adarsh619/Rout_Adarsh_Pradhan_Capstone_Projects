@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import type { Redis } from "ioredis";
 
-// The cart lives in Redis, not MongoDB: it changes often, needs no history, and expires by itself.
+// The cart lives in Redis, not PostgreSQL: it changes often, needs no history, and expires by itself.
 // One hash per cart: field = product id, value = {"qty":2,"at":<added, ms>}.
 export const CART_TTL_SECONDS = 7 * 24 * 60 * 60;
 export const MAX_CART_LINES = 50;

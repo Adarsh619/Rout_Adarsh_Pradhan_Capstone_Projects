@@ -11,7 +11,7 @@ A cancelled part is **refunded** to the customer and its share is **reversed**.
 | Taking the payment | Razorpay Orders + Checkout popup, test mode | **Real** Razorpay test-mode API; payments and refunds show in the Razorpay test dashboard |
 | Proving the payment | HMAC signature check, then a capture check against Razorpay | Real |
 | Payment events | Signed Razorpay webhooks, each handled once | Real (connected once the site is live) |
-| Splitting, commission, escrow | ShopSphere's own ledger in MongoDB | Real (our code) |
+| Splitting, commission, escrow | ShopSphere's own ledger in PostgreSQL | Real (our code) |
 | Refunds | Razorpay refund API, per cancelled part | **Real** test-mode refunds |
 | Vendor payouts | `PayoutProvider` interface with a `mock` driver | **Simulated** and labelled as such |
 

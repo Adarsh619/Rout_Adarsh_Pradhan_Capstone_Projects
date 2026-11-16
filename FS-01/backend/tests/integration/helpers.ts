@@ -1,9 +1,9 @@
 import { Redis } from "ioredis";
-import mongoose from "mongoose";
 import request from "supertest";
 import { createApp } from "../../src/app.js";
 import { loadEnv } from "../../src/config/env.js";
-import { connectMongo } from "../../src/lib/mongo.js";
+import type { Prisma } from "../../src/generated/prisma/client.js";
+import { connectDb, prisma } from "../../src/lib/db.js";
 import { createElasticsearch } from "../../src/lib/elasticsearch.js";
 import { createS3, createStorage, ensureBucket } from "../../src/lib/s3.js";
 import { SearchIndexer } from "../../src/modules/search/search-indexer.js";
@@ -14,11 +14,10 @@ import { createPaymentProvider, type PaymentProvider } from "../../src/modules/p
 import { MockPayoutProvider, type PayoutProvider } from "../../src/modules/payments/payout-provider.js";
 import { directSearchSync } from "../../src/modules/search/search-sync.js";
 import { hashPassword } from "../../src/modules/auth/password.js";
-import { User } from "../../src/modules/users/user.model.js";
+import { testDatabaseUrl } from "./global-setup.js";
 
-// Integration tests use their own MongoDB database and Redis database 15, and wipe them,
+// Integration tests use their own PostgreSQL database (shopsphere_test) and Redis database 15, and wipe them,
 // so running them never touches development data.
-export const TEST_DB = "shopsphere_test";
 const TEST_REDIS_DB = 15;
 
 export const env = loadEnv({
@@ -45,7 +44,7 @@ export function testRedis(): Redis {
 
 // Payments, payouts and their jobs run inside the request, so a test can check the result straight after.
 export async function startTestServices(opts: { payments?: PaymentProvider; payouts?: PayoutProvider } = {}) {
-  await connectMongo(env.MONGO_URL, TEST_DB);
+  await connectDb(testDatabaseUrl(env.DATABASE_URL));
   const redis = testRedis();
   const s3 = createS3(env);
   await ensureBucket(s3, env.S3_BUCKET);
@@ -76,11 +75,11 @@ export async function startTestServices(opts: { payments?: PaymentProvider; payo
   return { app, redis, storage, es, indexer, searchSync, payments, payouts };
 }
 
-// Empties every collection but keeps them and their indexes (dropping the whole database between tests
-// races with MongoDB recreating collections on a replica set).
+// Empties every table (but keeps the schema and the migration history).
 export async function wipe(redis: Redis) {
-  const collections = await mongoose.connection.db!.collections();
-  await Promise.all(collections.map((c) => c.deleteMany({})));
+  const tables = await prisma.$queryRaw<{ tablename: string }[]>`
+    SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename <> '_prisma_migrations'`;
+  await prisma.$executeRawUnsafe(`TRUNCATE ${tables.map((t) => `"${t.tablename}"`).join(", ")} CASCADE`);
   await redis.flushdb();
   await searchClient.deleteByQuery({ index: env.ES_INDEX, query: { match_all: {} }, refresh: true, conflicts: "proceed" }, { ignore: [404] });
 }
@@ -111,7 +110,7 @@ export const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
 
 // Admins can't sign up, so tests create one directly and sign in through the API.
 export async function signInAdmin(app: Parameters<typeof request>[0], email = "admin@example.com") {
-  await User.create({ name: "Test Admin", email, passwordHash: await hashPassword(PASSWORD, 4), role: "admin" });
+  await prisma.user.create({ data: { name: "Test Admin", email, passwordHash: await hashPassword(PASSWORD, 4), role: "admin" } });
   const res = await request(app).post("/api/v1/auth/login").send({ email, password: PASSWORD });
   return res.body.accessToken as string;
 }
@@ -144,4 +143,12 @@ export async function uploadImage(app: Parameters<typeof request>[0], token: str
   const put = await fetch(presign.body.uploadUrl as string, { method: "PUT", body, headers: presign.body.headers as Record<string, string> });
   if (!put.ok) throw new Error(`upload failed: ${put.status}`);
   return presign.body.key as string;
+}
+
+// A product straight in the database (with its photos as rows), for tests that don't go through the vendor API.
+export function createProduct(fields: Omit<Prisma.ProductUncheckedCreateInput, "images"> & { images?: { key: string; alt?: string }[] }) {
+  const { images = [], ...rest } = fields;
+  return prisma.product.create({
+    data: { ...rest, images: { create: images.map((img, position) => ({ position, key: img.key, alt: img.alt ?? "" })) } },
+  });
 }

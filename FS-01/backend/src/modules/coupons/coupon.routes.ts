@@ -5,7 +5,8 @@ import { AppError } from "../../middleware/errors.js";
 import { idParam, pageQuery, parseQuery, patchSchema, validateBody } from "../../middleware/validate.js";
 import type { RouteContext } from "../context.js";
 import { loadOwnStore } from "../vendors/vendor-access.js";
-import { Coupon, toCouponView, type CouponDoc } from "./coupon.model.js";
+import { isUniqueViolation, prisma } from "../../lib/db.js";
+import { toCouponView } from "./coupon.model.js";
 
 const paise = z.number().int().min(100, "At least ₹1").max(100_000_000);
 
@@ -44,7 +45,7 @@ function checkCoupon(c: Pick<CouponInput, "type" | "value" | "startsAt" | "endsA
 }
 
 const codeTaken = (err: unknown) => {
-  if ((err as { code?: number }).code === 11000) {
+  if (isUniqueViolation(err)) {
     throw new AppError(409, "code_taken", "A coupon with this code already exists", { fields: [{ field: "code", message: "This code is already used" }] });
   }
   throw err;
@@ -58,17 +59,20 @@ export function couponRouter(ctx: RouteContext): Router {
   const admin = [ctx.signedIn, requireRole("admin")];
   const seller = [ctx.signedIn, requireRole("vendor"), loadOwnStore({ approved: true })];
 
-  const scopeOf = (req: Request) => (req.vendor ? { scope: "vendor" as const, vendorId: req.vendor._id } : { scope: "platform" as const });
+  const scopeOf = (req: Request) => (req.vendor ? { scope: "vendor" as const, vendorId: req.vendor.id } : { scope: "platform" as const });
 
   async function list(req: Request) {
     const q = parseQuery(listQuery, req);
-    const filter = { ...scopeOf(req), ...(q.active && { isActive: q.active === "true" }) };
+    // Platform coupons have no store; a store sees only its own.
+    const where = { ...scopeOf(req), ...(!req.vendor && { vendorId: null }), ...(q.active && { isActive: q.active === "true" }) };
     const [items, total] = await Promise.all([
-      Coupon.find(filter)
-        .sort({ createdAt: -1, _id: -1 })
-        .skip((q.page - 1) * q.limit)
-        .limit(q.limit),
-      Coupon.countDocuments(filter),
+      prisma.coupon.findMany({
+        where,
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        skip: (q.page - 1) * q.limit,
+        take: q.limit,
+      }),
+      prisma.coupon.count({ where }),
     ]);
     return { items: items.map(toCouponView), page: q.page, limit: q.limit, total };
   }
@@ -76,30 +80,23 @@ export function couponRouter(ctx: RouteContext): Router {
   async function create(req: Request) {
     const body = req.body as CouponInput;
     checkCoupon(body);
-    const coupon = await Coupon.create({
-      ...body,
-      ...scopeOf(req),
-      maxDiscount: body.maxDiscount ?? undefined,
-      startsAt: body.startsAt ?? undefined,
-      endsAt: body.endsAt ?? undefined,
-      usageLimit: body.usageLimit ?? undefined,
-      description: body.description || undefined,
-      createdBy: req.auth!.id,
-    }).catch(codeTaken);
+    const coupon = await prisma.coupon
+      .create({ data: { ...body, ...scopeOf(req), description: body.description || null, createdBy: req.auth!.id } })
+      .catch(codeTaken);
     return { coupon: toCouponView(coupon) };
   }
 
   async function update(req: Request) {
-    const coupon = await Coupon.findOne({ _id: idParam(req), ...scopeOf(req) });
+    const coupon = await prisma.coupon.findFirst({ where: { id: idParam(req), ...scopeOf(req) } });
     if (!coupon) throw new AppError(404, "not_found", "Coupon not found");
     const changes = req.body as z.infer<typeof updateSchema>;
     const merged = { ...toCouponView(coupon), ...changes } as unknown as CouponInput;
     checkCoupon({ ...merged, startsAt: merged.startsAt ? new Date(merged.startsAt) : null, endsAt: merged.endsAt ? new Date(merged.endsAt) : null });
-    for (const [key, value] of Object.entries(changes)) {
-      coupon.set(key, value === null || value === "" ? undefined : value);
-    }
-    await coupon.save();
-    return { coupon: toCouponView(coupon as CouponDoc) };
+    const updated = await prisma.coupon.update({
+      where: { id: coupon.id },
+      data: { ...changes, ...(changes.description !== undefined && { description: changes.description || null }) },
+    });
+    return { coupon: toCouponView(updated) };
   }
 
   router.get("/admin/coupons", ...admin, async (req, res) => res.json(await list(req)));

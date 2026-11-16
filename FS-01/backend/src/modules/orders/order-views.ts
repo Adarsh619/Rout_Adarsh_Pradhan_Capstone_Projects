@@ -1,11 +1,9 @@
 import type { Storage } from "../../lib/s3.js";
-import type { OrderDoc, SubOrderDoc, SubOrderStatus } from "./order.model.js";
+import { shippingAddressOf, type OrderLine, type OrderRow, type SubOrderRow } from "./order.model.js";
 import { canCustomerCancel, VENDOR_NEXT } from "./order-rules.js";
 
-type Line = OrderDoc["items"][number];
-
-const lineView = (l: Line, storage: Storage) => ({
-  productId: l.productId.toString(),
+const lineView = (l: OrderLine, storage: Storage) => ({
+  productId: l.productId,
   title: l.title,
   image: l.imageKey ? storage.publicUrl(l.imageKey) : null,
   price: l.price,
@@ -13,105 +11,100 @@ const lineView = (l: Line, storage: Storage) => ({
   lineTotal: l.price * l.qty,
 });
 
-const timeline = (s: SubOrderDoc) =>
-  s.statusHistory.map((h) => ({ status: h.status as SubOrderStatus, at: (h.at as Date).toISOString(), byRole: h.byRole, note: h.note ?? null }));
+const timeline = (s: SubOrderRow) => s.history.map((h) => ({ status: h.status, at: h.at.toISOString(), byRole: h.byRole, note: h.note }));
 
 const iso = (d: Date | null | undefined) => (d ? d.toISOString() : null);
 
-const address = (o: OrderDoc) => ({
-  name: o.shippingAddress.name,
-  phone: o.shippingAddress.phone,
-  line1: o.shippingAddress.line1,
-  line2: o.shippingAddress.line2 ?? null,
-  city: o.shippingAddress.city,
-  state: o.shippingAddress.state,
-  pincode: o.shippingAddress.pincode,
-});
+const address = (o: OrderRow) => {
+  const a = shippingAddressOf(o);
+  return { name: a.name, phone: a.phone, line1: a.line1, line2: a.line2 ?? null, city: a.city, state: a.state, pincode: a.pincode };
+};
+
+const tracking = (s: SubOrderRow) => (s.trackingNumber ? { carrier: s.trackingCarrier ?? "", number: s.trackingNumber } : null);
 
 // The customer's view of an order and its parts. Commission and vendor shares are never shown to customers.
-export function toCustomerOrder(o: OrderDoc, parts: SubOrderDoc[], storage: Storage) {
+export function toCustomerOrder(o: OrderRow, parts: SubOrderRow[], storage: Storage) {
   const pending = o.status === "pending_payment";
   return {
-    id: o.id as string,
+    id: o.id,
     orderNumber: o.orderNumber,
     status: o.status,
-    createdAt: (o.createdAt as Date).toISOString(),
+    createdAt: o.createdAt.toISOString(),
     itemsTotal: o.itemsTotal,
     discount: o.discount,
     shipping: o.shipping,
     grandTotal: o.grandTotal,
-    coupon: o.coupon?.code ? { code: o.coupon.code, scope: o.coupon.scope as "platform" | "vendor" } : null,
+    coupon: o.couponCode && o.couponScope ? { code: o.couponCode, scope: o.couponScope } : null,
     payment: {
-      provider: o.payment!.provider,
-      status: o.payment!.status,
-      paidAt: iso(o.payment!.paidAt),
-      refundedAmount: o.payment!.refundedAmount ?? 0,
+      provider: o.paymentProvider,
+      status: o.paymentStatus,
+      paidAt: iso(o.paidAt),
+      refundedAmount: o.refundedAmount,
       // Needed to open the payment screen again while the order waits for payment.
-      providerOrderId: pending ? (o.payment!.providerOrderId ?? null) : null,
+      providerOrderId: pending ? o.paymentProviderOrderId : null,
     },
     reservationExpiresAt: pending ? o.reservationExpiresAt.toISOString() : null,
     shippingAddress: address(o),
     parts: parts.map((s) => ({
-      id: s.id as string,
+      id: s.id,
       vendor: { storeName: s.vendorName, slug: s.vendorSlug },
-      items: s.items.map((l) => lineView(l, storage)),
+      items: s.lines.map((l) => lineView(l, storage)),
       itemsTotal: s.itemsTotal,
-      discountShare: s.discountShare ?? 0,
+      discountShare: s.discountShare,
       payable: s.payable,
-      status: s.status as SubOrderStatus,
-      tracking: s.tracking?.number ? { carrier: s.tracking.carrier ?? "", number: s.tracking.number } : null,
+      status: s.status,
+      tracking: tracking(s),
       timeline: timeline(s),
-      invoiceNumber: s.invoiceNumber ?? null,
+      invoiceNumber: s.invoiceNumber,
       // Reviews open once the part is delivered.
       canReview: s.status === "delivered",
-      canCancel: canCustomerCancel(s.status as SubOrderStatus),
-      cancelReason: s.cancelReason ?? null,
-      refund: s.refund?.amount ? { amount: s.refund.amount, status: s.refund.status ?? "pending" } : null,
+      canCancel: canCustomerCancel(s.status),
+      cancelReason: s.cancelReason,
+      refund: s.refundAmount ? { amount: s.refundAmount, status: s.refundStatus ?? "pending" } : null,
     })),
   };
 }
 
 // A row in "My orders".
-export function toOrderSummary(o: OrderDoc, parts: SubOrderDoc[], storage: Storage) {
-  const first = o.items[0];
+export function toOrderSummary(o: OrderRow, parts: Pick<SubOrderRow, "vendorName" | "status">[], storage: Storage) {
+  const first = o.lines[0];
   return {
-    id: o.id as string,
+    id: o.id,
     orderNumber: o.orderNumber,
     status: o.status,
-    createdAt: (o.createdAt as Date).toISOString(),
+    createdAt: o.createdAt.toISOString(),
     grandTotal: o.grandTotal,
-    itemCount: o.items.reduce((n, l) => n + l.qty, 0),
+    itemCount: o.lines.reduce((n, l) => n + l.qty, 0),
     image: first?.imageKey ? storage.publicUrl(first.imageKey) : null,
-    title: first ? (o.items.length > 1 ? `${first.title} and ${o.items.length - 1} more` : first.title) : "",
-    parts: parts.map((s) => ({ storeName: s.vendorName, status: s.status as SubOrderStatus })),
+    title: first ? (o.lines.length > 1 ? `${first.title} and ${o.lines.length - 1} more` : first.title) : "",
+    parts: parts.map((s) => ({ storeName: s.vendorName, status: s.status })),
   };
 }
 
 // The vendor's view of their part: what to pack, where to send it, and what they'll earn.
-export function toVendorPart(s: SubOrderDoc, order: OrderDoc | undefined, customerName: string | undefined, storage: Storage) {
-  const status = s.status as SubOrderStatus;
+export function toVendorPart(s: SubOrderRow, order: OrderRow | undefined, customerName: string | undefined, storage: Storage) {
   return {
-    id: s.id as string,
+    id: s.id,
     orderNumber: s.orderNumber,
-    status,
+    status: s.status,
     placedAt: iso(s.placedAt),
-    items: s.items.map((l) => lineView(l, storage)),
+    items: s.lines.map((l) => lineView(l, storage)),
     itemsTotal: s.itemsTotal,
-    discountShare: s.discountShare ?? 0,
-    discountBy: (s.discountBy as "platform" | "vendor" | undefined) ?? null,
+    discountShare: s.discountShare,
+    discountBy: s.discountBy,
     payable: s.payable,
     commission: s.commission,
-    invoiceNumber: s.invoiceNumber ?? null,
+    invoiceNumber: s.invoiceNumber,
     vendorNet: s.vendorNet,
-    customer: { name: customerName ?? order?.shippingAddress.name ?? "" },
+    customer: { name: customerName ?? (order ? shippingAddressOf(order).name : "") },
     shippingAddress: order ? address(order) : null,
-    tracking: s.tracking?.number ? { carrier: s.tracking.carrier ?? "", number: s.tracking.number } : null,
+    tracking: tracking(s),
     timeline: timeline(s),
-    nextStatus: VENDOR_NEXT[status] ?? null,
-    cancelReason: s.cancelReason ?? null,
+    nextStatus: VENDOR_NEXT[s.status] ?? null,
+    cancelReason: s.cancelReason,
     // Escrow: held until delivery, then released and paid out; reversed if the part is cancelled.
-    payout: s.payout?.status
-      ? { status: s.payout.status, amount: s.payout.amount ?? s.vendorNet, releasedAt: iso(s.payout.releasedAt), paidAt: iso(s.payout.paidAt), reference: s.payout.providerRef ?? null }
+    payout: s.payoutStatus
+      ? { status: s.payoutStatus, amount: s.payoutAmount ?? s.vendorNet, releasedAt: iso(s.payoutReleasedAt), paidAt: iso(s.payoutPaidAt), reference: s.payoutProviderRef }
       : null,
   };
 }

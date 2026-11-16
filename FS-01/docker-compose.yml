@@ -6,7 +6,7 @@ name: shopsphere
 x-backend-env: &backend-env
   NODE_ENV: production
   LOG_LEVEL: ${LOG_LEVEL:-info}
-  MONGO_URL: mongodb://mongo:27017/shopsphere?replicaSet=rs0
+  DATABASE_URL: postgresql://shopsphere:${POSTGRES_PASSWORD:-shopsphere}@postgres:5432/shopsphere
   REDIS_URL: redis://redis:6379/0
   ELASTICSEARCH_URL: http://elasticsearch:9200
   S3_ENDPOINT: http://s3:9090
@@ -29,29 +29,21 @@ x-backend-env: &backend-env
   COOKIE_SAME_SITE: ${COOKIE_SAME_SITE:-lax}
 
 services:
-  mongo:
-    # 7.0, not 8.x: every MongoDB 8 release refuses to start on Linux kernels 6.19 and newer
-    # (SERVER-121912), which GitHub's runners and new Ubuntu servers now use. 7.0 is a supported long-term release.
-    image: mongo:7.0.45
-    # A single-node replica set: MongoDB only allows multi-document transactions on a replica set,
-    # and checkout uses one to create the order and reserve stock together.
-    command: ["--replSet", "rs0", "--bind_ip_all"]
-    ports: ["127.0.0.1:27017:27017"]
-    volumes: [mongo-data:/data/db]
+  postgres:
+    # This PC's port 5433 (5432 is often taken by another local Postgres).
+    image: postgres:17.7-alpine
+    environment:
+      POSTGRES_USER: shopsphere
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-shopsphere}
+      POSTGRES_DB: shopsphere
+    ports: ["127.0.0.1:5433:5432"]
+    volumes: [pg-data:/var/lib/postgresql/data]
     restart: unless-stopped
-    # The health check also starts the replica set the first time (and is a no-op afterwards). The member is
-    # named mongo:27017 so other containers can reach it; tools on this PC connect with directConnection=true.
     healthcheck:
-      test:
-        - CMD
-        - mongosh
-        - --quiet
-        - --eval
-        - "try { rs.status().ok } catch (e) { rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'mongo:27017' }] }).ok }"
+      test: ["CMD-SHELL", "pg_isready -U shopsphere -d shopsphere"]
       interval: 5s
-      timeout: 10s
+      timeout: 3s
       retries: 20
-      start_period: 10s
 
   redis:
     image: redis:7.4.12-alpine
@@ -105,7 +97,7 @@ services:
       PORT: "4000"
       DEMO_PASSWORD: ${DEMO_PASSWORD:-}
     depends_on:
-      mongo: { condition: service_healthy }
+      postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
       elasticsearch: { condition: service_healthy }
       s3: { condition: service_healthy }
@@ -139,7 +131,7 @@ services:
     restart: unless-stopped
 
 volumes:
-  mongo-data:
+  pg-data:
   redis-data:
   es-data:
   s3-data:

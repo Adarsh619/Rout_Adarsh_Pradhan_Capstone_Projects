@@ -9,12 +9,12 @@ An Amazon-style marketplace where **many vendors sell**, **customers buy from se
 |---|---|
 | Frontend | React 19 · Vite · React Router · TanStack Query · Tailwind CSS |
 | API + worker | Node.js 24 · Express 5 · TypeScript · Zod · BullMQ |
-| Data | MongoDB 7.0 (replica set, transactions) · Redis 7.4 · Elasticsearch 8.19 |
+| Data | PostgreSQL 17 · Prisma 7 (migrations, transactions) · Redis 7.4 · Elasticsearch 8.19 |
 | Files | AWS S3 (Adobe S3Mock locally) |
 | Payments | Razorpay test mode (UPI, cards, webhooks, refunds) + own split-and-escrow ledger; built-in mock needs no account ([how it works](docs/09-payments.md)) |
 | Infra | Docker Compose · nginx · GitHub Actions |
 
-**Status:** Day 8 of 10. Sign-in and roles work end to end; vendors apply for a store, admins approve or suspend it, vendors list products with photos uploaded straight to S3, and shoppers search 214 seeded products across 5 stores with typo-tolerant Elasticsearch search. Shoppers fill one cart from several stores (as guests too), check out once with stock held for 15 minutes, pay through Razorpay's test-mode popup, and follow each store's part from placed to delivered while vendors pack and ship their own part. Each store's share is held until delivery, then paid out (simulated); cancelling a part refunds it through Razorpay. Coupons (platform or store), an invoice PDF for each store's part, and reviews from customers whose order was delivered. Admins see live analytics (sales, commission, daily chart, top stores and products) and can refund and moderate; vendors see their earnings. Progress is tracked in the [10-day build tracker](docs/guides/DAY_PLAN.md).
+**Status:** Day 10 of 10; live (links above). Sign-in and roles work end to end; vendors apply for a store, admins approve or suspend it, vendors list products with photos uploaded straight to S3, and shoppers search 214 seeded products across 5 stores with typo-tolerant Elasticsearch search. Shoppers fill one cart from several stores (as guests too), check out once with stock held for 15 minutes, pay through Razorpay's test-mode popup, and follow each store's part from placed to delivered while vendors pack and ship their own part. Each store's share is held until delivery, then paid out (simulated); cancelling a part refunds it through Razorpay. Coupons (platform or store), an invoice PDF for each store's part, and reviews from customers whose order was delivered. Admins see live analytics (sales, commission, daily chart, top stores and products) and can refund and moderate; vendors see their earnings. Progress is tracked in the [10-day build tracker](docs/guides/DAY_PLAN.md).
 
 **Live demo:** https://shopsphere-fs01.vercel.app (frontend, Vercel) · API: https://shopsphere-adarsh.duckdns.org/api/v1/health (AWS, Mumbai) · demo logins below; the live demo password is given with the submission. The demo resets every night at 03:00 IST.
 
@@ -59,14 +59,14 @@ The catalogue comes from a committed snapshot ([`backend/seed/catalog.json`](bac
 depends on those sites being up; refresh it with `npm run seed:snapshot`. Prices are converted to rupees. The seed
 finishes by rebuilding the search index; to rebuild it on its own: `docker compose exec api node dist/scripts/reindex.js`.
 
-Port 3000 taken? Set `FRONTEND_PORT=3001` (and `CORS_ORIGINS=http://localhost:3001`) in `.env`. MongoDB, Redis, Elasticsearch, S3Mock and the API publish their ports on `127.0.0.1` only. The browser loads photos and uploads new ones straight from S3Mock on port 9090, the same way it talks to AWS S3 on the live site.
+Port 3000 taken? Set `FRONTEND_PORT=3001` (and `CORS_ORIGINS=http://localhost:3001`) in `.env`. PostgreSQL (on port 5433), Redis, Elasticsearch, S3Mock and the API publish their ports on `127.0.0.1` only. The browser loads photos and uploads new ones straight from S3Mock on port 9090, the same way it talks to AWS S3 on the live site.
 
 ## Developing without rebuilding images
 
 Keep the backing services in Docker and run the code on your PC with hot reload:
 
 ```bash
-docker compose up -d mongo redis elasticsearch s3
+docker compose up -d postgres redis elasticsearch s3
 cd backend && npm install && npm run dev        # API on :4000 (another terminal: npm run dev:worker)
 cd frontend && npm install && npm run dev       # app on :5173, /api is proxied to :4000
 ```

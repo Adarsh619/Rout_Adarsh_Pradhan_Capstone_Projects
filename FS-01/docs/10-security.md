@@ -12,7 +12,7 @@ sequenceDiagram
   participant B as Browser (React)
   participant A as API
   participant R as Redis
-  participant M as MongoDB
+  participant M as PostgreSQL
   B->>A: POST /auth/login {email, password}
   A->>R: failed-attempt counter for this email (max 5 / 15 min)
   A->>M: find user, bcrypt compare
@@ -138,12 +138,12 @@ sequence in the [API reference](06-api-reference.md#uploads).
 | Logs | Authorization and cookie headers and password fields are redacted |
 | Redirects | `?next=` after sign-in only accepts same-site paths (`/…`, not `//…` or `https://…`) |
 | Secrets | `JWT_ACCESS_SECRET` must be set (32+ characters) when `NODE_ENV=production`; `SameSite=None` is refused without `Secure`; `.env` is git-ignored |
-| Network | MongoDB, Redis and Elasticsearch ports are bound to `127.0.0.1` locally and never opened on the server |
+| Network | PostgreSQL, Redis and Elasticsearch ports are bound to `127.0.0.1` locally and never opened on the server |
 
 ## Tests that prove it
 
 - Unit (`backend/tests/auth-units.test.ts`): password rules incl. the 72-byte limit, JWT expiry vs tampering vs `alg: none`, refresh-token parsing, `requireAuth` / `requireRole`, production secret rules.
-- Integration against real MongoDB and Redis (`backend/tests/integration/auth.test.ts`): sign-up, case-insensitive sign-in, identical errors for unknown email and wrong password, the 5-failure lock, suspended accounts, rotation, the two-tab race, reuse detection signing out every device, CSRF header, logout killing the access token at once, password change signing out other devices.
+- Integration against real PostgreSQL and Redis (`backend/tests/integration/auth.test.ts`): sign-up, case-insensitive sign-in, identical errors for unknown email and wrong password, the 5-failure lock, suspended accounts, rotation, the two-tab race, reuse detection signing out every device, CSRF header, logout killing the access token at once, password change signing out other devices.
 - Unit and integration (`payment-units.test.ts`, `payments.test.ts`): forged and wrongly signed webhooks refused, live keys refused, a payment for the wrong order or amount refused, duplicate events and late payments never processed twice, only 4 digits of an account stored.
 - Integration (`orders.test.ts`): another customer's order is 404, vendors and admins can't check out, guest cart writes need the CSRF header, a forged payment signature is refused, a vendor can't move another store's part.
 - Integration (`vendors.test.ts`, `catalog.test.ts`): admin-only routes, vendor ownership (404 for another store's product), unapproved stores blocked, photos from another store or never uploaded refused, a file stored as HTML refused, suspension hiding products straight away.

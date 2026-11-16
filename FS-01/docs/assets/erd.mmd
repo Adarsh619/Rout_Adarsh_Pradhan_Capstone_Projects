@@ -1,29 +1,35 @@
 erDiagram
-  USER ||--o| VENDOR : "owns store"
-  USER ||--o{ ORDER : places
-  USER ||--o{ REVIEW : writes
-  VENDOR ||--o{ PRODUCT : lists
-  VENDOR ||--o{ SUB_ORDER : fulfils
-  VENDOR ||--o{ COUPON : "vendor coupons"
-  CATEGORY ||--o{ PRODUCT : groups
-  CATEGORY ||--o{ CATEGORY : parent
-  ORDER ||--|{ SUB_ORDER : "split per vendor"
-  ORDER ||--o{ LEDGER_ENTRY : records
-  SUB_ORDER ||--o{ LEDGER_ENTRY : records
-  SUB_ORDER ||--o| INVOICE : has
-  SUB_ORDER ||--o{ REVIEW : "verifies purchase"
-  PRODUCT ||--o{ REVIEW : receives
-  COUPON ||--o{ COUPON_REDEMPTION : "used in"
-  ORDER ||--o| COUPON_REDEMPTION : applies
+  USERS ||--o{ ADDRESSES : "saves (max 5)"
+  USERS ||--o| VENDORS : "owns store"
+  USERS ||--o{ ORDERS : places
+  USERS ||--o{ REVIEWS : writes
+  VENDORS ||--o{ PRODUCTS : lists
+  VENDORS ||--o{ SUB_ORDERS : fulfils
+  VENDORS ||--o{ COUPONS : "store coupons"
+  CATEGORIES ||--o{ PRODUCTS : groups
+  CATEGORIES ||--o{ CATEGORIES : "parent of"
+  PRODUCTS ||--o{ PRODUCT_IMAGES : "photos (max 6)"
+  PRODUCTS ||--o{ REVIEWS : receives
+  ORDERS ||--|{ SUB_ORDERS : "split per store"
+  ORDERS ||--|{ ORDER_LINES : contains
+  SUB_ORDERS ||--|{ ORDER_LINES : ships
+  SUB_ORDERS ||--|{ SUB_ORDER_EVENTS : "status history"
+  SUB_ORDERS ||--o| INVOICES : has
+  COUPONS ||--o{ COUPON_REDEMPTIONS : "used in"
+  ORDERS ||--o{ LEDGER_ENTRIES : "money moved"
 
-  USER { ObjectId _id string email string role string status }
-  VENDOR { ObjectId userId string slug string status int commissionRateBp string bankLast4 }
-  CATEGORY { string slug ObjectId parentId int commissionRateBp }
-  PRODUCT { ObjectId vendorId ObjectId categoryId int price int stock string status }
-  ORDER { string orderNumber ObjectId customerId int grandTotal string status }
-  SUB_ORDER { ObjectId orderId ObjectId vendorId int payable int commission int vendorNet string payoutStatus }
-  LEDGER_ENTRY { string type int amount string providerRef }
-  INVOICE { string invoiceNumber string s3Key }
-  REVIEW { int rating string status }
-  COUPON { string code string scope string type int value }
-  COUPON_REDEMPTION { ObjectId couponId ObjectId userId ObjectId orderId }
+  USERS { uuid id PK text email UK Role role AccountStatus status }
+  ADDRESSES { uuid id PK uuid userId FK bool isDefault }
+  VENDORS { uuid id PK uuid userId FK,UK text slug UK VendorStatus status int commissionRateBp PayoutAccountStatus payoutStatus }
+  CATEGORIES { uuid id PK text slug UK uuid parentId FK int commissionRateBp bool isActive }
+  PRODUCTS { uuid id PK uuid vendorId FK uuid categoryId FK int price int stock ProductStatus status jsonb attributes }
+  PRODUCT_IMAGES { uuid productId PK,FK int position PK text key }
+  ORDERS { uuid id PK text orderNumber UK uuid customerId FK int grandTotal OrderStatus status PaymentStatus paymentStatus jsonb shippingAddress }
+  SUB_ORDERS { uuid id PK uuid orderId FK uuid vendorId FK int payable int commission int vendorNet SubOrderStatus status PayoutStatus payoutStatus }
+  ORDER_LINES { uuid id PK uuid orderId FK uuid subOrderId FK uuid productId int price int qty int commissionRateBp }
+  SUB_ORDER_EVENTS { uuid id PK uuid subOrderId FK SubOrderStatus status timestamptz at ActorRole byRole }
+  INVOICES { uuid id PK uuid subOrderId FK,UK text invoiceNumber UK text s3Key }
+  REVIEWS { uuid id PK uuid productId FK uuid userId FK int rating ReviewStatus status }
+  COUPONS { uuid id PK text code UK CouponScope scope CouponType type int value int usedCount }
+  COUPON_REDEMPTIONS { uuid id PK uuid couponId FK uuid userId uuid orderId }
+  LEDGER_ENTRIES { uuid id PK text key UK LedgerType type uuid orderId uuid subOrderId int amount }

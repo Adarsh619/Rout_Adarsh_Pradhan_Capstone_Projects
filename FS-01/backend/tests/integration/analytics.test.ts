@@ -1,19 +1,11 @@
 import type { Express } from "express";
 import type { Redis } from "ioredis";
-import type { Types } from "mongoose";
 import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { todayIst } from "../../src/modules/analytics/date-range.js";
-import { disconnectMongo } from "../../src/lib/mongo.js";
-import { Category } from "../../src/modules/catalog/category.model.js";
-import { Product } from "../../src/modules/catalog/product.model.js";
-import { Coupon, CouponRedemption } from "../../src/modules/coupons/coupon.model.js";
-import { Counter, Order, SubOrder } from "../../src/modules/orders/order.model.js";
-import { LedgerEntry } from "../../src/modules/payments/ledger.model.js";
+import { disconnectDb, prisma } from "../../src/lib/db.js";
 import { MockPaymentProvider, PaymentProviderError } from "../../src/modules/payments/payment-provider.js";
-import { User } from "../../src/modules/users/user.model.js";
-import { Vendor } from "../../src/modules/vendors/vendor.model.js";
-import { approvedVendor, bearer, register, signInAdmin, startTestServices, wipe, withCsrf } from "./helpers.js";
+import { approvedVendor, bearer, register, signInAdmin, startTestServices, wipe, withCsrf , createProduct } from "./helpers.js";
 
 class TestPayments extends MockPaymentProvider {
   refuseRefunds = false;
@@ -29,7 +21,6 @@ let redis: Redis;
 
 beforeAll(async () => {
   ({ app, redis } = await startTestServices({ payments }));
-  await Promise.all([User.init(), Vendor.init(), Category.init(), Product.init(), Order.init(), SubOrder.init(), Counter.init(), LedgerEntry.init(), Coupon.init(), CouponRedemption.init()]);
 });
 
 beforeEach(async () => {
@@ -39,7 +30,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await wipe(redis);
-  await Promise.allSettled([disconnectMongo(), redis.quit()]);
+  await Promise.allSettled([disconnectDb(), redis.quit()]);
 });
 
 const api = () => request(app);
@@ -47,20 +38,20 @@ const api = () => request(app);
 // Two stores at 10%: a ₹20,000 phone (Vikram) and ₹299 cables (Meera).
 async function shop() {
   const admin = await signInAdmin(app);
-  const cat = await Category.create({ name: "Phones", slug: "phones" });
+  const cat = await prisma.category.create({ data: { name: "Phones", slug: "phones" } });
   const vikram = await approvedVendor(app, admin, "vikram@example.com", "Vikram Electronics");
   const meera = await approvedVendor(app, admin, "meera@example.com", "Meera Gadgets");
-  const product = (vendorId: string, categoryId: Types.ObjectId, title: string, price: number) =>
-    Product.create({ vendorId, categoryId, title, slug: title.toLowerCase().replace(/\W+/g, "-"), price, mrp: price, stock: 20, status: "active", images: [{ key: `products/${vendorId}/a.png`, alt: "" }] });
-  const phone = await product(vikram.storeId, cat._id, "Galaxy Phone", 2_000_000);
-  const cable = await product(meera.storeId, cat._id, "USB-C Cable", 29_900);
-  return { admin, vikram, meera, phoneId: phone.id as string, cableId: cable.id as string };
+  const product = (vendorId: string, categoryId: string, title: string, price: number) =>
+    createProduct({ vendorId, categoryId, title, slug: title.toLowerCase().replace(/\W+/g, "-"), price, mrp: price, stock: 20, status: "active", images: [{ key: `products/${vendorId}/a.png`, alt: "" }] });
+  const phone = await product(vikram.storeId, cat.id, "Galaxy Phone", 2_000_000);
+  const cable = await product(meera.storeId, cat.id, "USB-C Cable", 29_900);
+  return { admin, vikram, meera, phoneId: phone.id, cableId: cable.id };
 }
 
 async function customer(email = "priya@example.com") {
   const { accessToken: token } = await register(app, { email, name: "Priya Sharma" });
   const address = await api().post("/api/v1/account/addresses").set(bearer(token)).send({ name: "Priya Sharma", phone: "9876543210", line1: "12 MG Road", city: "Bengaluru", state: "Karnataka", pincode: "560001" });
-  return { token, addressId: address.body.address.id as string };
+  return { token, addressId: address.body.address.id };
 }
 
 // Buys what's given and pays for it; returns the order and its parts (oldest line's store first).
@@ -70,7 +61,7 @@ async function buy(c: { token: string; addressId: string }, lines: [string, numb
   const { order, payment } = (await api().post("/api/v1/checkout").set(bearer(c.token)).send({ addressId: c.addressId })).body;
   const proof = payments.pay(payment.providerOrderId);
   await api().post("/api/v1/checkout/verify").set(bearer(c.token)).send({ orderId: order.id, providerOrderId: payment.providerOrderId, ...proof });
-  return { orderId: order.id as string, parts: (await SubOrder.find({ orderId: order.id }).sort({ _id: 1 })).map((p) => p.id as string) };
+  return { orderId: order.id, parts: (await prisma.subOrder.findMany({ where: { orderId: order.id }, orderBy: { id: "asc" } })).map((p) => p.id) };
 }
 
 const move = (token: string, subId: string, status: string) =>
@@ -82,7 +73,7 @@ async function deliver(token: string, subId: string) {
 describe("admin analytics", () => {
   it("adds up sales, commission, discounts, refunds and escrow, by day, store and product", async () => {
     const s = await shop();
-    await Coupon.create({ code: "WELCOME10", scope: "platform", type: "percent", value: 1000, maxDiscount: 20_000 });
+    await prisma.coupon.create({ data: { code: "WELCOME10", scope: "platform", type: "percent", value: 1000, maxDiscount: 20_000 } });
     await api().put("/api/v1/vendors/me/payout").set(bearer(s.vikram.token)).send({ accountHolder: "Vikram", accountNumber: "123456789012", ifsc: "HDFC0001234" });
     const c = await customer();
     // Order 1: phone + 2 cables with WELCOME10; the phone is delivered (paid out), the cables cancelled (refunded).
@@ -135,7 +126,7 @@ describe("admin analytics", () => {
 describe("vendor earnings", () => {
   it("shows each store only its own sales, its share and where its money is", async () => {
     const s = await shop();
-    await Coupon.create({ code: "VIKRAM5", scope: "vendor", vendorId: s.vikram.storeId, type: "percent", value: 500 });
+    await prisma.coupon.create({ data: { code: "VIKRAM5", scope: "vendor", vendorId: s.vikram.storeId, type: "percent", value: 500 } });
     const c = await customer();
     const order = await buy(c, [[s.phoneId, 1], [s.cableId, 1]], "VIKRAM5");
     await deliver(s.vikram.token, order.parts[0]!);
@@ -165,10 +156,10 @@ describe("admin tools", () => {
     expect((await api().patch(`/api/v1/admin/vendors/${s.vikram.storeId}/commission`).set(bearer(s.admin)).send({ commissionRateBp: 6000 })).status).toBe(400);
     expect((await api().patch(`/api/v1/admin/vendors/${s.vikram.storeId}/commission`).set(bearer(s.vikram.token)).send({ commissionRateBp: 0 })).status).toBe(403);
     const after = await buy(c, [[s.phoneId, 1]]);
-    expect((await SubOrder.findById(before.parts[0]))!.commission).toBe(200_000);
-    expect((await SubOrder.findById(after.parts[0]))!.commission).toBe(100_000);
+    expect((await prisma.subOrder.findUnique({ where: { id: before.parts[0] } }))!.commission).toBe(200_000);
+    expect((await prisma.subOrder.findUnique({ where: { id: after.parts[0] } }))!.commission).toBe(100_000);
     await api().patch(`/api/v1/admin/vendors/${s.vikram.storeId}/commission`).set(bearer(s.admin)).send({ commissionRateBp: null });
-    expect((await Vendor.findById(s.vikram.storeId))!.commissionRateBp).toBeNull();
+    expect((await prisma.vendor.findUnique({ where: { id: s.vikram.storeId } }))!.commissionRateBp).toBeNull();
   });
 
   it("lets support refund a shipped part, finds orders by number or email, and retries a refused refund", async () => {
@@ -185,7 +176,7 @@ describe("admin tools", () => {
     payments.refuseRefunds = true;
     const refunded = await api().post(`/api/v1/admin/sub-orders/${order.parts[0]}/refund`).set(bearer(s.admin)).send({ reason: "Parcel lost in transit" });
     expect(refunded.body.part).toMatchObject({ status: "cancelled", refund: { amount: 2_000_000, status: "failed" } });
-    const timeline = (await SubOrder.findById(order.parts[0]))!.statusHistory.at(-1)!;
+    const timeline = (await prisma.subOrderEvent.findMany({ where: { subOrderId: order.parts[0] }, orderBy: [{ at: "asc" }, { id: "asc" }] })).at(-1)!;
     expect(timeline).toMatchObject({ status: "cancelled", byRole: "admin", note: "Parcel lost in transit" });
 
     const failing = await api().get("/api/v1/admin/orders?refund=failed").set(bearer(s.admin));
@@ -198,7 +189,7 @@ describe("admin tools", () => {
     expect(retried.body.refund).toMatchObject({ status: "processed", lastError: null });
     expect((await api().post(`/api/v1/admin/sub-orders/${order.parts[0]}/refund/retry`).set(bearer(s.admin))).status).toBe(409);
 
-    const orderNumber = (await Order.findById(order.orderId))!.orderNumber;
+    const orderNumber = (await prisma.order.findUnique({ where: { id: order.orderId } }))!.orderNumber;
     expect((await api().get(`/api/v1/admin/orders?q=${orderNumber.slice(-3)}`).set(bearer(s.admin))).body.items[0].orderNumber).toBe(orderNumber);
     expect((await api().get("/api/v1/admin/orders?q=PRIYA@example.com").set(bearer(s.admin))).body.total).toBe(1);
     expect((await api().get("/api/v1/admin/orders?q=nobody@example.com").set(bearer(s.admin))).body.total).toBe(0);

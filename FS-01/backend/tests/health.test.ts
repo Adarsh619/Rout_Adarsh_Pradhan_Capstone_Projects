@@ -14,16 +14,16 @@ const appWith = (checks: Record<string, () => Promise<void>>) =>
 
 describe("runHealthChecks", () => {
   it("reports ok when every service is up", async () => {
-    expect(await runHealthChecks({ mongo: up, redis: up })).toEqual({
+    expect(await runHealthChecks({ postgres: up, redis: up })).toEqual({
       status: "ok",
-      services: { mongo: "up", redis: "up" },
+      services: { postgres: "up", redis: "up" },
     });
   });
 
   it("marks only the failing service as down", async () => {
-    const report = await runHealthChecks({ mongo: up, redis: down });
+    const report = await runHealthChecks({ postgres: up, redis: down });
     expect(report.status).toBe("degraded");
-    expect(report.services).toEqual({ mongo: "up", redis: "down" });
+    expect(report.services).toEqual({ postgres: "up", redis: "down" });
   });
 
   it("treats a service that never answers as down after the timeout", async () => {
@@ -34,14 +34,14 @@ describe("runHealthChecks", () => {
 
 describe("GET /api/v1/health", () => {
   it("returns 200 with service statuses when healthy", async () => {
-    const res = await request(appWith({ mongo: up, redis: up })).get("/api/v1/health");
+    const res = await request(appWith({ postgres: up, redis: up })).get("/api/v1/health");
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ status: "ok", services: { mongo: "up", redis: "up" } });
+    expect(res.body).toMatchObject({ status: "ok", services: { postgres: "up", redis: "up" } });
     expect(res.headers["cache-control"]).toBe("no-store");
   });
 
   it("returns 503 when a service is down", async () => {
-    const res = await request(appWith({ mongo: up, redis: down })).get("/api/v1/health");
+    const res = await request(appWith({ postgres: up, redis: down })).get("/api/v1/health");
     expect(res.status).toBe(503);
     expect(res.body.status).toBe("degraded");
   });

@@ -1,6 +1,7 @@
-import mongoose, { type ClientSession } from "mongoose";
+import { prisma, type Tx } from "./db.js";
 
-// Runs a multi-document change in one MongoDB transaction. The driver retries the whole function on a transient
-// error such as a write conflict (two checkouts touching the same product at the same moment), so `fn` must only
-// depend on what it reads inside the transaction.
-export const inTransaction = <T>(fn: (session: ClientSession) => Promise<T>): Promise<T> => mongoose.connection.transaction(fn);
+// Runs a multi-row change in one PostgreSQL transaction (READ COMMITTED). Races are settled by conditional updates
+// inside it (`updateMany where { id, status: from }`, `stock: { gte: qty }`), so a loser sees count 0 and the whole
+// transaction rolls back when it throws.
+export const inTransaction = <T>(fn: (tx: Tx) => Promise<T>): Promise<T> =>
+  prisma.$transaction(fn, { maxWait: 5_000, timeout: 15_000 });

@@ -1,18 +1,16 @@
 import { Router } from "express";
 import { z } from "zod";
 import { cacheKeys, invalidate } from "../../lib/cache.js";
+import { prisma } from "../../lib/db.js";
 import { requireRole } from "../../middleware/auth.js";
 import { AppError } from "../../middleware/errors.js";
 import { idParam, pageQuery, parseQuery, patchSchema, validateBody } from "../../middleware/validate.js";
 import { listStorefront, storefrontQuery } from "../catalog/storefront.js";
-import { Product } from "../catalog/product.model.js";
-import { SubOrder } from "../orders/order.model.js";
 import type { RouteContext } from "../context.js";
 import { checkUploadedImage, UPLOAD_PURPOSES } from "../uploads/upload-rules.js";
-import { User } from "../users/user.model.js";
 import { uniqueSlug } from "../../lib/slug.js";
 import { loadOwnStore } from "./vendor-access.js";
-import { toOwnStore, toPublicStore, Vendor, VENDOR_STATUSES, type VendorDoc, type VendorStatus } from "./vendor.model.js";
+import { toOwnStore, toPublicStore, VENDOR_STATUSES, type VendorRow, type VendorStatus } from "./vendor.model.js";
 
 // Indian mobile number, with or without +91 / spaces / dashes; stored as the 10 digits.
 const phone = z
@@ -69,12 +67,12 @@ export function vendorRouter(ctx: RouteContext): Router {
   const router = Router();
   const vendorOnly = [ctx.signedIn, requireRole("vendor")];
   const adminOnly = [ctx.signedIn, requireRole("admin")];
-  const slugTaken = async (slug: string) => (await Vendor.exists({ slug })) !== null;
+  const slugTaken = async (slug: string) => (await prisma.vendor.count({ where: { slug } })) > 0;
 
   // A product page or list may show this store; drop cached copies when its status changes.
-  const forgetStoreProducts = async (vendor: VendorDoc) => {
-    const ids = await Product.find({ vendorId: vendor._id }).distinct("_id");
-    await invalidate(ctx.redis, ...ids.map((id) => cacheKeys.product(id.toString())));
+  const forgetStoreProducts = async (vendor: VendorRow) => {
+    const products = await prisma.product.findMany({ where: { vendorId: vendor.id }, select: { id: true } });
+    await invalidate(ctx.redis, ...products.map((p) => cacheKeys.product(p.id)));
   };
 
   // ---- The vendor's own store ------------------------------------------------------------------
@@ -82,14 +80,11 @@ export function vendorRouter(ctx: RouteContext): Router {
   // First application, an edit while it waits, or a new attempt after a rejection.
   router.post("/vendors/apply", ...vendorOnly, validateBody(applySchema), async (req, res) => {
     const body = req.body as z.infer<typeof applySchema>;
-    const existing = await Vendor.findOne({ userId: req.auth!.id });
+    const existing = await prisma.vendor.findUnique({ where: { userId: req.auth!.id } });
 
     if (!existing) {
-      const vendor = await Vendor.create({
-        ...body,
-        userId: req.auth!.id,
-        slug: await uniqueSlug(body.storeName, slugTaken),
-        status: "pending",
+      const vendor = await prisma.vendor.create({
+        data: { ...body, userId: req.auth!.id, slug: await uniqueSlug(body.storeName, slugTaken), status: "pending" },
       });
       res.status(201).json({ store: toOwnStore(vendor, ctx.storage) });
       return;
@@ -98,65 +93,73 @@ export function vendorRouter(ctx: RouteContext): Router {
       throw new AppError(409, "already_applied", "Your store is already set up. Edit it from your store settings.");
     }
     // Not public yet, so the URL can still follow the name.
-    if (body.storeName !== existing.storeName) {
-      existing.slug = await uniqueSlug(body.storeName, async (s) => s !== existing.slug && (await slugTaken(s)));
-    }
-    Object.assign(existing, body, { status: "pending", rejectionReason: undefined, submittedAt: new Date() });
-    if (!body.gstin) existing.gstin = undefined;
-    await existing.save();
-    res.json({ store: toOwnStore(existing, ctx.storage) });
+    const slug =
+      body.storeName !== existing.storeName
+        ? await uniqueSlug(body.storeName, async (s) => s !== existing.slug && (await slugTaken(s)))
+        : existing.slug;
+    const updated = await prisma.vendor.update({
+      where: { id: existing.id },
+      data: { ...body, gstin: body.gstin ?? null, slug, status: "pending", rejectionReason: null, submittedAt: new Date() },
+    });
+    res.json({ store: toOwnStore(updated, ctx.storage) });
   });
 
   router.get("/vendors/me", ...vendorOnly, async (req, res) => {
-    const vendor = await Vendor.findOne({ userId: req.auth!.id });
+    const vendor = await prisma.vendor.findUnique({ where: { userId: req.auth!.id } });
     res.json({ store: vendor ? toOwnStore(vendor, ctx.storage) : null });
   });
 
   router.patch("/vendors/me", ...vendorOnly, loadOwnStore({ approved: false }), validateBody(updateSchema), async (req, res) => {
-    const vendor = req.vendor!;
-    if (vendor.status === "suspended") {
+    const current = req.vendor!;
+    if (current.status === "suspended") {
       throw new AppError(403, "vendor_not_approved", "Your store is suspended, so it can't be changed right now.", {
-        storeStatus: vendor.status,
+        storeStatus: current.status,
       });
     }
     const { logoKey, ...fields } = req.body as z.infer<typeof updateSchema>;
-    const oldLogo = vendor.logoKey;
-    if (logoKey !== undefined && logoKey !== oldLogo) {
-      if (logoKey) {
-        const problem = await checkUploadedImage(ctx.storage, logoKey, UPLOAD_PURPOSES["store-logo"](vendor.id as string));
-        if (problem) throw new AppError(400, "validation_error", "Some fields need fixing", { fields: [{ field: "logoKey", message: problem }] });
-      }
-      vendor.logoKey = logoKey ?? undefined;
+    const oldLogo = current.logoKey;
+    if (logoKey && logoKey !== oldLogo) {
+      const problem = await checkUploadedImage(ctx.storage, logoKey, UPLOAD_PURPOSES["store-logo"](current.id));
+      if (problem) throw new AppError(400, "validation_error", "Some fields need fixing", { fields: [{ field: "logoKey", message: problem }] });
     }
-    Object.assign(vendor, fields);
-    if (fields.gstin === undefined && "gstin" in fields) vendor.gstin = undefined;
-    await vendor.save();
+    const vendor = await prisma.vendor.update({
+      where: { id: current.id },
+      data: {
+        ...fields,
+        ...("gstin" in fields && { gstin: fields.gstin ?? null }),
+        ...(logoKey !== undefined && { logoKey }),
+      },
+    });
     if (oldLogo && oldLogo !== vendor.logoKey) void ctx.storage.deleteMany([oldLogo]);
     if (vendor.status === "approved") {
       await forgetStoreProducts(vendor);
       // Search results show the store's name.
-      await ctx.searchSync.vendor(vendor._id);
+      await ctx.searchSync.vendor(vendor.id);
     }
     res.json({ store: toOwnStore(vendor, ctx.storage) });
   });
 
   // Saves where the store's earnings are paid. Shares already released wait for this, so they're sent now.
   router.put("/vendors/me/payout", ...vendorOnly, loadOwnStore({ approved: false }), validateBody(payoutSchema), async (req, res) => {
-    const vendor = req.vendor!;
     const body = req.body as z.infer<typeof payoutSchema>;
-    const { beneficiaryRef } = await ctx.payouts.registerBeneficiary({ vendorId: vendor.id as string, ...body });
-    vendor.set("payout", {
-      accountHolder: body.accountHolder,
-      bankLast4: body.accountNumber.slice(-4),
-      ifsc: body.ifsc,
-      provider: ctx.payouts.name,
-      beneficiaryRef,
-      status: "active",
-      updatedAt: new Date(),
+    const { beneficiaryRef } = await ctx.payouts.registerBeneficiary({ vendorId: req.vendor!.id, ...body });
+    const vendor = await prisma.vendor.update({
+      where: { id: req.vendor!.id },
+      data: {
+        payoutAccountHolder: body.accountHolder,
+        payoutBankLast4: body.accountNumber.slice(-4),
+        payoutIfsc: body.ifsc,
+        payoutProvider: ctx.payouts.name,
+        payoutBeneficiaryRef: beneficiaryRef,
+        payoutStatus: "active",
+        payoutUpdatedAt: new Date(),
+      },
     });
-    await vendor.save();
-    const waiting = await SubOrder.find({ vendorId: vendor._id, "payout.status": { $in: ["released", "failed"] } }).select("_id");
-    for (const part of waiting) await ctx.moneyJobs.payout(part.id as string);
+    const waiting = await prisma.subOrder.findMany({
+      where: { vendorId: vendor.id, payoutStatus: { in: ["released", "failed"] } },
+      select: { id: true },
+    });
+    for (const part of waiting) await ctx.moneyJobs.payout(part.id);
     res.json({ store: toOwnStore(vendor, ctx.storage), payoutsStarted: waiting.length });
   });
 
@@ -164,9 +167,9 @@ export function vendorRouter(ctx: RouteContext): Router {
 
   router.get("/stores/:slug", async (req, res) => {
     const q = parseQuery(storefrontQuery, req);
-    const vendor = await Vendor.findOne({ slug: req.params.slug, status: "approved" });
+    const vendor = await prisma.vendor.findFirst({ where: { slug: req.params.slug, status: "approved" } });
     if (!vendor) throw new AppError(404, "not_found", "Store not found");
-    const products = await listStorefront({ vendorId: vendor._id, categorySlug: q.category, sort: q.sort, page: q.page, limit: q.limit }, ctx.storage);
+    const products = await listStorefront({ vendorId: vendor.id, categorySlug: q.category, sort: q.sort, page: q.page, limit: q.limit }, ctx.storage);
     res.json({ store: toPublicStore(vendor, ctx.storage), products });
   });
 
@@ -176,38 +179,25 @@ export function vendorRouter(ctx: RouteContext): Router {
 
   router.get("/admin/vendors", ...adminOnly, async (req, res) => {
     const q = parseQuery(adminListQuery, req);
-    const filter = q.status ? { status: q.status } : {};
+    const where = q.status ? { status: q.status } : {};
     const [vendors, total, counts] = await Promise.all([
       // Oldest pending application first, so nobody waits forever.
-      Vendor.find(filter)
-        .sort(q.status === "pending" ? { submittedAt: 1 } : { submittedAt: -1 })
-        .skip((q.page - 1) * q.limit)
-        .limit(q.limit),
-      Vendor.countDocuments(filter),
-      Vendor.aggregate<{ _id: VendorStatus; n: number }>([{ $group: { _id: "$status", n: { $sum: 1 } } }]),
-    ]);
-    const [owners, productCounts] = await Promise.all([
-      User.find({ _id: { $in: vendors.map((v) => v.userId) } }).select("name email"),
-      Product.aggregate<{ _id: unknown; n: number }>([
-        { $match: { vendorId: { $in: vendors.map((v) => v._id) } } },
-        { $group: { _id: "$vendorId", n: { $sum: 1 } } },
-      ]),
-    ]);
-    const ownerById = new Map(owners.map((u) => [u.id as string, u]));
-    const productsById = new Map(productCounts.map((c) => [String(c._id), c.n]));
-    res.json({
-      items: vendors.map((v) => {
-        const owner = ownerById.get(v.userId.toString());
-        return {
-          ...toOwnStore(v, ctx.storage),
-          owner: owner ? { id: owner.id as string, name: owner.name, email: owner.email } : null,
-          productCount: productsById.get(v.id as string) ?? 0,
-        };
+      prisma.vendor.findMany({
+        where,
+        orderBy: { submittedAt: q.status === "pending" ? "asc" : "desc" },
+        skip: (q.page - 1) * q.limit,
+        take: q.limit,
+        include: { owner: { select: { id: true, name: true, email: true } }, _count: { select: { products: true } } },
       }),
+      prisma.vendor.count({ where }),
+      prisma.vendor.groupBy({ by: ["status"], _count: { _all: true } }),
+    ]);
+    res.json({
+      items: vendors.map(({ owner, _count, ...v }) => ({ ...toOwnStore(v, ctx.storage), owner, productCount: _count.products })),
       page: q.page,
       limit: q.limit,
       total,
-      counts: Object.fromEntries(VENDOR_STATUSES.map((s) => [s, counts.find((c) => c._id === s)?.n ?? 0])),
+      counts: Object.fromEntries(VENDOR_STATUSES.map((s) => [s, counts.find((c) => c.status === s)?._count._all ?? 0])),
     });
   });
 
@@ -227,22 +217,18 @@ export function vendorRouter(ctx: RouteContext): Router {
 
       const now = new Date();
       // Conditional update: two admins clicking at once can't both act on the same application.
-      const vendor = await Vendor.findOneAndUpdate(
-        { _id: id, status: { $in: rule.from } },
-        {
-          $set: {
-            status: rule.to,
-            statusChangedAt: now,
-            statusChangedBy: req.auth!.id,
-            ...(rule.to === "approved" && { approvedAt: now, approvedBy: req.auth!.id }),
-            ...(reason && { rejectionReason: reason }),
-          },
-          ...(!reason && { $unset: { rejectionReason: 1 } }),
+      const [vendor] = await prisma.vendor.updateManyAndReturn({
+        where: { id, status: { in: [...rule.from] } },
+        data: {
+          status: rule.to,
+          statusChangedAt: now,
+          statusChangedBy: req.auth!.id,
+          ...(rule.to === "approved" && { approvedAt: now, approvedBy: req.auth!.id }),
+          rejectionReason: reason ?? null,
         },
-        { returnDocument: "after" },
-      );
+      });
       if (!vendor) {
-        const current = await Vendor.findById(id).select("status");
+        const current = await prisma.vendor.findUnique({ where: { id }, select: { status: true } });
         if (!current) throw new AppError(404, "not_found", "Vendor not found");
         throw new AppError(409, "invalid_transition", `Can't ${action} a store that is ${current.status}`, {
           status: current.status,
@@ -251,7 +237,7 @@ export function vendorRouter(ctx: RouteContext): Router {
       }
       await forgetStoreProducts(vendor);
       // Approving adds the store's products to search; suspending removes them.
-      await ctx.searchSync.vendor(vendor._id);
+      await ctx.searchSync.vendor(vendor.id);
       res.json({ store: toOwnStore(vendor, ctx.storage) });
     });
   }

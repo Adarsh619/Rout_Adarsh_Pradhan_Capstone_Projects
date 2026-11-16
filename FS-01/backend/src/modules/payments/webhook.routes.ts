@@ -3,10 +3,10 @@ import { Router, type Request } from "express";
 import { logger } from "../../lib/logger.js";
 import { AppError } from "../../middleware/errors.js";
 import type { RouteContext } from "../context.js";
-import { Order, SubOrder } from "../orders/order.model.js";
+import { isUniqueViolation, prisma } from "../../lib/db.js";
+import { isEntityId } from "../../middleware/validate.js";
 import { markPaid, refundLatePayment, type OrderDeps } from "../orders/order-service.js";
 import { webhookSignatureValid } from "./payment-provider.js";
-import { WebhookEvent } from "./webhook-event.model.js";
 
 declare module "express-serve-static-core" {
   interface Request {
@@ -31,10 +31,10 @@ async function handle(deps: OrderDeps, event: RazorpayEvent): Promise<string> {
     // the tab before the callback ran, this is what confirms the order.
     case "payment.captured": {
       if (!providerOrderId || !paymentId) return "ignored";
-      const order = await Order.findOne({ "payment.providerOrderId": providerOrderId });
+      const order = await prisma.order.findUnique({ where: { paymentProviderOrderId: providerOrderId } });
       if (!order) return "unknown order";
       if (order.status === "pending_payment") {
-        await markPaid(deps, order.id as string, paymentId);
+        await markPaid(deps, order.id, paymentId);
         return "order confirmed";
       }
       if (order.status === "expired" || order.status === "cancelled") {
@@ -46,11 +46,11 @@ async function handle(deps: OrderDeps, event: RazorpayEvent): Promise<string> {
     case "payment.failed": {
       // The order stays open for another try until its reservation ends.
       if (!providerOrderId) return "ignored";
-      const res = await Order.updateOne(
-        { "payment.providerOrderId": providerOrderId, status: "pending_payment" },
-        { $set: { "payment.status": "failed" } },
-      );
-      return res.modifiedCount ? "attempt failed, order still payable" : "ignored";
+      const res = await prisma.order.updateMany({
+        where: { paymentProviderOrderId: providerOrderId, status: "pending_payment" },
+        data: { paymentStatus: "failed" },
+      });
+      return res.count ? "attempt failed, order still payable" : "ignored";
     }
     case "refund.processed":
     case "refund.failed": {
@@ -60,12 +60,12 @@ async function handle(deps: OrderDeps, event: RazorpayEvent): Promise<string> {
       // our own record of the refund id was saved.
       const subId = key?.startsWith("refund-") ? key.slice("refund-".length) : undefined;
       const refundId = typeof refund?.id === "string" ? refund.id : undefined;
-      if (!/^[0-9a-f]{24}$/i.test(subId ?? "") && !refundId) return "ignored";
-      const filter = subId && /^[0-9a-f]{24}$/i.test(subId) ? { _id: subId } : { "refund.providerRef": refundId };
-      const res = await SubOrder.updateOne(filter, {
-        $set: { "refund.status": status, ...(status === "processed" && { "refund.processedAt": new Date() }) },
+      if (!isEntityId(subId) && !refundId) return "ignored";
+      const res = await prisma.subOrder.updateMany({
+        where: isEntityId(subId) ? { id: subId } : { refundProviderRef: refundId },
+        data: { refundStatus: status, ...(status === "processed" && { refundProcessedAt: new Date() }) },
       });
-      return res.modifiedCount ? `refund ${status}` : "ignored";
+      return res.count ? `refund ${status}` : "ignored";
     }
     default:
       return "ignored";
@@ -100,17 +100,18 @@ export function webhookRouter(ctx: RouteContext): Router {
     const type = event.event ?? "unknown";
 
     // Claim the event. A repeat of one already handled is acknowledged and skipped; a failed one is tried again.
-    const existing = await WebhookEvent.findOne({ provider: "razorpay", eventId: id });
+    const where = { provider_eventId: { provider: "razorpay" as const, eventId: id } };
+    const existing = await prisma.webhookEvent.findUnique({ where });
     if (existing && existing.status !== "failed") {
       res.json({ ok: true, duplicate: true });
       return;
     }
     if (!existing) {
       try {
-        await WebhookEvent.create({ provider: "razorpay", eventId: id, type, status: "processing", receivedAt: new Date() });
+        await prisma.webhookEvent.create({ data: { provider: "razorpay", eventId: id, type, status: "processing", receivedAt: new Date() } });
       } catch (err) {
         // Two deliveries at the same moment: the other one is handling it.
-        if ((err as { code?: number }).code === 11000) {
+        if (isUniqueViolation(err)) {
           res.json({ ok: true, duplicate: true });
           return;
         }
@@ -120,14 +121,14 @@ export function webhookRouter(ctx: RouteContext): Router {
 
     try {
       const result = await handle(deps, event);
-      await WebhookEvent.updateOne(
-        { provider: "razorpay", eventId: id },
-        { $set: { status: result === "ignored" ? "ignored" : "processed", result, processedAt: new Date() }, $unset: { error: 1 } },
-      );
+      await prisma.webhookEvent.update({
+        where,
+        data: { status: result === "ignored" ? "ignored" : "processed", result, processedAt: new Date(), error: null },
+      });
       res.json({ ok: true, result });
     } catch (err) {
       logger.error({ err, eventId: id, type }, "webhook failed");
-      await WebhookEvent.updateOne({ provider: "razorpay", eventId: id }, { $set: { status: "failed", error: String(err) } });
+      await prisma.webhookEvent.update({ where, data: { status: "failed", error: String(err) } });
       // A non-2xx answer makes Razorpay deliver it again later.
       throw new AppError(500, "webhook_failed", "Couldn't process the event; it will be retried");
     }

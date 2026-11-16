@@ -55,13 +55,14 @@ export const pageQuery = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
 });
 
-// 24 hex characters only (mongoose's isValidObjectId also accepts any 12-character string).
-const OBJECT_ID = /^[0-9a-f]{24}$/i;
-export const objectId = z.string().regex(OBJECT_ID, "Invalid id");
+// Ids are UUIDs. Checked before they reach the database, where a malformed one is an error rather than "no match".
+const ENTITY_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const isEntityId = (v: unknown): v is string => typeof v === "string" && ENTITY_ID.test(v);
+export const entityId = z.string().regex(ENTITY_ID, "Invalid id");
 
 // For :id route parameters: an id that can't exist is a 404, the same as one that doesn't.
 export function idParam(req: Request, name = "id"): string {
   const id = req.params[name];
-  if (typeof id !== "string" || !OBJECT_ID.test(id)) throw new AppError(404, "not_found", "Not found");
+  if (!isEntityId(id)) throw new AppError(404, "not_found", "Not found");
   return id;
 }

@@ -3,7 +3,9 @@ import { z } from "zod";
 import { AppError } from "../../middleware/errors.js";
 import { idParam, patchSchema, validateBody } from "../../middleware/validate.js";
 import type { RouteContext } from "../context.js";
-import { MAX_ADDRESSES, toAddress, User, type UserDoc } from "../users/user.model.js";
+import { prisma, type Tx } from "../../lib/db.js";
+import { inTransaction } from "../../lib/transaction.js";
+import { MAX_ADDRESSES, toAddress } from "../users/user.model.js";
 
 const optional = (max: number) =>
   z
@@ -40,58 +42,74 @@ const updateSchema = patchSchema(addressFields);
 export function addressRouter(ctx: RouteContext): Router {
   const router = Router();
 
-  const load = async (id: string): Promise<UserDoc> => {
-    const user = await User.findById(id);
-    if (!user) throw new AppError(404, "not_found", "Account not found");
-    return user;
+  // Oldest first, as they were added.
+  const list = async (userId: string, tx: Tx = prisma) => ({
+    items: (await tx.address.findMany({ where: { userId }, orderBy: { id: "asc" } })).map(toAddress),
+  });
+  const makeDefault = (tx: Tx, userId: string, addressId: string) =>
+    tx.$executeRaw`UPDATE addresses SET "isDefault" = (id = ${addressId}::uuid) WHERE "userId" = ${userId}::uuid`;
+  const find = async (tx: Tx, userId: string, id: string) => {
+    const address = await tx.address.findFirst({ where: { id, userId } });
+    if (!address) throw new AppError(404, "not_found", "Address not found");
+    return address;
   };
-  const makeDefault = (user: UserDoc, addressId: string) => {
-    for (const a of user.addresses) a.isDefault = a._id.toString() === addressId;
-  };
-  const list = (user: UserDoc) => ({ items: user.addresses.map(toAddress) });
 
   router.get("/account/addresses", ctx.signedIn, async (req, res) => {
-    res.json(list(await load(req.auth!.id)));
+    res.json(await list(req.auth!.id));
   });
 
   router.post("/account/addresses", ctx.signedIn, validateBody(createSchema), async (req, res) => {
-    const user = await load(req.auth!.id);
-    if (user.addresses.length >= MAX_ADDRESSES) {
-      throw new AppError(409, "too_many_addresses", `You can save up to ${MAX_ADDRESSES} addresses. Remove one first.`);
-    }
-    const body = req.body as z.infer<typeof createSchema>;
-    user.addresses.push(body);
-    const added = user.addresses[user.addresses.length - 1]!;
-    if (body.isDefault || user.addresses.length === 1) makeDefault(user, added._id.toString());
-    await user.save();
-    res.status(201).json({ address: toAddress(added), ...list(user) });
+    const userId = req.auth!.id;
+    const { isDefault, ...fields } = req.body as z.infer<typeof createSchema>;
+    const result = await inTransaction(async (tx) => {
+      // Locks the user's row, so two tabs adding at once can't both get past the limit.
+      await tx.$executeRaw`SELECT 1 FROM users WHERE id = ${userId}::uuid FOR UPDATE`;
+      const count = await tx.address.count({ where: { userId } });
+      if (count >= MAX_ADDRESSES) {
+        throw new AppError(409, "too_many_addresses", `You can save up to ${MAX_ADDRESSES} addresses. Remove one first.`);
+      }
+      const added = await tx.address.create({ data: { ...fields, userId } });
+      if (isDefault || count === 0) await makeDefault(tx, userId, added.id);
+      return { address: await tx.address.findUniqueOrThrow({ where: { id: added.id } }), ...(await list(userId, tx)) };
+    });
+    res.status(201).json({ address: toAddress(result.address), items: result.items });
   });
 
   router.patch("/account/addresses/:id", ctx.signedIn, validateBody(updateSchema), async (req, res) => {
-    const user = await load(req.auth!.id);
+    const userId = req.auth!.id;
     const id = idParam(req);
-    const address = user.addresses.id(id);
-    if (!address) throw new AppError(404, "not_found", "Address not found");
     const changes = req.body as z.infer<typeof updateSchema>;
     const { isDefault, ...fields } = changes;
-    address.set(fields);
-    if ("label" in changes && !changes.label) address.label = undefined;
-    if ("line2" in changes && !changes.line2) address.line2 = undefined;
-    // The default can be moved to another address but not simply switched off.
-    if (isDefault) makeDefault(user, id);
-    await user.save();
-    res.json({ address: toAddress(address), ...list(user) });
+    const result = await inTransaction(async (tx) => {
+      await find(tx, userId, id);
+      await tx.address.update({
+        where: { id },
+        data: {
+          ...fields,
+          ...("label" in changes && !changes.label && { label: null }),
+          ...("line2" in changes && !changes.line2 && { line2: null }),
+        },
+      });
+      // The default can be moved to another address but not simply switched off.
+      if (isDefault) await makeDefault(tx, userId, id);
+      return { address: await tx.address.findUniqueOrThrow({ where: { id } }), ...(await list(userId, tx)) };
+    });
+    res.json({ address: toAddress(result.address), items: result.items });
   });
 
   router.delete("/account/addresses/:id", ctx.signedIn, async (req, res) => {
-    const user = await load(req.auth!.id);
-    const address = user.addresses.id(idParam(req));
-    if (!address) throw new AppError(404, "not_found", "Address not found");
-    const wasDefault = address.isDefault;
-    address.deleteOne();
-    if (wasDefault && user.addresses[0]) user.addresses[0].isDefault = true;
-    await user.save();
-    res.json(list(user));
+    const userId = req.auth!.id;
+    const id = idParam(req);
+    const result = await inTransaction(async (tx) => {
+      const address = await find(tx, userId, id);
+      await tx.address.delete({ where: { id } });
+      if (address.isDefault) {
+        const first = await tx.address.findFirst({ where: { userId }, orderBy: { id: "asc" } });
+        if (first) await makeDefault(tx, userId, first.id);
+      }
+      return list(userId, tx);
+    });
+    res.json(result);
   });
 
   return router;

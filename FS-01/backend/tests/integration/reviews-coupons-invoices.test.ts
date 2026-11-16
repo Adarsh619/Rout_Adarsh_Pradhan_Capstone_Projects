@@ -1,23 +1,14 @@
 import type { Express } from "express";
 import type { Redis } from "ioredis";
-import type { Types } from "mongoose";
 import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { disconnectMongo } from "../../src/lib/mongo.js";
-import { Category } from "../../src/modules/catalog/category.model.js";
-import { Product } from "../../src/modules/catalog/product.model.js";
-import { Coupon, CouponRedemption } from "../../src/modules/coupons/coupon.model.js";
-import { Invoice } from "../../src/modules/invoices/invoice.model.js";
-import { Counter, Order, SubOrder } from "../../src/modules/orders/order.model.js";
+import { disconnectDb, prisma } from "../../src/lib/db.js";
 import { releaseReservation } from "../../src/modules/orders/order-service.js";
 import { noReservations } from "../../src/modules/orders/reservations.js";
-import { LedgerEntry, type LedgerType } from "../../src/modules/payments/ledger.model.js";
+import { type LedgerType } from "../../src/modules/payments/ledger.model.js";
 import type { MockPaymentProvider } from "../../src/modules/payments/payment-provider.js";
-import { Review } from "../../src/modules/reviews/review.model.js";
 import type { SearchSync } from "../../src/modules/search/search-sync.js";
-import { User } from "../../src/modules/users/user.model.js";
-import { Vendor } from "../../src/modules/vendors/vendor.model.js";
-import { approvedVendor, bearer, register, signInAdmin, startTestServices, wipe, withCsrf } from "./helpers.js";
+import { approvedVendor, bearer, register, signInAdmin, startTestServices, wipe, withCsrf , createProduct } from "./helpers.js";
 
 let app: Express;
 let redis: Redis;
@@ -28,7 +19,6 @@ beforeAll(async () => {
   const services = await startTestServices();
   ({ app, redis, searchSync } = services);
   payments = services.payments as MockPaymentProvider;
-  await Promise.all([User.init(), Vendor.init(), Category.init(), Product.init(), Order.init(), SubOrder.init(), Counter.init(), LedgerEntry.init(), Review.init(), Coupon.init(), CouponRedemption.init(), Invoice.init()]);
 });
 
 beforeEach(async () => {
@@ -37,7 +27,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await wipe(redis);
-  await Promise.allSettled([disconnectMongo(), redis.quit()]);
+  await Promise.allSettled([disconnectDb(), redis.quit()]);
 });
 
 const api = () => request(app);
@@ -45,20 +35,20 @@ const api = () => request(app);
 // Two stores at 10% commission: a ₹20,000 phone (Vikram) and ₹299 cables (Meera).
 async function shop() {
   const admin = await signInAdmin(app);
-  const cat = await Category.create({ name: "Phones", slug: "phones" });
+  const cat = await prisma.category.create({ data: { name: "Phones", slug: "phones" } });
   const vikram = await approvedVendor(app, admin, "vikram@example.com", "Vikram Electronics");
   const meera = await approvedVendor(app, admin, "meera@example.com", "Meera Gadgets");
-  const product = (vendorId: string, categoryId: Types.ObjectId, title: string, price: number) =>
-    Product.create({ vendorId, categoryId, title, slug: title.toLowerCase().replace(/\W+/g, "-"), price, mrp: price, stock: 10, status: "active", images: [{ key: `products/${vendorId}/a.png`, alt: "" }] });
-  const phone = await product(vikram.storeId, cat._id, "Galaxy Phone", 2_000_000);
-  const cable = await product(meera.storeId, cat._id, "USB-C Cable", 29_900);
-  return { admin, vikram, meera, phoneId: phone.id as string, cableId: cable.id as string };
+  const product = (vendorId: string, categoryId: string, title: string, price: number) =>
+    createProduct({ vendorId, categoryId, title, slug: title.toLowerCase().replace(/\W+/g, "-"), price, mrp: price, stock: 10, status: "active", images: [{ key: `products/${vendorId}/a.png`, alt: "" }] });
+  const phone = await product(vikram.storeId, cat.id, "Galaxy Phone", 2_000_000);
+  const cable = await product(meera.storeId, cat.id, "USB-C Cable", 29_900);
+  return { admin, vikram, meera, phoneId: phone.id, cableId: cable.id };
 }
 
 async function customer(email = "priya@example.com", name = "Priya Sharma") {
   const { accessToken: token } = await register(app, { email, name });
   const address = await api().post("/api/v1/account/addresses").set(bearer(token)).send({ name, phone: "9876543210", line1: "12 MG Road", city: "Bengaluru", state: "Karnataka", pincode: "560001" });
-  return { token, addressId: address.body.address.id as string };
+  return { token, addressId: address.body.address.id };
 }
 
 const add = (token: string, productId: string, qty = 1) => api().post("/api/v1/cart/items").set(bearer(token)).set(withCsrf).send({ productId, qty });
@@ -79,7 +69,7 @@ async function deliver(token: string, subId: string) {
   await move(token, subId, { status: "delivered" });
 }
 
-const sum = async (type: LedgerType) => (await LedgerEntry.find({ type })).reduce((n, e) => n + e.amount, 0);
+const sum = async (type: LedgerType) => (await prisma.ledgerEntry.findMany({ where: { type } })).reduce((n, e) => n + e.amount, 0);
 
 describe("reviews", () => {
   it("only lets a customer review what was delivered to them, once, and keeps ratings in step", async () => {
@@ -95,8 +85,8 @@ describe("reviews", () => {
     const before = await api().get(`/api/v1/products/${s.phoneId}/reviews`).set(bearer(c.token));
     expect(before.body.viewer).toMatchObject({ canReview: false, reason: "not_delivered" });
 
-    const part = (await SubOrder.findOne({ orderId: order.id }))!;
-    await deliver(s.vikram.token, part.id as string);
+    const part = (await prisma.subOrder.findFirst({ where: { orderId: order.id } }))!;
+    await deliver(s.vikram.token, part.id);
     const after = await api().get(`/api/v1/products/${s.phoneId}/reviews`).set(bearer(c.token));
     expect(after.body.viewer).toMatchObject({ canReview: true, reason: null });
 
@@ -109,17 +99,17 @@ describe("reviews", () => {
     expect((await api().post(`/api/v1/products/${s.phoneId}/reviews`).set(bearer(c.token)).send({ rating: 5, body: "Second try at a review" })).body.error.code).toBe("already_reviewed");
 
     // A seeded review joins the average.
-    await Review.create({ productId: s.phoneId, vendorId: s.vikram.storeId, authorName: "Seed Reviewer", rating: 2, body: "Meh", source: "seed" });
+    await prisma.review.create({ data: { productId: s.phoneId, vendorId: s.vikram.storeId, authorName: "Seed Reviewer", rating: 2, body: "Meh", source: "seed" } });
     const list = await api().get(`/api/v1/products/${s.phoneId}/reviews`);
     expect(list.body.total).toBe(2);
     expect(list.body.viewer).toBeNull();
-    expect((await Product.findById(s.phoneId))!.ratingAvg).toBe(4);
-    expect((await Vendor.findById(s.vikram.storeId))!).toMatchObject({ ratingAvg: 4, ratingCount: 1 });
+    expect((await prisma.product.findUnique({ where: { id: s.phoneId } }))!.ratingAvg).toBe(4);
+    expect((await prisma.vendor.findUnique({ where: { id: s.vikram.storeId } }))!).toMatchObject({ ratingAvg: 4, ratingCount: 1 });
 
     // An admin hides the customer's review: it leaves the page and the ratings.
     const hidden = await api().patch(`/api/v1/admin/reviews/${posted.body.review.id}`).set(bearer(s.admin)).send({ status: "hidden", reason: "Test" });
     expect(hidden.body.review.status).toBe("hidden");
-    expect((await Product.findById(s.phoneId))!).toMatchObject({ ratingAvg: 2, ratingCount: 1 });
+    expect((await prisma.product.findUnique({ where: { id: s.phoneId } }))!).toMatchObject({ ratingAvg: 2, ratingCount: 1 });
     const page = await api().get(`/api/v1/products/${s.phoneId}/reviews`);
     expect(page.body.items.map((r: { authorName: string }) => r.authorName)).toEqual(["Seed Reviewer"]);
     expect(page.body.summary.stars).toEqual({ 5: 0, 4: 0, 3: 0, 2: 1, 1: 0 });
@@ -148,7 +138,7 @@ describe("coupons", () => {
 
   it("a platform coupon: shown in the cart, charged at checkout, paid for by the platform, and the books balance", async () => {
     const s = await shop();
-    await Coupon.create({ code: "WELCOME10", scope: "platform", type: "percent", value: 1000, maxDiscount: 20_000, minOrder: 49_900 });
+    await prisma.coupon.create({ data: { code: "WELCOME10", scope: "platform", type: "percent", value: 1000, maxDiscount: 20_000, minOrder: 49_900 } });
     const c = await customer();
     await add(c.token, s.phoneId);
     await add(c.token, s.cableId, 2);
@@ -171,7 +161,7 @@ describe("coupons", () => {
     // Vendors are owed their full share; the platform covers the discount.
     expect(await sum("platform_discount")).toBe(20_000);
     expect((await sum("payment")) + (await sum("platform_discount"))).toBe((await sum("vendor_hold")) + (await sum("commission")));
-    expect((await Coupon.findOne({ code: "WELCOME10" }))!.usedCount).toBe(1);
+    expect((await prisma.coupon.findFirst({ where: { code: "WELCOME10" } }))!.usedCount).toBe(1);
 
     // Once per customer.
     await add(c.token, s.phoneId);
@@ -189,7 +179,7 @@ describe("coupons", () => {
 
   it("a vendor coupon: only that store's part, paid for by the store", async () => {
     const s = await shop();
-    await Coupon.create({ code: "VIKRAM5", scope: "vendor", vendorId: s.vikram.storeId, type: "percent", value: 500, minOrder: 100_000 });
+    await prisma.coupon.create({ data: { code: "VIKRAM5", scope: "vendor", vendorId: s.vikram.storeId, type: "percent", value: 500, minOrder: 100_000 } });
     const c = await customer();
     await add(c.token, s.cableId, 2);
     expect((await applyCode(c.token, "VIKRAM5")).body.error.message).toMatch(/nothing in your cart/);
@@ -197,7 +187,7 @@ describe("coupons", () => {
     expect((await applyCode(c.token, "VIKRAM5")).body.cart).toMatchObject({ discount: 100_000, grandTotal: 1_959_800, coupon: { scope: "vendor", storeName: "Vikram Electronics" } });
     const res = await checkout(c, 1_959_800);
     await pay(c.token, res.body.order, res.body.payment.providerOrderId);
-    const parts = await SubOrder.find({ orderId: res.body.order.id }).sort({ _id: 1 });
+    const parts = await prisma.subOrder.findMany({ where: { orderId: res.body.order.id }, orderBy: { id: "asc" } });
     expect(parts.map((p) => [p.discountBy ?? null, p.payable, p.commission, p.vendorNet])).toEqual([
       [null, 59_800, 5_980, 53_820],
       ["vendor", 1_900_000, 190_000, 1_710_000],
@@ -208,7 +198,7 @@ describe("coupons", () => {
 
   it("the last use goes to one shopper only, and an unpaid order gives its use back", async () => {
     const s = await shop();
-    await Coupon.create({ code: "LASTONE", scope: "platform", type: "flat", value: 10_000, usageLimit: 1 });
+    await prisma.coupon.create({ data: { code: "LASTONE", scope: "platform", type: "flat", value: 10_000, usageLimit: 1 } });
     const a = await customer("a@example.com", "Asha");
     const b = await customer("b@example.com", "Bilal");
     for (const c of [a, b]) {
@@ -219,13 +209,13 @@ describe("coupons", () => {
     expect(results.map((r) => r.status).sort()).toEqual([201, 409]);
     const loser = results.find((r) => r.status === 409)!;
     expect(["coupon_exhausted", "coupon_invalid"]).toContain(loser.body.error.code);
-    expect((await Coupon.findOne({ code: "LASTONE" }))!.usedCount).toBe(1);
+    expect((await prisma.coupon.findFirst({ where: { code: "LASTONE" } }))!.usedCount).toBe(1);
 
     const won = results.find((r) => r.status === 201)!.body.order;
-    await Order.updateOne({ _id: won.id }, { reservationExpiresAt: new Date(Date.now() - 1000) });
+    await prisma.order.update({ where: { id: won.id }, data: { reservationExpiresAt: new Date(Date.now() - 1000) } });
     await releaseReservation({ redis, searchSync, reservations: noReservations }, won.id, { to: "expired", reason: "Not paid in time", actor: { role: "system" }, onlyIfDue: true });
-    expect((await Coupon.findOne({ code: "LASTONE" }))!.usedCount).toBe(0);
-    expect(await CouponRedemption.countDocuments()).toBe(0);
+    expect((await prisma.coupon.findFirst({ where: { code: "LASTONE" } }))!.usedCount).toBe(0);
+    expect(await prisma.couponRedemption.count()).toBe(0);
   });
 });
 
@@ -256,6 +246,6 @@ describe("invoices", () => {
     expect((await api().get(`/api/v1/invoices/${parts[0]!.id}`).set(bearer(s.admin))).status).toBe(200);
     const stranger = await customer("someone@example.com", "Someone");
     expect((await api().get(`/api/v1/invoices/${parts[0]!.id}`).set(bearer(stranger.token))).status).toBe(404);
-    expect(await Invoice.countDocuments()).toBe(2);
+    expect(await prisma.invoice.count()).toBe(2);
   });
 });

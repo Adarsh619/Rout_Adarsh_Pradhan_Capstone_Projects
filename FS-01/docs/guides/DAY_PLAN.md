@@ -92,11 +92,13 @@ Started **Tue 3 Nov 2026**. Days 4 and 7 each finished a day early, so the remai
 - [x] 🛠 Server (AWS EC2 t4g.small, Mumbai): Docker, swap, Elasticsearch setting, ports 80/443, HTTPS via Caddy + DuckDNS
 - [x] 🛠 Backend live on the server (14 Nov); Atlas, S3 (instance role), Razorpay test webhook connected (16 Nov)
 - [x] 👤 Frontend live on Vercel (`/api` rewrite to the server): https://shopsphere-fs01.vercel.app
-- [x] 🛠 UptimeRobot on `/api/v1/health`; automatic deploy of commits that pass CI; nightly demo reset (03:00 IST) — scripts written, timers to install
+- [x] 🛠 UptimeRobot on `/api/v1/health`; automatic deploy of commits that pass CI; nightly demo reset (03:00 IST): timers installed 17 Nov; first automatic deploy (8d76ee5) went live ~90 s after CI passed
 - [x] 🛠 Performance: k6 browse test on the live site (214 products, 50 users, cache hit vs miss). The 20k-product dataset and the Playwright test were dropped for time
-- [ ] ✅ Live links run the full demo; results recorded
+- [x] ✅ Live links run the full demo (purchase with coupon, invoice, webhook 200, sign-in survives reload on Vercel, the API sees the visitor's address through Vercel); results recorded
 
-## Day 10 · Tue 10 Nov · Deliverables
+## Day 10 · Tue 17 – Thu 19 Nov · Deliverables
+- [x] 🛠 Brief changed (17 Nov): data layer moved from MongoDB + Mongoose to **PostgreSQL + Prisma** (branch `fs01-postgres`; all tests and the smoke test green; CI, production compose, nightly reset and docs updated)
+- [ ] 👤 Go live on PostgreSQL: `POSTGRES_PASSWORD` in the server `.env`, merge, re-seed, save the reset baseline, test purchase
 - [ ] 🛠 Finish docs 01–14 + `openapi.yaml`, README with setup instructions, root README row
 - [ ] 🛠 Test and coverage report, performance numbers in doc 12
 - [ ] 🛠 Presentation outline (10 min: problem, design, challenges, results, next steps) and reflection template

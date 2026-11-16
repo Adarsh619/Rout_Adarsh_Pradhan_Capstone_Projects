@@ -1,19 +1,18 @@
-import type { Types } from "mongoose";
 import { z } from "zod";
+import type { Prisma } from "../../generated/prisma/client.js";
+import { prisma } from "../../lib/db.js";
 import type { Storage } from "../../lib/s3.js";
 import { pageQuery } from "../../middleware/validate.js";
-import { Vendor } from "../vendors/vendor.model.js";
-import { Category } from "./category.model.js";
-import { Product, toProductCard } from "./product.model.js";
+import { toProductCard, withImages } from "./product.model.js";
 
-// Browsing lists straight from MongoDB (home page, category and store pages). Full-text search and
-// filters arrive with Elasticsearch on Day 4. Shoppers only ever see active products of approved stores.
+// Browsing lists straight from the database (home page, category and store pages); full-text search and filters go
+// through Elasticsearch. Shoppers only ever see active products of approved stores.
 export const SORTS = {
-  newest: { createdAt: -1 },
-  price_asc: { price: 1, _id: 1 },
-  price_desc: { price: -1, _id: 1 },
-  rating: { ratingAvg: -1, ratingCount: -1, _id: 1 },
-} as const;
+  newest: [{ createdAt: "desc" }, { id: "asc" }],
+  price_asc: [{ price: "asc" }, { id: "asc" }],
+  price_desc: [{ price: "desc" }, { id: "asc" }],
+  rating: [{ ratingAvg: "desc" }, { ratingCount: "desc" }, { id: "asc" }],
+} as const satisfies Record<string, Prisma.ProductOrderByWithRelationInput[]>;
 
 export const storefrontQuery = pageQuery.extend({
   category: z.string().max(80).optional(),
@@ -21,35 +20,37 @@ export const storefrontQuery = pageQuery.extend({
 });
 
 export async function listStorefront(
-  opts: { vendorId?: Types.ObjectId | string; categorySlug?: string; sort: keyof typeof SORTS; page: number; limit: number },
+  opts: { vendorId?: string; categorySlug?: string; sort: keyof typeof SORTS; page: number; limit: number },
   storage: Storage,
 ) {
-  const vendors = await Vendor.find({ status: "approved", ...(opts.vendorId && { _id: opts.vendorId }) }).select("storeName slug");
-  const byId = new Map(vendors.map((v) => [v.id as string, v]));
-
-  let categoryIds: Types.ObjectId[] | undefined;
+  let categoryIds: string[] | undefined;
   if (opts.categorySlug) {
-    const category = await Category.findOne({ slug: opts.categorySlug, isActive: true });
+    const category = await prisma.category.findFirst({
+      where: { slug: opts.categorySlug, isActive: true },
+      include: { children: { where: { isActive: true }, select: { id: true } } },
+    });
     if (!category) return { items: [], page: opts.page, limit: opts.limit, total: 0 };
     // A department includes all of its sub-categories.
-    const children = await Category.find({ parentId: category._id, isActive: true }).select("_id");
-    categoryIds = [category._id, ...children.map((c) => c._id)];
+    categoryIds = [category.id, ...category.children.map((c) => c.id)];
   }
 
-  const filter = {
-    status: "active" as const,
-    vendorId: { $in: vendors.map((v) => v._id) },
-    ...(categoryIds && { categoryId: { $in: categoryIds } }),
+  const where: Prisma.ProductWhereInput = {
+    status: "active",
+    vendor: { status: "approved", ...(opts.vendorId && { id: opts.vendorId }) },
+    ...(categoryIds && { categoryId: { in: categoryIds } }),
   };
   const [products, total] = await Promise.all([
-    Product.find(filter)
-      .sort(SORTS[opts.sort])
-      .skip((opts.page - 1) * opts.limit)
-      .limit(opts.limit),
-    Product.countDocuments(filter),
+    prisma.product.findMany({
+      where,
+      orderBy: [...SORTS[opts.sort]],
+      skip: (opts.page - 1) * opts.limit,
+      take: opts.limit,
+      include: { ...withImages, vendor: { select: { storeName: true, slug: true } } },
+    }),
+    prisma.product.count({ where }),
   ]);
   return {
-    items: products.map((p) => toProductCard(p, byId.get(p.vendorId.toString())!, storage)),
+    items: products.map((p) => toProductCard(p, p.vendor, storage)),
     page: opts.page,
     limit: opts.limit,
     total,

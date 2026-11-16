@@ -14,7 +14,7 @@ endpoints still to come, is the [API list](specs/04-api-list.md). A machine-read
 | Auth | `Authorization: Bearer <accessToken>` from sign-in (15 min). The refresh cookie is only for `/auth/refresh` and `/auth/logout`; those and guest cart writes also need `X-Requested-With: ShopSphere` ([Security](10-security.md)) |
 | Money | **Integer paise**: `price: 1999900` is ₹19,999. Fractions are rejected |
 | Lists | `?page=1&limit=20` (limit ≤ 50) → `{ items, page, limit, total }`; some lists add `counts` per status |
-| Ids | 24-hex MongoDB ids. An id that can't exist answers 404, the same as one that doesn't |
+| Ids | UUIDs (e.g. `01a1e615-5f8d-70de-9cf5-2c1f77ba95a6`). An id that can't exist answers 404, the same as one that doesn't |
 | Caching | Cached reads say `X-Cache: HIT` or `MISS` |
 | Updates | `PATCH` changes only the fields sent; anything left out keeps its saved value |
 
@@ -140,7 +140,7 @@ Every change clears the category cache and cached product pages (they show the c
 
 ### `GET /products?category=&sort=&page=&limit=`
 
-Active products of approved stores, straight from MongoDB (the home page's department browsing). `category` is a slug;
+Active products of approved stores, straight from PostgreSQL (the home page's department browsing). `category` is a slug;
 a department includes its sub-categories. `sort` is `newest` (default), `price_asc`, `price_desc` or `rating`.
 Full-text search with filters is `GET /search` below.
 
@@ -159,7 +159,7 @@ The full product: everything on the card plus `description`, `category`, `vendor
 
 ## Search
 
-Served by Elasticsearch, kept in step with MongoDB by a background job ([how](08-background-jobs.md)).
+Served by Elasticsearch, kept in step with PostgreSQL by a background job ([how](08-background-jobs.md)).
 
 ### `GET /search`
 
@@ -252,7 +252,7 @@ is false until it's fixed. Products a vendor deleted simply disappear.
 { "addressId": "…", "expectedTotal": 2059800 }
 ```
 
-Re-reads every price and stock level, then in **one MongoDB transaction** takes the stock and creates the order plus one
+Re-reads every price and stock level, then in **one PostgreSQL transaction** takes the stock and creates the order plus one
 part (sub-order) per store. The order waits for payment for 15 minutes (`RESERVATION_MINUTES`); after that its stock goes
 back on sale. The bought lines leave the cart.
 

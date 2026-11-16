@@ -3,12 +3,8 @@ import type { Express } from "express";
 import type { Redis } from "ioredis";
 import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { disconnectMongo } from "../../src/lib/mongo.js";
-import { Category } from "../../src/modules/catalog/category.model.js";
-import { Product } from "../../src/modules/catalog/product.model.js";
+import { disconnectDb, prisma } from "../../src/lib/db.js";
 import type { SearchIndexer } from "../../src/modules/search/search-indexer.js";
-import { User } from "../../src/modules/users/user.model.js";
-import { Vendor } from "../../src/modules/vendors/vendor.model.js";
 import { approvedVendor, bearer, env, signInAdmin, startTestServices, uploadImage, wipe } from "./helpers.js";
 
 let app: Express;
@@ -18,7 +14,6 @@ let indexer: SearchIndexer;
 
 beforeAll(async () => {
   ({ app, redis, es, indexer } = await startTestServices());
-  await Promise.all([User.init(), Vendor.init(), Category.init(), Product.init()]);
 });
 
 beforeEach(async () => {
@@ -27,7 +22,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await wipe(redis);
-  await Promise.allSettled([disconnectMongo(), redis.quit(), es.close()]);
+  await Promise.allSettled([disconnectDb(), redis.quit(), es.close()]);
 });
 
 const api = () => request(app);
@@ -173,7 +168,7 @@ describe("keeping search in step with the shop", () => {
   it("rebuilds the whole index behind the alias without losing anything", async () => {
     const { ids } = await catalogue();
     // A product edited directly in the database (bypassing the API) is picked up by a rebuild.
-    await Product.updateOne({ _id: ids.shirt }, { $set: { title: "Linen Kurta" } });
+    await prisma.product.update({ where: { id: ids.shirt }, data: { title: "Linen Kurta" } });
     const before = Object.keys(await es.indices.getAlias({ name: env.ES_INDEX }));
     const { indexed } = await indexer.reindexAll();
     expect(indexed).toBe(5);

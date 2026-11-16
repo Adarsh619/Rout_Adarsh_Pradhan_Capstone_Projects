@@ -1,10 +1,11 @@
 import type { RequestHandler } from "express";
 import { AppError } from "../../middleware/errors.js";
-import { Vendor, type VendorDoc } from "./vendor.model.js";
+import { prisma } from "../../lib/db.js";
+import type { VendorRow } from "./vendor.model.js";
 
 declare module "express-serve-static-core" {
   interface Request {
-    vendor?: VendorDoc;
+    vendor?: VendorRow;
   }
 }
 
@@ -14,7 +15,7 @@ export const loadOwnStore =
   ({ approved }: { approved: boolean }): RequestHandler =>
   async (req, _res, next) => {
     try {
-      const vendor = await Vendor.findOne({ userId: req.auth!.id });
+      const vendor = await prisma.vendor.findUnique({ where: { userId: req.auth!.id } });
       if (!vendor) {
         if (approved) throw notApproved("none");
         throw new AppError(404, "store_not_found", "You haven't applied for a store yet");

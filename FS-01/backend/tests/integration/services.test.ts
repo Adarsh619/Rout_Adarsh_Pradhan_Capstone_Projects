@@ -1,10 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { loadEnv } from "../../src/config/env.js";
+import { connectDb, disconnectDb, nextSeq, pingDb, prisma } from "../../src/lib/db.js";
 import { createElasticsearch, pingElasticsearch } from "../../src/lib/elasticsearch.js";
-import { connectMongo, disconnectMongo, pingMongo } from "../../src/lib/mongo.js";
 import { createRedis, pingRedis } from "../../src/lib/redis.js";
 import { createS3, ensureBucket, pingS3 } from "../../src/lib/s3.js";
-import mongoose from "mongoose";
+import { inTransaction } from "../../src/lib/transaction.js";
+import { testDatabaseUrl } from "./global-setup.js";
 
 // Proves the real services the app depends on are reachable and set up the way the app needs them.
 const env = loadEnv({ ...process.env, S3_ENDPOINT: process.env.S3_ENDPOINT ?? "http://localhost:9090" });
@@ -13,30 +14,37 @@ const es = createElasticsearch(env.ELASTICSEARCH_URL);
 const s3 = createS3(env);
 
 beforeAll(async () => {
-  await connectMongo(env.MONGO_URL);
+  await connectDb(testDatabaseUrl(env.DATABASE_URL));
 });
 
 afterAll(async () => {
-  await Promise.allSettled([disconnectMongo(), redis.quit(), es.close()]);
+  await Promise.allSettled([disconnectDb(), redis.quit(), es.close()]);
 });
 
 describe("backing services", () => {
-  it("MongoDB answers and runs as a replica set (needed for transactions at checkout)", async () => {
-    await pingMongo();
-    const hello = await mongoose.connection.db!.admin().command({ hello: 1 });
-    expect(hello.setName).toBe("rs0");
+  it("PostgreSQL answers and has the migrated schema", async () => {
+    await pingDb();
+    const tables = await prisma.$queryRaw<{ n: bigint }[]>`SELECT COUNT(*) AS n FROM pg_tables WHERE schemaname = 'public' AND tablename = 'orders'`;
+    expect(Number(tables[0]!.n)).toBe(1);
   });
 
-  it("MongoDB commits a multi-document transaction", async () => {
-    const coll = mongoose.connection.db!.collection("integration_tx");
-    const session = await mongoose.startSession();
-    await session.withTransaction(async () => {
-      await coll.insertOne({ n: 1 }, { session });
-      await coll.insertOne({ n: 2 }, { session });
-    });
-    await session.endSession();
-    expect(await coll.countDocuments()).toBeGreaterThanOrEqual(2);
-    await coll.drop();
+  it("a transaction that throws leaves nothing behind", async () => {
+    const name = `test-${Date.now()}`;
+    await expect(
+      inTransaction(async (tx) => {
+        await nextSeq(name, tx);
+        throw new Error("roll back");
+      }),
+    ).rejects.toThrow("roll back");
+    expect(await prisma.counter.findUnique({ where: { id: name } })).toBeNull();
+  });
+
+  it("sequences hand out each number once, even in parallel", async () => {
+    const name = `test-par-${Date.now()}`;
+    const numbers = await Promise.all(Array.from({ length: 20 }, () => nextSeq(name)));
+    expect(new Set(numbers).size).toBe(20);
+    expect(Math.max(...numbers)).toBe(20);
+    await prisma.counter.delete({ where: { id: name } });
   });
 
   it("Redis answers", async () => {

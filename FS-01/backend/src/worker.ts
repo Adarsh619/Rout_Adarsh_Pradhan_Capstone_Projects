@@ -4,7 +4,7 @@ import { createElasticsearch } from "./lib/elasticsearch.js";
 import { createS3, createStorage } from "./lib/s3.js";
 import { generateInvoice, INVOICE_QUEUE } from "./modules/invoices/invoice-jobs.js";
 import { logger } from "./lib/logger.js";
-import { connectMongo, disconnectMongo } from "./lib/mongo.js";
+import { connectDb, disconnectDb } from "./lib/db.js";
 import { createRedis } from "./lib/redis.js";
 import { SearchIndexer } from "./modules/search/search-indexer.js";
 import { expireDueOrders, releaseReservation } from "./modules/orders/order-service.js";
@@ -20,7 +20,7 @@ export const QUEUES = [SEARCH_QUEUE, INVOICE_QUEUE, MONEY_QUEUE, RESERVATION_QUE
 
 async function main(): Promise<void> {
   const env = loadEnv();
-  await connectMongo(env.MONGO_URL);
+  await connectDb(env.DATABASE_URL);
   const connection = createRedis(env.REDIS_URL);
   const es = createElasticsearch(env.ELASTICSEARCH_URL);
   const indexer = new SearchIndexer(es, env.ES_INDEX);
@@ -61,7 +61,7 @@ async function main(): Promise<void> {
 
   const shutdown = async () => {
     await Promise.allSettled(workers.map((w) => w.close()));
-    await Promise.allSettled([moneyQueue.close(), reservations.queue.close(), disconnectMongo(), connection.quit(), es.close()]);
+    await Promise.allSettled([moneyQueue.close(), reservations.queue.close(), disconnectDb(), connection.quit(), es.close()]);
     process.exit(0);
   };
   process.on("SIGTERM", shutdown);

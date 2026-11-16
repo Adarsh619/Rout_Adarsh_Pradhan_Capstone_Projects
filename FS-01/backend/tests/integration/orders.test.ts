@@ -1,18 +1,12 @@
 import type { Express } from "express";
 import type { Redis } from "ioredis";
-import type { Types } from "mongoose";
 import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { disconnectMongo } from "../../src/lib/mongo.js";
-import { Category } from "../../src/modules/catalog/category.model.js";
-import { Product } from "../../src/modules/catalog/product.model.js";
-import { Counter, Order, SubOrder } from "../../src/modules/orders/order.model.js";
+import { disconnectDb, prisma } from "../../src/lib/db.js";
 import { expireDueOrders, releaseReservation } from "../../src/modules/orders/order-service.js";
 import { noReservations } from "../../src/modules/orders/reservations.js";
 import type { SearchSync } from "../../src/modules/search/search-sync.js";
-import { User } from "../../src/modules/users/user.model.js";
-import { Vendor } from "../../src/modules/vendors/vendor.model.js";
-import { approvedVendor, bearer, PASSWORD, register, signInAdmin, startTestServices, wipe, withCsrf } from "./helpers.js";
+import { approvedVendor, bearer, PASSWORD, register, signInAdmin, startTestServices, wipe, withCsrf , createProduct } from "./helpers.js";
 
 let app: Express;
 let redis: Redis;
@@ -20,7 +14,6 @@ let searchSync: SearchSync;
 
 beforeAll(async () => {
   ({ app, redis, searchSync } = await startTestServices());
-  await Promise.all([User.init(), Vendor.init(), Category.init(), Product.init(), Order.init(), SubOrder.init(), Counter.init()]);
 });
 
 beforeEach(async () => {
@@ -29,7 +22,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await wipe(redis);
-  await Promise.allSettled([disconnectMongo(), redis.quit()]);
+  await Promise.allSettled([disconnectDb(), redis.quit()]);
 });
 
 const api = () => request(app);
@@ -46,13 +39,13 @@ const ADDRESS = {
 // Two approved stores selling in a category with its own 15% commission (the department has 5%).
 async function shop() {
   const admin = await signInAdmin(app);
-  const dept = await Category.create({ name: "Electronics", slug: "electronics", commissionRateBp: 500 });
-  const phones = await Category.create({ name: "Phones", slug: "phones", parentId: dept._id, commissionRateBp: 1500 });
-  const cables = await Category.create({ name: "Cables", slug: "cables", parentId: dept._id });
+  const dept = await prisma.category.create({ data: { name: "Electronics", slug: "electronics", commissionRateBp: 500 } });
+  const phones = await prisma.category.create({ data: { name: "Phones", slug: "phones", parentId: dept.id, commissionRateBp: 1500 } });
+  const cables = await prisma.category.create({ data: { name: "Cables", slug: "cables", parentId: dept.id } });
   const vikram = await approvedVendor(app, admin, "vikram@example.com", "Vikram Electronics");
   const meera = await approvedVendor(app, admin, "meera@example.com", "Meera Gadgets");
-  const product = (vendorId: string, categoryId: Types.ObjectId, title: string, price: number, stock: number) =>
-    Product.create({
+  const product = (vendorId: string, categoryId: string, title: string, price: number, stock: number) =>
+    createProduct({
       vendorId,
       categoryId,
       title,
@@ -63,16 +56,16 @@ async function shop() {
       status: "active",
       images: [{ key: `products/${vendorId}/${title.length}.png`, alt: "" }],
     });
-  const phone = await product(vikram.storeId, phones._id, "Galaxy Phone", 2_000_000, 5);
-  const case_ = await product(vikram.storeId, phones._id, "Phone Case", 49_900, 20);
-  const cable = await product(meera.storeId, cables._id, "USB-C Cable", 29_900, 3);
-  return { admin, vikram, meera, phone, case_, cable, ids: { phone: phone.id as string, case_: case_.id as string, cable: cable.id as string } };
+  const phone = await product(vikram.storeId, phones.id, "Galaxy Phone", 2_000_000, 5);
+  const case_ = await product(vikram.storeId, phones.id, "Phone Case", 49_900, 20);
+  const cable = await product(meera.storeId, cables.id, "USB-C Cable", 29_900, 3);
+  return { admin, vikram, meera, phone, case_, cable, ids: { phone: phone.id, case_: case_.id, cable: cable.id } };
 }
 
 async function customer(email = "priya@example.com") {
   const { accessToken } = await register(app, { email, name: "Priya Sharma" });
   const added = await api().post("/api/v1/account/addresses").set(bearer(accessToken)).send(ADDRESS);
-  return { token: accessToken, addressId: added.body.address.id as string };
+  return { token: accessToken, addressId: added.body.address.id };
 }
 
 const addToCart = (token: string, productId: string, qty = 1) =>
@@ -91,7 +84,7 @@ async function pay(token: string, orderId: string, providerOrderId: string) {
     .send({ orderId, providerOrderId, providerPaymentId: gateway.body.providerPaymentId, signature: gateway.body.signature });
 }
 
-const stockOf = async (id: string) => (await Product.findById(id))!.stock;
+const stockOf = async (id: string) => (await prisma.product.findUnique({ where: { id: id } }))!.stock;
 
 describe("addresses", () => {
   it("keeps exactly one default, normalises phone numbers and allows up to 5", async () => {
@@ -128,7 +121,7 @@ describe("cart", () => {
     const guest = cookie.split(";")[0]!;
 
     await api().post("/api/v1/cart/items").set("Cookie", guest).set(withCsrf).send({ productId: ids.cable });
-    await Product.updateOne({ _id: ids.phone }, { price: 1_900_000 });
+    await prisma.product.update({ where: { id: ids.phone }, data: { price: 1_900_000 } });
     const cart = await api().get("/api/v1/cart").set("Cookie", guest);
     expect(cart.body.cart.groups.map((g: { vendor: { storeName: string } }) => g.vendor.storeName)).toEqual(["Meera Gadgets", "Vikram Electronics"]);
     expect(cart.body.cart).toMatchObject({ itemCount: 3, itemsTotal: 2 * 1_900_000 + 29_900, canCheckout: true });
@@ -170,8 +163,8 @@ describe("cart", () => {
 
     await addToCart(token, ids.phone);
     // The store is suspended and the cable sells out elsewhere: both lines stay, flagged, and checkout is blocked.
-    await Vendor.updateOne({ _id: vikram.storeId }, { status: "suspended" });
-    await Product.updateOne({ _id: ids.cable }, { stock: 1 });
+    await prisma.vendor.update({ where: { id: vikram.storeId }, data: { status: "suspended" } });
+    await prisma.product.update({ where: { id: ids.cable }, data: { stock: 1 } });
     const cart = await api().get("/api/v1/cart").set(bearer(token));
     const problems = Object.fromEntries(
       cart.body.cart.groups.flatMap((g: { items: { title: string; problem: string }[] }) => g.items.map((i) => [i.title, i.problem])),
@@ -213,7 +206,7 @@ describe("checkout", () => {
     expect((await api().get("/api/v1/cart").set(bearer(token))).body.cart.itemCount).toBe(0);
 
     // Commission is frozen per line: phones 15%, cables fall back to the department's 5%.
-    const parts = await SubOrder.find({ orderId: order.id }).sort({ _id: 1 });
+    const parts = await prisma.subOrder.findMany({ where: { orderId: order.id }, orderBy: { id: "asc" } });
     expect(parts.map((p) => [p.itemsTotal, p.commission, p.vendorNet])).toEqual([
       [2_099_800, 314_970, 1_784_830],
       [59_800, 2_990, 56_810],
@@ -226,7 +219,7 @@ describe("checkout", () => {
     expect((await checkout(token, addressId)).body.error.code).toBe("cart_empty");
 
     await addToCart(token, ids.phone);
-    await Product.updateOne({ _id: ids.phone }, { price: 2_100_000 });
+    await prisma.product.update({ where: { id: ids.phone }, data: { price: 2_100_000 } });
     const stale = await checkout(token, addressId, { expectedTotal: 2_000_000 });
     expect(stale.status).toBe(409);
     expect(stale.body.error).toMatchObject({ code: "price_changed", details: { itemsTotal: 2_100_000 } });
@@ -250,7 +243,7 @@ describe("checkout", () => {
     expect(statuses.filter((s) => s === 409)).toHaveLength(3);
     expect(results.filter((r) => r.status === 409).every((r) => r.body.error.code === "out_of_stock")).toBe(true);
     expect(await stockOf(ids.cable)).toBe(0);
-    expect(await Order.countDocuments()).toBe(3);
+    expect(await prisma.order.count()).toBe(3);
   });
 });
 
@@ -278,12 +271,12 @@ describe("payment and reservations", () => {
     expect(paid.status).toBe(200);
     expect(paid.body.order).toMatchObject({ status: "confirmed", payment: { status: "paid", providerOrderId: null } });
     expect(paid.body.order.parts.map((p: { status: string }) => p.status)).toEqual(["placed", "placed"]);
-    expect((await Product.findById(ids.phone))!.soldCount).toBe(1);
+    expect((await prisma.product.findUnique({ where: { id: ids.phone } }))!.soldCount).toBe(1);
 
     // The same proof again (a double click, or the webhook on Day 6) changes nothing.
     const again = await api().post("/api/v1/checkout/verify").set(bearer(token)).send(proof);
     expect(again.status).toBe(200);
-    expect((await Product.findById(ids.phone))!.soldCount).toBe(1);
+    expect((await prisma.product.findUnique({ where: { id: ids.phone } }))!.soldCount).toBe(1);
 
     // Another customer can't see or pay this order.
     const other = await customer("someone@example.com");
@@ -301,7 +294,7 @@ describe("payment and reservations", () => {
     const deps = { redis, searchSync, reservations: noReservations };
     expect(await releaseReservation(deps, order.id, { to: "expired", reason: "Not paid in time", actor: { role: "system" }, onlyIfDue: true })).toBe(false);
 
-    await Order.updateOne({ _id: order.id }, { reservationExpiresAt: new Date(Date.now() - 1000) });
+    await prisma.order.update({ where: { id: order.id }, data: { reservationExpiresAt: new Date(Date.now() - 1000) } });
     expect(await expireDueOrders(deps)).toBe(1);
     expect(await expireDueOrders(deps)).toBe(0);
     expect(await stockOf(ids.cable)).toBe(3);
@@ -336,7 +329,7 @@ describe("after payment", () => {
     const { order, payment } = (await checkout(c.token, c.addressId)).body;
     await pay(c.token, order.id, payment.providerOrderId);
     const parts = (await api().get(`/api/v1/orders/${order.id}`).set(bearer(c.token))).body.order.parts as { id: string }[];
-    return { ...s, ...c, orderId: order.id as string, vikramPart: parts[0]!.id, meeraPart: parts[1]!.id };
+    return { ...s, ...c, orderId: order.id, vikramPart: parts[0]!.id, meeraPart: parts[1]!.id };
   }
 
   const move = (token: string, subId: string, body: Record<string, unknown>) =>

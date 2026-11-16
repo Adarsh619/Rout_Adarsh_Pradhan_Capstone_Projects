@@ -1,7 +1,7 @@
 import type { estypes } from "@elastic/elasticsearch";
 
 // One document per product a shopper can buy: active, in an active category, sold by an approved store.
-// Everything a search result card or a filter needs is copied in, so a search never has to ask MongoDB.
+// Everything a search result card or a filter needs is copied in, so a search never has to ask the database.
 export interface ProductSearchDoc {
   id: string;
   title: string;

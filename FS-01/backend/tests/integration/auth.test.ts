@@ -2,9 +2,8 @@ import type { Express } from "express";
 import type { Redis } from "ioredis";
 import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { disconnectMongo } from "../../src/lib/mongo.js";
+import { disconnectDb, prisma } from "../../src/lib/db.js";
 import { hashPassword } from "../../src/modules/auth/password.js";
-import { User } from "../../src/modules/users/user.model.js";
 import { PASSWORD, refreshCookie, register, startTestServices, wipe, withCsrf } from "./helpers.js";
 
 let app: Express;
@@ -12,7 +11,6 @@ let redis: Redis;
 
 beforeAll(async () => {
   ({ app, redis } = await startTestServices());
-  await User.init(); // make sure the unique email index exists
 });
 
 beforeEach(async () => {
@@ -21,7 +19,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await wipe(redis);
-  await Promise.allSettled([disconnectMongo(), redis.quit()]);
+  await Promise.allSettled([disconnectDb(), redis.quit()]);
 });
 
 const api = () => request(app);
@@ -38,7 +36,7 @@ describe("register", () => {
     expect(JSON.stringify(res.body)).not.toMatch(/passwordHash|\$2[aby]\$/);
     expect(cookie).toMatch(/^ss_refresh=/);
 
-    const stored = await User.findOne({ email: "priya@example.com" }).select("+passwordHash");
+    const stored = await prisma.user.findUnique({ where: { email: "priya@example.com" } });
     expect(stored!.passwordHash).not.toBe(PASSWORD);
   });
 
@@ -111,7 +109,7 @@ describe("login", () => {
   });
 
   it("refuses suspended accounts, but only after the right password", async () => {
-    await User.updateOne({ email: "priya@example.com" }, { status: "suspended" });
+    await prisma.user.update({ where: { email: "priya@example.com" }, data: { status: "suspended" } });
     expect((await login("priya@example.com", "Wrong-password-1")).body.error.code).toBe("invalid_credentials");
     const res = await login("priya@example.com");
     expect(res.status).toBe(403);
@@ -119,12 +117,12 @@ describe("login", () => {
   });
 
   it("signs in seeded admins", async () => {
-    await User.create({
+    await prisma.user.create({ data: {
       name: "Asha Admin",
       email: "admin@example.com",
       role: "admin",
       passwordHash: await hashPassword(PASSWORD, 4),
-    });
+    } });
     expect((await login("admin@example.com")).body.user.role).toBe("admin");
   });
 });
@@ -198,7 +196,7 @@ describe("me, refresh and logout", () => {
 
   it("stops a suspended user at the next refresh", async () => {
     const { cookie } = await register(app, { email: "s@example.com" });
-    await User.updateOne({ email: "s@example.com" }, { status: "suspended" });
+    await prisma.user.update({ where: { email: "s@example.com" }, data: { status: "suspended" } });
     expect((await refresh(cookie)).status).toBe(401);
   });
 });

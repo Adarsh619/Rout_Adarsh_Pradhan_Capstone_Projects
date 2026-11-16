@@ -39,18 +39,30 @@ Each decision lists what was chosen, the alternatives, and why.
 - **Why:** floating-point maths loses paise (`0.1 + 0.2 ≠ 0.3`), and across thousands of splits that would make the ledger stop balancing. Razorpay also expects paise.
 - **Rule:** every paid order must satisfy `customer paid = Σ vendor shares + platform share`; a test checks it for every coupon scenario.
 
-## 5. MongoDB as a replica set, with transactions at checkout
+## 5. PostgreSQL through Prisma, with transactions at checkout
 
-- **Chosen:** a single-node replica set locally (Atlas is one already). Checkout creates the order and sub-orders and decrements stock in **one transaction**, with a conditional update `stock ≥ qty`.
-- **Why:** two customers buying the last item at the same moment must not both succeed. Standalone MongoDB doesn't support multi-document transactions.
-- **Version: MongoDB 7.0 in Docker and CI.** Every MongoDB 8.x release refuses to start on Linux kernels 6.19 and newer ([SERVER-121912](https://jira.mongodb.org/browse/SERVER-121912)), and GitHub's `ubuntu-latest` runners now run kernel 7.0, so the first CI runs failed. MongoDB's exemption for patched kernels misreads Ubuntu's version numbers ([SERVER-136848](https://jira.mongodb.org/browse/SERVER-136848), still open). 7.0 is a supported long-term release, has everything ShopSphere uses (transactions, aggregation), and the same code runs unchanged on MongoDB Atlas. Move back to 8.x once that fix ships.
+- **Chosen:** PostgreSQL 17 as the one source of truth, accessed through Prisma 7 (typed client, schema file, versioned
+  migrations). Checkout creates the order, its parts and lines and decrements stock in **one transaction**, with a
+  conditional update `stock ≥ qty`. Every status change is a conditional update on the status it was read with.
+- **Why PostgreSQL + Prisma:** the brief's required stack (React, TypeScript, Node.js, Express, **PostgreSQL**,
+  **Prisma**, Tailwind CSS, Docker). It also fits the data: orders, parts, lines, ledger entries and coupons are
+  relational, money sums are SQL `SUM … GROUP BY`, foreign keys and enums stop bad rows, and migrations make schema
+  changes reviewable.
+- **History:** the first build (Days 1–9) used MongoDB 7.0 with Mongoose. When the brief was updated on 17 Nov, the data
+  layer was moved to PostgreSQL + Prisma: embedded lists became tables (`order_lines`, `sub_order_events`,
+  `product_images`, `addresses`), embedded objects became prefixed columns, and ids became UUIDv7. Routes, rules, the
+  API contract, the frontend, Redis, Elasticsearch, S3 and Razorpay didn't change, and every test (unit, integration,
+  end-to-end smoke) passed before and after. The plan is in [`specs/05-postgres-migration-plan.md`](specs/05-postgres-migration-plan.md).
+- **Details that matter:** READ COMMITTED transactions plus conditional updates (the loser of a race matches 0 rows and
+  rolls back) instead of SERIALIZABLE retries; order and invoice numbers from an atomic
+  `INSERT … ON CONFLICT DO UPDATE … RETURNING` counter; malformed ids rejected before they reach the database.
 
 ## 6. Elasticsearch fed by a background job
 
-- **Chosen:** MongoDB is the source of truth. Every product, vendor or review change puts a `search-index` job on a queue; the worker re-reads the product and updates Elasticsearch. `npm run reindex` rebuilds the whole index.
-- **Alternatives:** writing to Elasticsearch inside the request (slow, fails the request if search is down), or MongoDB Atlas Search (not the required stack).
+- **Chosen:** PostgreSQL is the source of truth. Every product, vendor or review change puts a `search-index` job on a queue; the worker re-reads the product and updates Elasticsearch. `npm run reindex` rebuilds the whole index.
+- **Alternatives:** writing to Elasticsearch inside the request (slow, fails the request if search is down), or PostgreSQL full-text search (no typo tolerance, facets or synonyms worth the name).
 - **Why:** requests stay fast, a search outage never blocks selling, and the index can always be rebuilt.
-- **Details that matter:** jobs carry only the product id and the worker re-reads MongoDB, so retries and out-of-order jobs are harmless. Searches go through an alias, so a rebuild fills a new index and switches over atomically with no downtime. Synonyms are applied at index time so typo tolerance still works at search time. See [Background jobs and search](08-background-jobs.md).
+- **Details that matter:** jobs carry only the product id and the worker re-reads PostgreSQL, so retries and out-of-order jobs are harmless. Searches go through an alias, so a rebuild fills a new index and switches over atomically with no downtime. Synonyms are applied at index time so typo tolerance still works at search time. See [Background jobs and search](08-background-jobs.md).
 
 ## 7. Files go straight between the browser and S3
 
@@ -74,7 +86,7 @@ Each decision lists what was chosen, the alternatives, and why.
 
 ## 10. Separate frontend and backend hosting, always on
 
-- **Chosen:** frontend on Vercel; backend (API, worker, Redis, Elasticsearch) on its own server with Caddy for HTTPS; MongoDB Atlas; AWS S3. First choice for the server was an Oracle Cloud Always Free ARM VM.
+- **Chosen:** frontend on Vercel; backend (API, worker, Redis, Elasticsearch) on its own server with Caddy for HTTPS; PostgreSQL in a container on the same server; AWS S3. First choice for the server was an Oracle Cloud Always Free ARM VM.
 - **Alternatives:** Render's free tier sleeps after 15 minutes (30–60 s first load), and hosted Elasticsearch trials expire after 14 days.
 - **Why:** the brief asks for separate deployments, and reviewers may open the link at any time, weeks later.
 - **Fallback (taken on 7 Nov):** Oracle's A1 capacity in Hyderabad was full every day of the first week, so the same Docker setup runs on an AWS EC2 t4g.small in Mumbai (2 vCPU, 2 GB plus swap, Elasticsearch heap 512 MB), paid from the AWS free-plan credits with a zero-spend budget alert. Render was dropped as the fallback because its free tier sleeps and can't run Elasticsearch.
@@ -87,9 +99,9 @@ Each decision lists what was chosen, the alternatives, and why.
 
 ## 12. Reserve stock at checkout, give it back if unpaid
 
-- **Chosen:** checkout takes the stock in the same MongoDB transaction that creates the order, using a conditional update (`stock ≥ qty`). The order then has 15 minutes to be paid; a delayed job (plus a sweep every minute) gives the stock back if it isn't.
+- **Chosen:** checkout takes the stock in the same PostgreSQL transaction that creates the order, using a conditional update (`stock ≥ qty`). The order then has 15 minutes to be paid; a delayed job (plus a sweep every minute) gives the stock back if it isn't.
 - **Alternatives:** take the stock only after payment, which lets two people pay for the last unit and forces a refund; or a "reserved" counter beside the stock, which every read has to subtract.
-- **Why:** nobody can pay for something that's gone. The conditional update can never take stock below zero, and two checkouts touching the same product conflict inside MongoDB, so one is retried and then refused. A test runs six shoppers at once for three units: exactly three orders succeed.
+- **Why:** nobody can pay for something that's gone. The conditional update can never take stock below zero, and the second of two checkouts touching the same product waits for the first one's row lock, then matches nothing and is refused. A test runs six shoppers at once for three units: exactly three orders succeed.
 
 ## 13. A test payment gateway that plays Razorpay's part
 
