@@ -18,12 +18,12 @@ curl -fsS "$BASE/" | grep -q '<div id="root">' && check "app page"
 curl -fsSI "$BASE/" | grep -qi 'x-content-type-options: nosniff' && check "security headers"
 curl -fsS "$BASE/some/deep/link" | grep -q '<div id="root">' && check "client-side routes fall back to the app"
 HEALTH="$(curl -fsS "$BASE/api/v1/health")"
-for svc in mongo redis elasticsearch s3; do
+for svc in postgres redis elasticsearch s3; do
   echo "$HEALTH" | grep -q "\"$svc\":\"up\"" && check "$svc is up"
 done
 curl -sS -o /dev/null -w '%{http_code}' "$BASE/api/v1/nope" | grep -q 404 && check "unknown API route returns 404"
 
-# Sign-up goes through nginx, Express, MongoDB and Redis (session) end to end.
+# Sign-up goes through nginx, Express, PostgreSQL and Redis (session) end to end.
 TOKEN="$(json -X POST "$BASE/api/v1/auth/register" \
   -d "{\"name\":\"Smoke Test\",\"email\":\"$EMAIL\",\"password\":\"Smoke-test-123\"}" | field accessToken)"
 [ -n "$TOKEN" ] && check "sign-up ($EMAIL)"
@@ -148,7 +148,7 @@ if [ -n "${DEMO_PASSWORD:-}" ]; then
   as_shopper -X POST "$BASE/api/v1/products/$PRODUCT_ID/reviews" -d '{"rating":5,"body":"Smoke test review: works as described."}'     | grep -q '"ratingCount":1' && check "the customer reviews the delivered product and its rating updates"
 
   # The customer cancels the other store's part: its share is reversed and the worker refunds it.
-  OTHER_PART="$(as_shopper "$BASE/api/v1/orders/$ORDER_ID" | grep -o '"id":"[a-f0-9]\{24\}","vendor":{"storeName":"Smoke Second Store"' | sed 's/"id":"\([^"]*\)".*/\1/')"
+  OTHER_PART="$(as_shopper "$BASE/api/v1/orders/$ORDER_ID" | grep -o '"id":"[a-f0-9-]\{36\}","vendor":{"storeName":"Smoke Second Store"' | sed 's/"id":"\([^"]*\)".*/\1/')"
   as_shopper -X POST "$BASE/api/v1/orders/$ORDER_ID/sub-orders/$OTHER_PART/cancel" -d '{"reason":"Smoke test"}' -o /dev/null
   for i in $(seq 1 30); do
     as_shopper "$BASE/api/v1/orders/$ORDER_ID" | grep -q '"refund":{"amount":[0-9]*,"status":"processed"}' && break

@@ -13,7 +13,7 @@ const health = (status: "ok" | "degraded", services: Record<string, "up" | "down
 describe("home page", () => {
   it("shows the marketplace pitch and every service as up", async () => {
     mockApi({
-      "GET /api/v1/health": () => jsonResponse(health("ok", { mongo: "up", redis: "up", elasticsearch: "up", s3: "up" })),
+      "GET /api/v1/health": () => jsonResponse(health("ok", { postgres: "up", redis: "up", elasticsearch: "up", s3: "up" })),
     });
     renderWithProviders(<App />);
 
@@ -25,7 +25,7 @@ describe("home page", () => {
 
   it("shows which service is down when the API reports 503", async () => {
     mockApi({
-      "GET /api/v1/health": () => jsonResponse(health("degraded", { mongo: "up", elasticsearch: "down" }), 503),
+      "GET /api/v1/health": () => jsonResponse(health("degraded", { postgres: "up", elasticsearch: "down" }), 503),
     });
     renderWithProviders(<App />);
 

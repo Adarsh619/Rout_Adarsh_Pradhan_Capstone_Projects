@@ -3,7 +3,8 @@ import { describe, expect, it } from "vitest";
 import { loadEnv } from "../src/config/env.js";
 import { createStorage } from "../src/lib/s3.js";
 import { slugify, uniqueSlug } from "../src/lib/slug.js";
-import { buildTree, Category } from "../src/modules/catalog/category.model.js";
+import { randomUUID } from "node:crypto";
+import { buildTree, type CategoryRow } from "../src/modules/catalog/category.model.js";
 import { discountPercent } from "../src/modules/catalog/product.model.js";
 import { checkUploadedImage, MAX_IMAGE_BYTES } from "../src/modules/uploads/upload-rules.js";
 import { unitApp } from "./helpers/app.js";
@@ -34,10 +35,20 @@ describe("money", () => {
 
 describe("category tree", () => {
   it("nests active sub-categories under their department in order", () => {
-    const dept = new Category({ name: "Electronics", slug: "electronics", sortOrder: 1 });
-    const fashion = new Category({ name: "Fashion", slug: "fashion", sortOrder: 0 });
-    const phones = new Category({ name: "Phones", slug: "phones", parentId: dept._id });
-    const hidden = new Category({ name: "Pagers", slug: "pagers", parentId: dept._id, isActive: false });
+    const category = (fields: Partial<CategoryRow> & Pick<CategoryRow, "name" | "slug">): CategoryRow => ({
+      id: randomUUID(),
+      parentId: null,
+      commissionRateBp: null,
+      isActive: true,
+      sortOrder: 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      ...fields,
+    });
+    const dept = category({ name: "Electronics", slug: "electronics", sortOrder: 1 });
+    const fashion = category({ name: "Fashion", slug: "fashion", sortOrder: 0 });
+    const phones = category({ name: "Phones", slug: "phones", parentId: dept.id });
+    const hidden = category({ name: "Pagers", slug: "pagers", parentId: dept.id, isActive: false });
     const tree = buildTree([dept, phones, hidden, fashion]);
     expect(tree.map((c) => c.name)).toEqual(["Fashion", "Electronics"]);
     expect(tree[1]!.children.map((c) => c.name)).toEqual(["Phones"]);

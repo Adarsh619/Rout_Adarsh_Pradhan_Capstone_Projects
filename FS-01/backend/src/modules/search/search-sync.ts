@@ -1,6 +1,5 @@
 import { Queue, type JobsOptions } from "bullmq";
 import type { Redis } from "ioredis";
-import type { Types } from "mongoose";
 import { logger } from "../../lib/logger.js";
 import type { SearchIndexer } from "./search-indexer.js";
 
@@ -11,9 +10,9 @@ export type SearchJob = { kind: "product" | "vendor" | "category"; id: string };
 // What the API calls after a change that shoppers' search results depend on. The default sends a job to the worker,
 // so the request never waits for Elasticsearch (and still succeeds if Elasticsearch is down).
 export interface SearchSync {
-  product(id: string | Types.ObjectId): Promise<void>;
-  vendor(id: string | Types.ObjectId): Promise<void>;
-  category(id: string | Types.ObjectId): Promise<void>;
+  product(id: string): Promise<void>;
+  vendor(id: string): Promise<void>;
+  category(id: string): Promise<void>;
 }
 
 // Retries with backoff (1 s, 2 s, 4 s …) cover Elasticsearch restarts; finished jobs are kept briefly for debugging.
@@ -26,12 +25,12 @@ const JOB_OPTIONS: JobsOptions = {
 
 export function queuedSearchSync(connection: Redis): SearchSync & { queue: Queue } {
   const queue = new Queue<SearchJob>(SEARCH_QUEUE, { connection });
-  const add = async (kind: SearchJob["kind"], id: string | Types.ObjectId) => {
+  const add = async (kind: SearchJob["kind"], id: string) => {
     try {
-      await queue.add(kind, { kind, id: String(id) }, JOB_OPTIONS);
+      await queue.add(kind, { kind, id: id }, JOB_OPTIONS);
     } catch (err) {
       // The change itself is saved; `npm run reindex` puts the index right if a job was lost.
-      logger.error({ err, kind, id: String(id) }, "could not queue a search update");
+      logger.error({ err, kind, id: id }, "could not queue a search update");
     }
   };
   return {

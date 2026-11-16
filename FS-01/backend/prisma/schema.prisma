@@ -1,0 +1,548 @@
+// ShopSphere's database (PostgreSQL). Money is integer paise, rates are basis points; ids are time-ordered UUIDs (v7),
+// so ordering by id is ordering by creation. Tables are snake_case plurals; columns keep the camelCase API names.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "esm"
+  runtime      = "nodejs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ── People ──────────────────────────────────────────────────────────────────────────────────────────────────────
+
+enum Role {
+  customer
+  vendor
+  admin
+}
+
+enum AccountStatus {
+  active
+  suspended
+}
+
+model User {
+  id                String        @id @default(uuid(7)) @db.Uuid
+  name              String
+  email             String        @unique
+  passwordHash      String
+  role              Role
+  status            AccountStatus @default(active)
+  passwordChangedAt DateTime?     @db.Timestamptz(3)
+  lastLoginAt       DateTime?     @db.Timestamptz(3)
+  createdAt         DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime      @updatedAt @db.Timestamptz(3)
+
+  addresses Address[]
+  vendor    Vendor?   @relation("VendorOwner")
+  orders    Order[]
+  reviews   Review[]
+
+  @@map("users")
+}
+
+model Address {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  userId    String   @db.Uuid
+  label     String?
+  name      String
+  phone     String
+  line1     String
+  line2     String?
+  city      String
+  state     String
+  pincode   String
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("addresses")
+}
+
+enum VendorStatus {
+  pending
+  approved
+  rejected
+  suspended
+}
+
+enum PayoutAccountStatus {
+  not_started
+  active
+}
+
+model Vendor {
+  id               String       @id @default(uuid(7)) @db.Uuid
+  userId           String       @unique @db.Uuid
+  storeName        String
+  slug             String       @unique
+  description      String       @default("")
+  logoKey          String?
+  contactEmail     String
+  phone            String
+  gstin            String?
+  status           VendorStatus @default(pending)
+  rejectionReason  String?
+  // null = the category's (or the platform's default) rate.
+  commissionRateBp Int?
+  // Payout account (simulated provider). Only the last 4 digits of the bank account are kept.
+  payoutAccountHolder  String?
+  payoutBankLast4      String?
+  payoutIfsc           String?
+  payoutProvider       String?
+  payoutBeneficiaryRef String?
+  payoutStatus         PayoutAccountStatus @default(not_started)
+  payoutUpdatedAt      DateTime?           @db.Timestamptz(3)
+  ratingAvg        Float        @default(0)
+  ratingCount      Int          @default(0)
+  submittedAt      DateTime     @default(now()) @db.Timestamptz(3)
+  approvedAt       DateTime?    @db.Timestamptz(3)
+  approvedBy       String?      @db.Uuid
+  statusChangedAt  DateTime?    @db.Timestamptz(3)
+  statusChangedBy  String?      @db.Uuid
+  createdAt        DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime     @updatedAt @db.Timestamptz(3)
+
+  owner     User        @relation("VendorOwner", fields: [userId], references: [id])
+  products  Product[]
+  subOrders SubOrder[]
+  coupons   Coupon[]
+
+  @@index([status])
+  @@map("vendors")
+}
+
+// ── Catalogue ───────────────────────────────────────────────────────────────────────────────────────────────────
+
+model Category {
+  id               String   @id @default(uuid(7)) @db.Uuid
+  name             String
+  slug             String   @unique
+  parentId         String?  @db.Uuid
+  commissionRateBp Int?
+  isActive         Boolean  @default(true)
+  sortOrder        Int      @default(0)
+  createdAt        DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime @updatedAt @db.Timestamptz(3)
+
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryTree")
+  products Product[]
+
+  @@index([parentId])
+  @@map("categories")
+}
+
+enum ProductStatus {
+  draft
+  active
+  inactive
+}
+
+model Product {
+  id          String        @id @default(uuid(7)) @db.Uuid
+  vendorId    String        @db.Uuid
+  categoryId  String        @db.Uuid
+  title       String
+  slug        String
+  description String        @default("")
+  brand       String?
+  price       Int
+  mrp         Int
+  stock       Int           @default(0)
+  sku         String?
+  // Free-form specs shown on the product page, e.g. { "Colour": "Black" }.
+  attributes  Json          @default("{}")
+  ratingAvg   Float         @default(0)
+  ratingCount Int           @default(0)
+  soldCount   Int           @default(0)
+  status      ProductStatus @default(draft)
+  createdAt   DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime      @updatedAt @db.Timestamptz(3)
+
+  vendor   Vendor         @relation(fields: [vendorId], references: [id])
+  category Category       @relation(fields: [categoryId], references: [id])
+  images   ProductImage[]
+  reviews  Review[]
+
+  @@unique([vendorId, slug])
+  // NULLs are distinct in Postgres, so products without a SKU never clash.
+  @@unique([vendorId, sku])
+  @@index([vendorId, status])
+  @@index([categoryId])
+  @@index([status, createdAt(sort: Desc)])
+  @@map("products")
+}
+
+model ProductImage {
+  productId String @db.Uuid
+  position  Int
+  key       String
+  alt       String @default("")
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@id([productId, position])
+  @@map("product_images")
+}
+
+enum ReviewStatus {
+  visible
+  hidden
+}
+
+enum ReviewSource {
+  customer
+  seed
+}
+
+model Review {
+  id           String       @id @default(uuid(7)) @db.Uuid
+  productId    String       @db.Uuid
+  vendorId     String       @db.Uuid
+  // null for seeded reviews (imported, not written by a ShopSphere customer).
+  userId       String?      @db.Uuid
+  subOrderId   String?      @db.Uuid
+  authorName   String
+  rating       Int
+  title        String?
+  body         String       @default("")
+  status       ReviewStatus @default(visible)
+  source       ReviewSource @default(customer)
+  hiddenReason String?
+  createdAt    DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime     @updatedAt @db.Timestamptz(3)
+
+  product Product @relation(fields: [productId], references: [id])
+  user    User?   @relation(fields: [userId], references: [id])
+
+  // One review per customer per product (seeded reviews have no user, and NULLs never clash).
+  @@unique([productId, userId])
+  @@index([productId, status, createdAt(sort: Desc)])
+  @@index([vendorId, status])
+  @@index([status, createdAt(sort: Desc)])
+  @@map("reviews")
+}
+
+// ── Coupons ─────────────────────────────────────────────────────────────────────────────────────────────────────
+
+enum CouponScope {
+  platform
+  vendor
+}
+
+enum CouponType {
+  percent
+  flat
+}
+
+model Coupon {
+  id           String      @id @default(uuid(7)) @db.Uuid
+  code         String      @unique
+  scope        CouponScope
+  vendorId     String?     @db.Uuid
+  type         CouponType
+  value        Int
+  maxDiscount  Int?
+  minOrder     Int         @default(0)
+  startsAt     DateTime?   @db.Timestamptz(3)
+  endsAt       DateTime?   @db.Timestamptz(3)
+  usageLimit   Int?
+  perUserLimit Int         @default(1)
+  usedCount    Int         @default(0)
+  isActive     Boolean     @default(true)
+  description  String?
+  createdBy    String?     @db.Uuid
+  createdAt    DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime    @updatedAt @db.Timestamptz(3)
+
+  vendor      Vendor?            @relation(fields: [vendorId], references: [id])
+  redemptions CouponRedemption[]
+
+  @@index([scope, vendorId, createdAt(sort: Desc)])
+  @@map("coupons")
+}
+
+model CouponRedemption {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  couponId  String   @db.Uuid
+  userId    String   @db.Uuid
+  orderId   String   @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  coupon Coupon @relation(fields: [couponId], references: [id])
+
+  @@unique([couponId, orderId])
+  @@index([couponId, userId])
+  @@map("coupon_redemptions")
+}
+
+// ── Orders ──────────────────────────────────────────────────────────────────────────────────────────────────────
+
+enum OrderStatus {
+  pending_payment
+  confirmed
+  completed
+  cancelled
+  expired
+}
+
+enum SubOrderStatus {
+  awaiting_payment
+  placed
+  packed
+  shipped
+  delivered
+  cancelled
+}
+
+enum PaymentProvider {
+  mock
+  razorpay
+}
+
+enum PaymentStatus {
+  created
+  paid
+  failed
+  refunded
+  partially_refunded
+}
+
+enum PayoutStatus {
+  held
+  released
+  paid
+  reversed
+  failed
+}
+
+enum RefundStatus {
+  pending
+  processed
+  failed
+}
+
+enum ActorRole {
+  customer
+  vendor
+  admin
+  system
+}
+
+// One checkout: the customer's single payment. Each store's part is a SubOrder.
+model Order {
+  id                        String          @id @default(uuid(7)) @db.Uuid
+  orderNumber               String          @unique
+  customerId                String          @db.Uuid
+  // A copy of the address at checkout, so later edits to the address book never change past orders.
+  shippingAddress           Json
+  itemsTotal                Int
+  discount                  Int             @default(0)
+  shipping                  Int             @default(0)
+  grandTotal                Int
+  couponId                  String?         @db.Uuid
+  couponCode                String?
+  couponScope               CouponScope?
+  couponVendorId            String?         @db.Uuid
+  couponDiscount            Int?
+  paymentProvider           PaymentProvider
+  paymentProviderOrderId    String?         @unique
+  paymentProviderPaymentId  String?
+  paymentStatus             PaymentStatus   @default(created)
+  paidAt                    DateTime?       @db.Timestamptz(3)
+  refundedAmount            Int             @default(0)
+  status                    OrderStatus     @default(pending_payment)
+  reservationExpiresAt      DateTime        @db.Timestamptz(3)
+  cancelledAt               DateTime?       @db.Timestamptz(3)
+  completedAt               DateTime?       @db.Timestamptz(3)
+  createdAt                 DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt                 DateTime        @updatedAt @db.Timestamptz(3)
+
+  customer  User        @relation(fields: [customerId], references: [id])
+  subOrders SubOrder[]
+  lines     OrderLine[]
+
+  @@index([customerId, createdAt(sort: Desc)])
+  @@index([status, reservationExpiresAt])
+  @@index([createdAt])
+  @@map("orders")
+}
+
+// One store's part of an order: packed, shipped and delivered by that store; its money held until delivery.
+model SubOrder {
+  id               String         @id @default(uuid(7)) @db.Uuid
+  orderId          String         @db.Uuid
+  orderNumber      String
+  customerId       String         @db.Uuid
+  vendorId         String         @db.Uuid
+  vendorName       String
+  vendorSlug       String
+  itemsTotal       Int
+  discountShare    Int            @default(0)
+  discountBy       CouponScope?
+  payable          Int
+  commission       Int
+  vendorNet        Int
+  status           SubOrderStatus @default(awaiting_payment)
+  trackingCarrier  String?
+  trackingNumber   String?
+  payoutAmount     Int?
+  payoutStatus     PayoutStatus?
+  payoutProvider   String?
+  payoutProviderRef String?
+  payoutReleasedAt DateTime?      @db.Timestamptz(3)
+  payoutPaidAt     DateTime?      @db.Timestamptz(3)
+  payoutLastError  String?
+  refundAmount     Int?
+  refundStatus     RefundStatus?
+  refundProviderRef String?
+  refundRequestedAt DateTime?     @db.Timestamptz(3)
+  refundProcessedAt DateTime?     @db.Timestamptz(3)
+  refundLastError  String?
+  placedAt         DateTime?      @db.Timestamptz(3)
+  invoiceNumber    String?
+  deliveredAt      DateTime?      @db.Timestamptz(3)
+  cancelledAt      DateTime?      @db.Timestamptz(3)
+  cancelReason     String?
+  createdAt        DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime       @updatedAt @db.Timestamptz(3)
+
+  order   Order           @relation(fields: [orderId], references: [id])
+  vendor  Vendor          @relation(fields: [vendorId], references: [id])
+  lines   OrderLine[]
+  history SubOrderEvent[]
+  invoice Invoice?
+
+  @@index([orderId])
+  @@index([vendorId, status, createdAt(sort: Desc)])
+  @@index([vendorId, placedAt(sort: Desc)])
+  @@index([payoutStatus, vendorId])
+  @@index([refundStatus])
+  @@map("sub_orders")
+}
+
+// A bought product, with its title, price and commission rate copied at checkout.
+model OrderLine {
+  id               String @id @default(uuid(7)) @db.Uuid
+  orderId          String @db.Uuid
+  subOrderId       String @db.Uuid
+  position         Int
+  productId        String @db.Uuid
+  vendorId         String @db.Uuid
+  title            String
+  imageKey         String?
+  price            Int
+  qty              Int
+  commissionRateBp Int
+
+  order    Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  subOrder SubOrder @relation(fields: [subOrderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([subOrderId])
+  @@index([productId])
+  @@map("order_lines")
+}
+
+// Every status change of a store's part: who did it and when.
+model SubOrderEvent {
+  id         String         @id @default(uuid(7)) @db.Uuid
+  subOrderId String         @db.Uuid
+  status     SubOrderStatus
+  at         DateTime       @db.Timestamptz(3)
+  byUserId   String?        @db.Uuid
+  byRole     ActorRole
+  note       String?
+
+  subOrder SubOrder @relation(fields: [subOrderId], references: [id], onDelete: Cascade)
+
+  @@index([subOrderId, at])
+  @@map("sub_order_events")
+}
+
+// Yearly sequences for order and invoice numbers (e.g. "order-2026").
+model Counter {
+  id  String @id
+  seq Int    @default(0)
+
+  @@map("counters")
+}
+
+model Invoice {
+  id            String   @id @default(uuid(7)) @db.Uuid
+  subOrderId    String   @unique @db.Uuid
+  orderId       String   @db.Uuid
+  vendorId      String   @db.Uuid
+  customerId    String   @db.Uuid
+  invoiceNumber String   @unique
+  s3Key         String
+  generatedAt   DateTime @db.Timestamptz(3)
+
+  subOrder SubOrder @relation(fields: [subOrderId], references: [id])
+
+  @@map("invoices")
+}
+
+// ── Money ───────────────────────────────────────────────────────────────────────────────────────────────────────
+
+enum LedgerType {
+  payment
+  refund
+  commission
+  commission_reversal
+  vendor_hold
+  vendor_release
+  vendor_reversal
+  payout
+  platform_discount
+  platform_discount_reversal
+}
+
+// Append-only. key = "<type>:<sub-order or order id>" is unique, so a retried job can never book twice.
+model LedgerEntry {
+  id          String     @id @default(uuid(7)) @db.Uuid
+  key         String     @unique
+  type        LedgerType
+  orderId     String     @db.Uuid
+  subOrderId  String?    @db.Uuid
+  vendorId    String?    @db.Uuid
+  amount      Int
+  providerRef String?
+  note        String?
+  createdAt   DateTime   @default(now()) @db.Timestamptz(3)
+
+  @@index([orderId])
+  @@index([vendorId, type, createdAt(sort: Desc)])
+  @@index([type, createdAt(sort: Desc)])
+  @@map("ledger_entries")
+}
+
+enum WebhookEventStatus {
+  processing
+  processed
+  ignored
+  failed
+}
+
+// Every webhook delivery, keyed by the provider's event id, so a repeated delivery is handled once.
+model WebhookEvent {
+  id          String             @id @default(uuid(7)) @db.Uuid
+  provider    PaymentProvider
+  eventId     String
+  type        String
+  status      WebhookEventStatus
+  result      String?
+  error       String?
+  receivedAt  DateTime           @db.Timestamptz(3)
+  processedAt DateTime?          @db.Timestamptz(3)
+
+  @@unique([provider, eventId])
+  @@map("webhook_events")
+}

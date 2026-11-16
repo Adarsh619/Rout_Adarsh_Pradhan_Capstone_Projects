@@ -87,8 +87,8 @@ server's `FS-01/.env`; compose with `-f docker-compose.prod.yml`). Seeded on Atl
 
 **Live 17 Nov:** frontend on Vercel at https://shopsphere-fs01.vercel.app (sign-in survives reload, photos load; S3
 CORS allows it). Server runs the auto-deploy timer (5 min) and the nightly reset (03:00 IST, baseline ~84 KB saved 17 Nov,
-after the live test purchase, which the user later cancelled). Request logs carry `clientIp` (req.ip after 2 hops): after
-the next deploy, check on the server that it shows the visitor's address, and that `/api/v1/health` shows the commit.
+after the live test purchase, which the user later cancelled). First automatic deploy (8d76ee5) worked; `/api/v1/health`
+shows the commit. Request logs' `clientIp` shows the visitor's real address through Vercel (checked 17 Nov). Day 9 done.
 
 **Day 10 (Tue 17 – Thu 19):** docs 12 (testing + performance), 13 (challenges, next steps), 14 (setup) + `openapi.yaml`,
 test and coverage report, presentation outline, reflection template, bug sweep, README live links; Wed: user records

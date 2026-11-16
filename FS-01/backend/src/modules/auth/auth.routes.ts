@@ -6,7 +6,8 @@ import { requireAuth } from "../../middleware/auth.js";
 import { requireCsrfHeader } from "../../middleware/csrf.js";
 import { AppError } from "../../middleware/errors.js";
 import { validateBody } from "../../middleware/validate.js";
-import { User, toPublicUser, type Role, type UserDoc } from "../users/user.model.js";
+import { isUniqueViolation, prisma } from "../../lib/db.js";
+import { publicUserSelect, toPublicUser } from "../users/user.model.js";
 import { burnPasswordCheck, hashPassword, passwordSchema, verifyPassword } from "./password.js";
 import type { SessionStore } from "./sessions.js";
 import { parseRefreshToken, type AccessTokens } from "./tokens.js";
@@ -76,11 +77,11 @@ export function authRouter(cfg: AuthConfig): { auth: Router; account: Router } {
   };
 
   // Starts a session and answers with the access token; the refresh token goes into the httpOnly cookie.
-  const signIn = async (req: Request, res: Response, user: UserDoc, status: number) => {
-    const { sid, token } = await cfg.sessions.create(user.id as string, user.role as Role);
-    const accessToken = await cfg.tokens.sign({ sub: user.id as string, role: user.role as Role, sid });
+  const signIn = async (req: Request, res: Response, user: Parameters<typeof toPublicUser>[0], status: number) => {
+    const { sid, token } = await cfg.sessions.create(user.id, user.role);
+    const accessToken = await cfg.tokens.sign({ sub: user.id, role: user.role, sid });
     res.cookie(REFRESH_COOKIE, token, cookieOptions());
-    await cfg.afterSignIn?.(req, res, user.id as string);
+    await cfg.afterSignIn?.(req, res, user.id);
     res.status(status).json({ user: toPublicUser(user), accessToken, expiresIn: cfg.accessTtlSeconds });
   };
 
@@ -109,14 +110,14 @@ export function authRouter(cfg: AuthConfig): { auth: Router; account: Router } {
     async (req, res, next) => {
       try {
         const body = req.body as z.infer<typeof registerSchema>;
-        const user = await User.create({
-          name: body.name,
-          email: body.email,
-          passwordHash: await hashPassword(body.password, cfg.bcryptCost),
-          role: body.role,
-          lastLoginAt: new Date(),
-        }).catch((err: unknown) => {
-          if (typeof err === "object" && err !== null && "code" in err && err.code === 11000) {
+        const passwordHash = await hashPassword(body.password, cfg.bcryptCost);
+        const user = await prisma.user
+          .create({
+            data: { name: body.name, email: body.email, passwordHash, role: body.role, lastLoginAt: new Date() },
+            select: publicUserSelect,
+          })
+          .catch((err: unknown) => {
+          if (isUniqueViolation(err)) {
             throw new AppError(409, "email_taken", "An account with this email already exists", {
               fields: [{ field: "email", message: "An account with this email already exists" }],
             });
@@ -149,7 +150,7 @@ export function authRouter(cfg: AuthConfig): { auth: Router; account: Router } {
           });
         }
 
-        const user = await User.findOne({ email }).select("+passwordHash");
+        const user = await prisma.user.findUnique({ where: { email } });
         let ok = false;
         if (user) ok = await verifyPassword(password, user.passwordHash);
         else await burnPasswordCheck(password, cfg.bcryptCost);
@@ -163,8 +164,7 @@ export function authRouter(cfg: AuthConfig): { auth: Router; account: Router } {
         }
 
         await reset(cfg.redis, failKey);
-        user.lastLoginAt = new Date();
-        await user.save();
+        await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
         await signIn(req, res, user, 200);
       } catch (err) {
         next(err);
@@ -196,14 +196,14 @@ export function authRouter(cfg: AuthConfig): { auth: Router; account: Router } {
         throw new AppError(401, "session_ended", "Please sign in");
       }
 
-      const user = await User.findById(result.uid);
+      const user = await prisma.user.findUnique({ where: { id: result.uid }, select: publicUserSelect });
       if (!user || user.status !== "active") {
         await cfg.sessions.revoke(parsed.sid);
         clearCookie(res);
         throw new AppError(401, "session_ended", "Please sign in");
       }
 
-      const accessToken = await cfg.tokens.sign({ sub: user.id as string, role: user.role as Role, sid: parsed.sid });
+      const accessToken = await cfg.tokens.sign({ sub: user.id, role: user.role, sid: parsed.sid });
       res.cookie(REFRESH_COOKIE, result.token, cookieOptions());
       res.json({ user: toPublicUser(user), accessToken, expiresIn: cfg.accessTtlSeconds });
     } catch (err) {
@@ -224,7 +224,7 @@ export function authRouter(cfg: AuthConfig): { auth: Router; account: Router } {
 
   auth.get("/me", signedIn, async (req, res, next) => {
     try {
-      const user = await User.findById(req.auth!.id);
+      const user = await prisma.user.findUnique({ where: { id: req.auth!.id }, select: publicUserSelect });
       if (!user || user.status !== "active") {
         await cfg.sessions.revoke(req.auth!.sid);
         throw new AppError(401, "session_ended", "Please sign in");
@@ -237,11 +237,8 @@ export function authRouter(cfg: AuthConfig): { auth: Router; account: Router } {
 
   account.patch("/", signedIn, validateBody(updateAccountSchema), async (req, res, next) => {
     try {
-      const user = await User.findByIdAndUpdate(
-        req.auth!.id,
-        { name: (req.body as z.infer<typeof updateAccountSchema>).name },
-        { returnDocument: "after", runValidators: true },
-      );
+      const name = (req.body as z.infer<typeof updateAccountSchema>).name;
+      const [user] = await prisma.user.updateManyAndReturn({ where: { id: req.auth!.id }, data: { name }, select: publicUserSelect });
       if (!user) throw new AppError(404, "not_found", "Account not found");
       res.json({ user: toPublicUser(user) });
     } catch (err) {
@@ -257,7 +254,7 @@ export function authRouter(cfg: AuthConfig): { auth: Router; account: Router } {
     async (req, res, next) => {
       try {
         const { currentPassword, newPassword } = req.body as z.infer<typeof changePasswordSchema>;
-        const user = await User.findById(req.auth!.id).select("+passwordHash");
+        const user = await prisma.user.findUnique({ where: { id: req.auth!.id } });
         if (!user) throw new AppError(404, "not_found", "Account not found");
         if (!(await verifyPassword(currentPassword, user.passwordHash))) {
           throw new AppError(400, "validation_error", "Some fields need fixing", {
@@ -269,11 +266,12 @@ export function authRouter(cfg: AuthConfig): { auth: Router; account: Router } {
             fields: [{ field: "newPassword", message: "Choose a password you haven't used here" }],
           });
         }
-        user.passwordHash = await hashPassword(newPassword, cfg.bcryptCost);
-        user.passwordChangedAt = new Date();
-        await user.save();
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { passwordHash: await hashPassword(newPassword, cfg.bcryptCost), passwordChangedAt: new Date() },
+        });
         // Every other browser signed in to this account is signed out; this one stays signed in.
-        const signedOutSessions = await cfg.sessions.revokeAllForUser(user.id as string, req.auth!.sid);
+        const signedOutSessions = await cfg.sessions.revokeAllForUser(user.id, req.auth!.sid);
         res.json({ ok: true, signedOutSessions });
       } catch (err) {
         next(err);

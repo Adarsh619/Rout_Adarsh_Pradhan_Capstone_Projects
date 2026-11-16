@@ -20,7 +20,7 @@ const schema = z.object({
   // Comma-separated list of browser origins allowed to call the API (the Vercel site in production).
   CORS_ORIGINS: z.string().default("http://localhost:3000,http://localhost:5173"),
 
-  MONGO_URL: z.string().url().default("mongodb://localhost:27017/shopsphere?replicaSet=rs0&directConnection=true"),
+  DATABASE_URL: z.string().url().default("postgresql://shopsphere:shopsphere@localhost:5433/shopsphere"),
   REDIS_URL: z.string().url().default("redis://localhost:6379/0"),
   ELASTICSEARCH_URL: z.string().url().default("http://localhost:9200"),
   // The alias searches go through; each rebuild creates a new index behind it and switches the alias.

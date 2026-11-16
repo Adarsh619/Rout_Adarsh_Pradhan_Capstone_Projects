@@ -1,21 +1,29 @@
 import type { Redis } from "ioredis";
-import type { ClientSession, Types } from "mongoose";
 import { cacheKeys, invalidate } from "../../lib/cache.js";
+import { prisma, type Tx } from "../../lib/db.js";
 import { logger } from "../../lib/logger.js";
 import { inTransaction } from "../../lib/transaction.js";
 import { AppError } from "../../middleware/errors.js";
 import { CartStore, userCartKey } from "../cart/cart-store.js";
-import { Product } from "../catalog/product.model.js";
 import { applyCoupon } from "../coupons/coupon-rules.js";
 import { couponKeyFor, evaluateCoupon, redeem, releaseRedemption, termsOf } from "../coupons/coupon-service.js";
-import type { CouponDoc } from "../coupons/coupon.model.js";
+import type { CouponRow } from "../coupons/coupon.model.js";
 import type { InvoiceJobs } from "../invoices/invoice-jobs.js";
 import { record, type LedgerInput } from "../payments/ledger.model.js";
 import { addRefundToOrder, type MoneyJobs } from "../payments/money-jobs.js";
 import type { PaymentProvider } from "../payments/payment-provider.js";
 import type { SearchSync } from "../search/search-sync.js";
-import { User } from "../users/user.model.js";
-import { Order, SubOrder, nextOrderNumber, type ActorRole, type OrderDoc, type SubOrderDoc, type SubOrderStatus } from "./order.model.js";
+import {
+  nextOrderNumber,
+  orderInclude,
+  subOrderInclude,
+  type ActorRole,
+  type OrderLine,
+  type OrderRow,
+  type ShippingAddress,
+  type SubOrderRow,
+  type SubOrderStatus,
+} from "./order.model.js";
 import { canAdminCancel, canCustomerCancel, canVendorMove, rollUpOrderStatus, splitByVendor, VENDOR_NEXT } from "./order-rules.js";
 import { priceLines } from "./pricing.js";
 import type { ReservationScheduler } from "./reservations.js";
@@ -39,33 +47,48 @@ export interface Actor {
 
 const SYSTEM: Actor = { role: "system" };
 
-const history = (status: SubOrderStatus, actor: Actor, note?: string) => ({
+// One row of a part's history: who moved it to which status, and when.
+const event = (subOrderId: string, status: SubOrderStatus, actor: Actor, note?: string) => ({
+  subOrderId,
   status,
   at: new Date(),
   byRole: actor.role,
-  ...(actor.userId && { byUserId: actor.userId }),
-  ...(note && { note }),
+  byUserId: actor.userId ?? null,
+  note: note ?? null,
 });
 
+// Stock goes back (or soldCount moves) for every line, one product at a time, inside the caller's transaction.
+async function addToProducts(tx: Tx, lines: Pick<OrderLine, "productId" | "qty">[], change: (qty: number) => { stock?: number; soldCount?: number }) {
+  for (const line of lines) {
+    const c = change(line.qty);
+    await tx.product.updateMany({
+      where: { id: line.productId },
+      data: {
+        ...(c.stock && { stock: { increment: c.stock } }),
+        ...(c.soldCount && { soldCount: { increment: c.soldCount } }),
+      },
+    });
+  }
+}
+
 // Stock changed: product pages and search must show it (in stock / out of stock).
-export async function afterStockChange(deps: Pick<OrderDeps, "redis" | "searchSync">, productIds: (string | Types.ObjectId)[]) {
-  const ids = [...new Set(productIds.map(String))];
+export async function afterStockChange(deps: Pick<OrderDeps, "redis" | "searchSync">, productIds: string[]) {
+  const ids = [...new Set(productIds)];
   await invalidate(deps.redis, ...ids.map(cacheKeys.product));
   await Promise.all(ids.map((id) => deps.searchSync.product(id)));
 }
 
 // ---- Checkout --------------------------------------------------------------------------------------
 
-export async function placeOrder(deps: OrderDeps, input: { userId: string; addressId: string; expectedTotal?: number }) {
+export async function placeOrder(deps: OrderDeps, input: { userId: string; addressId: string; expectedTotal?: number }): Promise<OrderRow> {
   const cart = new CartStore(deps.redis);
   const cartKey = userCartKey(input.userId);
   // Oldest first, so the order lists things in the order they were added.
   const lines = (await cart.read(cartKey)).reverse();
   if (lines.length === 0) throw new AppError(409, "cart_empty", "Your cart is empty");
 
-  const user = await User.findById(input.userId);
-  const address = user?.addresses.id(input.addressId);
-  if (!user || !address) {
+  const address = await prisma.address.findFirst({ where: { id: input.addressId, userId: input.userId } });
+  if (!address) {
     throw new AppError(400, "validation_error", "Some fields need fixing", { fields: [{ field: "addressId", message: "Choose a delivery address" }] });
   }
 
@@ -80,7 +103,7 @@ export async function placeOrder(deps: OrderDeps, input: { userId: string; addre
 
   // The coupon applied in the cart, checked again now (it may have expired or been used up since).
   const couponCode = await deps.redis.get(couponKeyFor(cartKey));
-  let coupon: CouponDoc | null = null;
+  let coupon: CouponRow | null = null;
   if (couponCode) {
     const checked = await evaluateCoupon(couponCode, input.userId, plainParts);
     if (checked.problem || !checked.coupon) throw new AppError(409, "coupon_invalid", `${checked.problem} Remove the coupon to continue.`, { code: couponCode });
@@ -99,161 +122,173 @@ export async function placeOrder(deps: OrderDeps, input: { userId: string; addre
 
   const orderNumber = await nextOrderNumber();
   const expiresAt = new Date(Date.now() + deps.reservationMinutes * 60_000);
+  const shippingAddress: ShippingAddress = {
+    name: address.name,
+    phone: address.phone,
+    line1: address.line1,
+    line2: address.line2,
+    city: address.city,
+    state: address.state,
+    pincode: address.pincode,
+  };
 
-  const order = await inTransaction(async (session) => {
-    // Take the stock only if enough is still there. Two shoppers racing for the last unit: one update matches,
-    // the other matches nothing (or hits a write conflict and is retried), so stock never goes below zero.
+  const order = await inTransaction(async (tx) => {
+    // Take the stock only if enough is still there. Two shoppers racing for the last unit: the second update waits
+    // for the first one's row lock, then matches nothing, so stock never goes below zero.
     for (const line of priced) {
-      const taken = await Product.updateOne(
-        { _id: line.productId, status: "active", stock: { $gte: line.qty } },
-        { $inc: { stock: -line.qty } },
-        { session },
-      );
-      if (taken.modifiedCount !== 1) {
+      const taken = await tx.product.updateMany({
+        where: { id: line.productId, status: "active", stock: { gte: line.qty } },
+        data: { stock: { decrement: line.qty } },
+      });
+      if (taken.count !== 1) {
         throw new AppError(409, "out_of_stock", `${line.title} sold out while you were checking out`, { productId: line.productId });
       }
     }
-    const [created] = await Order.create(
-      [
-        {
+    const created = await tx.order.create({
+      data: {
+        orderNumber,
+        customerId: input.userId,
+        shippingAddress: { ...shippingAddress },
+        itemsTotal,
+        discount,
+        grandTotal,
+        ...(coupon && { couponId: coupon.id, couponCode: coupon.code, couponScope: coupon.scope, couponVendorId: coupon.vendorId, couponDiscount: discount }),
+        paymentProvider: deps.payments.name,
+        paymentStatus: "created",
+        status: "pending_payment",
+        reservationExpiresAt: expiresAt,
+      },
+    });
+    let position = 0;
+    for (const part of parts) {
+      const vendor = vendorById.get(part.vendorId)!;
+      const sub = await tx.subOrder.create({
+        data: {
+          orderId: created.id,
           orderNumber,
-          customerId: user._id,
-          items: priced,
-          shippingAddress: { name: address.name, phone: address.phone, line1: address.line1, line2: address.line2, city: address.city, state: address.state, pincode: address.pincode },
-          itemsTotal,
-          discount,
-          grandTotal,
-          ...(coupon && {
-            coupon: { couponId: coupon._id, code: coupon.code, scope: coupon.scope, vendorId: coupon.vendorId, discount },
-          }),
-          payment: { provider: deps.payments.name, status: "created" },
-          status: "pending_payment",
-          reservationExpiresAt: expiresAt,
-        },
-      ],
-      { session },
-    );
-    await SubOrder.create(
-      parts.map((part) => {
-        const vendor = vendorById.get(part.vendorId)!;
-        return {
-          orderId: created!._id,
-          orderNumber,
-          customerId: user._id,
+          customerId: input.userId,
           vendorId: part.vendorId,
           vendorName: vendor.storeName,
           vendorSlug: vendor.slug,
-          items: part.items,
           itemsTotal: part.itemsTotal,
           discountShare: part.discountShare,
-          ...(part.discountBy && { discountBy: part.discountBy }),
+          discountBy: part.discountBy ?? null,
           payable: part.payable,
           commission: part.commission,
           vendorNet: part.vendorNet,
           status: "awaiting_payment",
-          statusHistory: [history("awaiting_payment", { userId: input.userId, role: "customer" }, "Order placed, waiting for payment")],
-        };
-      }),
-      { session, ordered: true },
-    );
-    if (coupon) await redeem(coupon, input.userId, created!._id, session);
-    return created!;
+        },
+      });
+      await tx.orderLine.createMany({
+        data: part.items.map((l) => ({
+          orderId: created.id,
+          subOrderId: sub.id,
+          position: position++,
+          productId: l.productId,
+          vendorId: l.vendorId,
+          title: l.title,
+          imageKey: l.imageKey ?? null,
+          price: l.price,
+          qty: l.qty,
+          commissionRateBp: l.commissionRateBp,
+        })),
+      });
+      await tx.subOrderEvent.create({ data: event(sub.id, "awaiting_payment", { userId: input.userId, role: "customer" }, "Order placed, waiting for payment") });
+    }
+    if (coupon) await redeem(coupon, input.userId, created.id, tx);
+    return created;
   });
 
   // The payment provider is called after the stock is safely reserved. If it can't be reached, the stock goes
   // straight back and the shopper can try again; nothing was charged.
+  let withPayment: OrderRow;
   try {
     const { providerOrderId } = await deps.payments.createOrder({ amount: grandTotal, receipt: orderNumber });
-    order.set("payment.providerOrderId", providerOrderId);
-    await order.save();
+    withPayment = await prisma.order.update({ where: { id: order.id }, data: { paymentProviderOrderId: providerOrderId }, include: orderInclude });
   } catch (err) {
-    await releaseReservation(deps, order.id as string, { to: "cancelled", reason: "The payment service couldn't be reached", actor: SYSTEM });
+    await releaseReservation(deps, order.id, { to: "cancelled", reason: "The payment service couldn't be reached", actor: SYSTEM });
     if (err instanceof AppError) throw err;
     throw new AppError(502, "payment_unavailable", "Payments are unavailable right now. Nothing was charged; please try again.");
   }
 
-  await deps.reservations.schedule(order.id as string, expiresAt);
+  await deps.reservations.schedule(order.id, expiresAt);
   await cart.remove(cartKey, ...priced.map((l) => l.productId));
   await deps.redis.del(couponKeyFor(cartKey));
   await afterStockChange(deps, priced.map((l) => l.productId));
-  return order;
+  return withPayment;
 }
 
 // ---- Payment ---------------------------------------------------------------------------------------
 
 // Confirms an order once its payment is proven, and puts each vendor's share on hold until delivery. Safe to call
 // twice for the same payment (the popup's callback and Razorpay's webhook both report it).
-export async function markPaid(deps: Pick<OrderDeps, "payments" | "reservations" | "invoiceJobs">, orderId: string, providerPaymentId: string): Promise<OrderDoc> {
+export async function markPaid(deps: Pick<OrderDeps, "payments" | "reservations" | "invoiceJobs">, orderId: string, providerPaymentId: string): Promise<OrderRow> {
   const now = new Date();
-  const paid = await inTransaction(async (session) => {
-    const order = await Order.findOneAndUpdate(
-      { _id: orderId, status: "pending_payment" },
-      { $set: { status: "confirmed", "payment.status": "paid", "payment.providerPaymentId": providerPaymentId, "payment.paidAt": now } },
-      { session, returnDocument: "after" },
-    );
+  const paid = await inTransaction(async (tx) => {
+    const [order] = await tx.order.updateManyAndReturn({
+      where: { id: orderId, status: "pending_payment" },
+      data: { status: "confirmed", paymentStatus: "paid", paymentProviderPaymentId: providerPaymentId, paidAt: now },
+    });
     if (!order) return undefined;
-    const parts = await SubOrder.find({ orderId: order._id, status: "awaiting_payment" }).session(session);
-    const entries: LedgerInput[] = [{ type: "payment", orderId: order._id, amount: order.grandTotal, providerRef: providerPaymentId }];
+    const parts = await tx.subOrder.findMany({ where: { orderId: order.id, status: "awaiting_payment" }, orderBy: { id: "asc" } });
+    const entries: LedgerInput[] = [{ type: "payment", orderId: order.id, amount: order.grandTotal, providerRef: providerPaymentId }];
     // A platform coupon: the platform covers that part of the price, so vendors are still owed their full share.
-    if (order.coupon?.scope === "platform" && order.discount > 0) {
-      entries.push({ type: "platform_discount", orderId: order._id, amount: order.discount, note: `Coupon ${order.coupon.code}` });
+    if (order.couponScope === "platform" && order.discount > 0) {
+      entries.push({ type: "platform_discount", orderId: order.id, amount: order.discount, note: `Coupon ${order.couponCode}` });
     }
     for (const part of parts) {
-      part.status = "placed";
-      part.placedAt = now;
-      part.statusHistory.push(history("placed", SYSTEM, "Payment received"));
       // Escrow: the vendor's share is owed but held by the platform until the part is delivered.
-      part.set("payout", { amount: part.vendorNet, status: "held" });
-      await part.save({ session });
+      await tx.subOrder.update({
+        where: { id: part.id },
+        data: { status: "placed", placedAt: now, payoutAmount: part.vendorNet, payoutStatus: "held" },
+      });
+      await tx.subOrderEvent.create({ data: event(part.id, "placed", SYSTEM, "Payment received") });
       entries.push(
-        { type: "commission", orderId: order._id, subOrderId: part._id, vendorId: part.vendorId, amount: part.commission },
-        { type: "vendor_hold", orderId: order._id, subOrderId: part._id, vendorId: part.vendorId, amount: part.vendorNet },
+        { type: "commission", orderId: order.id, subOrderId: part.id, vendorId: part.vendorId, amount: part.commission },
+        { type: "vendor_hold", orderId: order.id, subOrderId: part.id, vendorId: part.vendorId, amount: part.vendorNet },
       );
     }
-    await record(entries, session);
-    await Product.bulkWrite(
-      order.items.map((item) => ({ updateOne: { filter: { _id: item.productId }, update: { $inc: { soldCount: item.qty } } } })),
-      { session },
-    );
+    await record(entries, tx);
+    const lines = await tx.orderLine.findMany({ where: { orderId: order.id } });
+    await addToProducts(tx, lines, (qty) => ({ soldCount: qty }));
     return order;
   });
   if (paid) {
     await deps.reservations.cancel(orderId);
-    for (const part of await SubOrder.find({ orderId: paid._id }).select("_id")) await deps.invoiceJobs.generate(part.id as string);
-    return paid;
+    for (const part of await prisma.subOrder.findMany({ where: { orderId: paid.id }, select: { id: true } })) await deps.invoiceJobs.generate(part.id);
+    return prisma.order.findUniqueOrThrow({ where: { id: paid.id }, include: orderInclude });
   }
 
-  const order = await Order.findById(orderId);
-  if (order && order.payment?.providerPaymentId === providerPaymentId && order.payment.status !== "created" && order.payment.status !== "failed") return order;
+  const order = await prisma.order.findUnique({ where: { id: orderId }, include: orderInclude });
+  if (order && order.paymentProviderPaymentId === providerPaymentId && order.paymentStatus !== "created" && order.paymentStatus !== "failed") return order;
   // Paid after the reservation ran out: the stock may already be sold to someone else, so the money goes straight back.
   if (order) await refundLatePayment(deps, order, providerPaymentId);
   throw new AppError(409, "order_not_payable", "This order expired or was cancelled before the payment arrived, so its items went back on sale. The payment has been refunded in full.");
 }
 
 // A payment for an order that already ended (expired or cancelled before paying) is refunded in full, once.
-export async function refundLatePayment(deps: Pick<OrderDeps, "payments">, order: OrderDoc, providerPaymentId: string): Promise<void> {
+export async function refundLatePayment(deps: Pick<OrderDeps, "payments">, order: Pick<OrderRow, "id" | "status" | "grandTotal">, providerPaymentId: string): Promise<void> {
   if (order.status !== "expired" && order.status !== "cancelled") return;
   // Claim it first, so two reports of the same payment (popup and webhook) don't both refund.
-  const claimed = await Order.findOneAndUpdate(
-    { _id: order._id, "payment.providerPaymentId": { $exists: false } },
-    { $set: { "payment.providerPaymentId": providerPaymentId, "payment.status": "paid", "payment.paidAt": new Date() } },
-    { returnDocument: "after" },
-  );
-  if (!claimed) return;
+  const claimed = await prisma.order.updateMany({
+    where: { id: order.id, paymentProviderPaymentId: null },
+    data: { paymentProviderPaymentId: providerPaymentId, paymentStatus: "paid", paidAt: new Date() },
+  });
+  if (claimed.count !== 1) return;
   try {
-    const refund = await deps.payments.refund({ providerPaymentId, amount: order.grandTotal, key: `late-${order.id as string}` });
-    await inTransaction(async (session) => {
+    const refund = await deps.payments.refund({ providerPaymentId, amount: order.grandTotal, key: `late-${order.id}` });
+    await inTransaction(async (tx) => {
       await record(
         [
-          { type: "payment", orderId: order._id, amount: order.grandTotal, providerRef: providerPaymentId, note: "Paid after the order ended" },
-          { type: "refund", orderId: order._id, amount: order.grandTotal, providerRef: refund.refundId, note: "Late payment refunded in full" },
+          { type: "payment", orderId: order.id, amount: order.grandTotal, providerRef: providerPaymentId, note: "Paid after the order ended" },
+          { type: "refund", orderId: order.id, amount: order.grandTotal, providerRef: refund.refundId, note: "Late payment refunded in full" },
         ],
-        session,
+        tx,
       );
-      await addRefundToOrder(order._id, order.grandTotal, session);
+      await addRefundToOrder(order.id, order.grandTotal, tx);
     });
   } catch (err) {
-    // Stays visible as paid on an ended order, for an admin to refund by hand (Day 8 admin refunds page).
+    // Stays visible as paid on an ended order, for an admin to refund by hand (admin refunds page).
     logger.error({ err, orderId: order.id, providerPaymentId }, "could not refund a late payment");
   }
 }
@@ -268,25 +303,23 @@ export async function releaseReservation(
   opts: { to: "expired" | "cancelled"; reason: string; actor: Actor; onlyIfDue?: boolean },
 ): Promise<boolean> {
   const now = new Date();
-  const released = await inTransaction(async (session) => {
-    const order = await Order.findOneAndUpdate(
-      { _id: orderId, status: "pending_payment", ...(opts.onlyIfDue && { reservationExpiresAt: { $lte: now } }) },
-      { $set: { status: opts.to, cancelledAt: now } },
-      { session, returnDocument: "after" },
-    );
+  const released = await inTransaction(async (tx) => {
+    const [order] = await tx.order.updateManyAndReturn({
+      where: { id: orderId, status: "pending_payment", ...(opts.onlyIfDue && { reservationExpiresAt: { lte: now } }) },
+      data: { status: opts.to, cancelledAt: now },
+    });
     if (!order) return undefined;
-    await Product.bulkWrite(
-      order.items.map((item) => ({ updateOne: { filter: { _id: item.productId }, update: { $inc: { stock: item.qty } } } })),
-      { session },
-    );
-    await SubOrder.updateMany(
-      { orderId: order._id, status: "awaiting_payment" },
-      { $set: { status: "cancelled", cancelledAt: now, cancelReason: opts.reason }, $push: { statusHistory: history("cancelled", opts.actor, opts.reason) } },
-      { session },
-    );
+    const lines = await tx.orderLine.findMany({ where: { orderId: order.id } });
+    await addToProducts(tx, lines, (qty) => ({ stock: qty }));
+    const parts = await tx.subOrder.updateManyAndReturn({
+      where: { orderId: order.id, status: "awaiting_payment" },
+      data: { status: "cancelled", cancelledAt: now, cancelReason: opts.reason },
+      select: { id: true },
+    });
+    await tx.subOrderEvent.createMany({ data: parts.map((p) => event(p.id, "cancelled", opts.actor, opts.reason)) });
     // Never paid, so the coupon use is given back.
-    if (order.coupon?.couponId) await releaseRedemption(order.coupon.couponId, order._id, session);
-    return order.items.map((i) => i.productId);
+    if (order.couponId) await releaseRedemption(order.couponId, order.id, tx);
+    return lines.map((l) => l.productId);
   });
   if (!released) return false;
   await deps.reservations.cancel(orderId);
@@ -296,12 +329,14 @@ export async function releaseReservation(
 
 // The minute sweep: every unpaid order past its time.
 export async function expireDueOrders(deps: Pick<OrderDeps, "redis" | "searchSync" | "reservations">): Promise<number> {
-  const due = await Order.find({ status: "pending_payment", reservationExpiresAt: { $lte: new Date() } })
-    .select("_id")
-    .limit(200);
+  const due = await prisma.order.findMany({
+    where: { status: "pending_payment", reservationExpiresAt: { lte: new Date() } },
+    select: { id: true },
+    take: 200,
+  });
   let n = 0;
   for (const order of due) {
-    if (await releaseReservation(deps, order.id as string, { to: "expired", reason: "Not paid in time", actor: SYSTEM, onlyIfDue: true })) n++;
+    if (await releaseReservation(deps, order.id, { to: "expired", reason: "Not paid in time", actor: SYSTEM, onlyIfDue: true })) n++;
   }
   return n;
 }
@@ -309,15 +344,14 @@ export async function expireDueOrders(deps: Pick<OrderDeps, "redis" | "searchSyn
 // ---- After payment: cancelling and fulfilment ------------------------------------------------------
 
 // Re-reads every part and sets the order's overall status.
-async function rollUp(orderId: Types.ObjectId, session: ClientSession) {
-  const parts = await SubOrder.find({ orderId }).select("status").session(session);
-  const status = rollUpOrderStatus(parts.map((p) => p.status as SubOrderStatus));
+async function rollUp(orderId: string, tx: Tx) {
+  const parts = await tx.subOrder.findMany({ where: { orderId }, select: { status: true } });
+  const status = rollUpOrderStatus(parts.map((p) => p.status));
   const now = new Date();
-  await Order.updateOne(
-    { _id: orderId, status: { $in: ["confirmed", "completed", "cancelled"] } },
-    { $set: { status, ...(status === "completed" && { completedAt: now }), ...(status === "cancelled" && { cancelledAt: now }) } },
-    { session },
-  );
+  await tx.order.updateMany({
+    where: { id: orderId, status: { in: ["confirmed", "completed", "cancelled"] } },
+    data: { status, ...(status === "completed" && { completedAt: now }), ...(status === "cancelled" && { cancelledAt: now }) },
+  });
 }
 
 // The customer cancels one store's part before it ships: its stock goes back on sale, the vendor's held share and
@@ -325,69 +359,71 @@ async function rollUp(orderId: Types.ObjectId, session: ClientSession) {
 export async function cancelPart(
   deps: Pick<OrderDeps, "redis" | "searchSync" | "moneyJobs">,
   input: { orderId?: string; subOrderId: string; actor: Actor & { userId: string }; reason?: string },
-): Promise<SubOrderDoc> {
+): Promise<SubOrderRow> {
   const admin = input.actor.role === "admin";
   // A customer can only reach their own parts; an admin any part.
-  const sub = await SubOrder.findOne({ _id: input.subOrderId, ...(input.orderId && { orderId: input.orderId }), ...(!admin && { customerId: input.actor.userId }) });
+  const sub = await prisma.subOrder.findFirst({
+    where: { id: input.subOrderId, ...(input.orderId && { orderId: input.orderId }), ...(!admin && { customerId: input.actor.userId }) },
+  });
   if (!sub) throw new AppError(404, "not_found", "Order not found");
-  const from = sub.status as SubOrderStatus;
+  const from = sub.status;
   if (!(admin ? canAdminCancel(from) : canCustomerCancel(from))) {
     throw new AppError(409, "invalid_transition", from === "awaiting_payment" ? "This order isn't paid yet; cancel the whole order instead" : `This part is already ${from} and can't be cancelled`, { from });
   }
   const reason = input.reason || (admin ? "Cancelled and refunded by ShopSphere support" : "Cancelled by the customer");
   const now = new Date();
-  const updated = await inTransaction(async (session) => {
-    const doc = await SubOrder.findOneAndUpdate(
-      { _id: sub._id, status: from },
-      {
-        $set: {
-          status: "cancelled",
-          cancelledAt: now,
-          cancelReason: reason,
-          "payout.status": "reversed",
-          refund: { amount: sub.payable, status: "pending", requestedAt: now },
-        },
-        $push: { statusHistory: history("cancelled", input.actor, reason) },
+  const updated = await inTransaction(async (tx) => {
+    const [doc] = await tx.subOrder.updateManyAndReturn({
+      where: { id: sub.id, status: from },
+      data: {
+        status: "cancelled",
+        cancelledAt: now,
+        cancelReason: reason,
+        payoutStatus: "reversed",
+        refundAmount: sub.payable,
+        refundStatus: "pending",
+        refundRequestedAt: now,
       },
-      { session, returnDocument: "after" },
-    );
+    });
     if (!doc) return undefined;
+    await tx.subOrderEvent.create({ data: event(doc.id, "cancelled", input.actor, reason) });
     await record(
       [
-        { type: "vendor_reversal", orderId: doc.orderId, subOrderId: doc._id, vendorId: doc.vendorId, amount: doc.vendorNet },
-        { type: "commission_reversal", orderId: doc.orderId, subOrderId: doc._id, vendorId: doc.vendorId, amount: doc.commission },
+        { type: "vendor_reversal", orderId: doc.orderId, subOrderId: doc.id, vendorId: doc.vendorId, amount: doc.vendorNet },
+        { type: "commission_reversal", orderId: doc.orderId, subOrderId: doc.id, vendorId: doc.vendorId, amount: doc.commission },
         ...(doc.discountBy === "platform" && doc.discountShare > 0
-          ? [{ type: "platform_discount_reversal" as const, orderId: doc.orderId, subOrderId: doc._id, vendorId: doc.vendorId, amount: doc.discountShare }]
+          ? [{ type: "platform_discount_reversal" as const, orderId: doc.orderId, subOrderId: doc.id, vendorId: doc.vendorId, amount: doc.discountShare }]
           : []),
       ],
-      session,
+      tx,
     );
-    await Product.bulkWrite(
-      doc.items.map((item) => ({ updateOne: { filter: { _id: item.productId }, update: { $inc: { stock: item.qty, soldCount: -item.qty } } } })),
-      { session },
-    );
-    await rollUp(doc.orderId, session);
-    return doc;
+    const lines = await tx.orderLine.findMany({ where: { subOrderId: doc.id } });
+    await addToProducts(tx, lines, (qty) => ({ stock: qty, soldCount: -qty }));
+    await rollUp(doc.orderId, tx);
+    return tx.subOrder.findUniqueOrThrow({ where: { id: doc.id }, include: subOrderInclude });
   });
   // The vendor changed it at the same moment (e.g. shipped it).
   if (!updated) throw new AppError(409, "invalid_transition", "This part changed while you were cancelling it. Refresh and try again.");
-  await afterStockChange(deps, updated.items.map((i) => i.productId));
-  await deps.moneyJobs.refund(updated.id as string);
+  await afterStockChange(deps, updated.lines.map((l) => l.productId));
+  await deps.moneyJobs.refund(updated.id);
   return updated;
 }
 
 // The vendor moves their part along: placed → packed → shipped (with tracking) → delivered. Delivery releases the
 // vendor's held share, and a background job pays it out.
-export async function advancePart(deps: Pick<OrderDeps, "moneyJobs">, input: {
-  vendorId: string;
-  subOrderId: string;
-  to: SubOrderStatus;
-  tracking?: { carrier: string; number: string };
-  actor: Actor;
-}): Promise<SubOrderDoc> {
-  const sub = await SubOrder.findOne({ _id: input.subOrderId, vendorId: input.vendorId, placedAt: { $exists: true } });
+export async function advancePart(
+  deps: Pick<OrderDeps, "moneyJobs">,
+  input: {
+    vendorId: string;
+    subOrderId: string;
+    to: SubOrderStatus;
+    tracking?: { carrier: string; number: string };
+    actor: Actor;
+  },
+): Promise<SubOrderRow> {
+  const sub = await prisma.subOrder.findFirst({ where: { id: input.subOrderId, vendorId: input.vendorId, placedAt: { not: null } } });
   if (!sub) throw new AppError(404, "not_found", "Order not found");
-  const from = sub.status as SubOrderStatus;
+  const from = sub.status;
   if (!canVendorMove(from, input.to)) {
     const next = VENDOR_NEXT[from];
     throw new AppError(409, "invalid_transition", next ? `This order is ${from}; the next step is ${next}` : `This order is ${from} and can't change any more`, {
@@ -400,26 +436,24 @@ export async function advancePart(deps: Pick<OrderDeps, "moneyJobs">, input: {
     throw new AppError(400, "validation_error", "Some fields need fixing", { fields: [{ field: "tracking.number", message: "Add the courier and tracking number" }] });
   }
   const now = new Date();
-  const updated = await inTransaction(async (session) => {
-    const doc = await SubOrder.findOneAndUpdate(
-      { _id: sub._id, status: from },
-      {
-        $set: {
-          status: input.to,
-          ...(input.tracking && { tracking: input.tracking }),
-          ...(input.to === "delivered" && { deliveredAt: now, "payout.status": "released", "payout.releasedAt": now }),
-        },
-        $push: { statusHistory: history(input.to, input.actor, input.tracking ? `${input.tracking.carrier} ${input.tracking.number}` : undefined) },
+  const updated = await inTransaction(async (tx) => {
+    const [doc] = await tx.subOrder.updateManyAndReturn({
+      where: { id: sub.id, status: from },
+      data: {
+        status: input.to,
+        ...(input.tracking && { trackingCarrier: input.tracking.carrier, trackingNumber: input.tracking.number }),
+        ...(input.to === "delivered" && { deliveredAt: now, payoutStatus: "released", payoutReleasedAt: now }),
       },
-      { session, returnDocument: "after" },
-    );
-    if (doc && input.to === "delivered") {
-      await record([{ type: "vendor_release", orderId: doc.orderId, subOrderId: doc._id, vendorId: doc.vendorId, amount: doc.vendorNet }], session);
-      await rollUp(doc.orderId, session);
+    });
+    if (!doc) return undefined;
+    await tx.subOrderEvent.create({ data: event(doc.id, input.to, input.actor, input.tracking ? `${input.tracking.carrier} ${input.tracking.number}` : undefined) });
+    if (input.to === "delivered") {
+      await record([{ type: "vendor_release", orderId: doc.orderId, subOrderId: doc.id, vendorId: doc.vendorId, amount: doc.vendorNet }], tx);
+      await rollUp(doc.orderId, tx);
     }
-    return doc;
+    return tx.subOrder.findUniqueOrThrow({ where: { id: doc.id }, include: subOrderInclude });
   });
   if (!updated) throw new AppError(409, "invalid_transition", "This order changed in the meantime (the customer may have cancelled it). Refresh and try again.");
-  if (input.to === "delivered") await deps.moneyJobs.payout(updated.id as string);
+  if (input.to === "delivered") await deps.moneyJobs.payout(updated.id);
   return updated;
 }

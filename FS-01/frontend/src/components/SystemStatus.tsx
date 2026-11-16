@@ -1,7 +1,7 @@
 import { useHealth } from "../api/health";
 
 const LABELS: Record<string, string> = {
-  mongo: "Database (MongoDB)",
+  postgres: "Database (PostgreSQL)",
   redis: "Cache & queues (Redis)",
   elasticsearch: "Search (Elasticsearch)",
   s3: "File storage (S3)",

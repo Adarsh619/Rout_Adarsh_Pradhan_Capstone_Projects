@@ -1,8 +1,8 @@
 import { loadEnv } from "../config/env.js";
 import { logger } from "../lib/logger.js";
-import { connectMongo, disconnectMongo } from "../lib/mongo.js";
+import { connectDb, disconnectDb, prisma } from "../lib/db.js";
 import { hashPassword } from "../modules/auth/password.js";
-import { User, type Role } from "../modules/users/user.model.js";
+import type { Role } from "../modules/users/user.model.js";
 
 // Creates one demo account per role (and the only way to get an admin). Safe to run again:
 // existing accounts keep their data and only get their password and role reset.
@@ -20,17 +20,17 @@ async function main() {
   if (!password || password.length < 10) {
     throw new Error("Set DEMO_PASSWORD (10+ characters, letters and numbers) before seeding demo users");
   }
-  await connectMongo(env.MONGO_URL);
+  await connectDb(env.DATABASE_URL);
   const passwordHash = await hashPassword(password, env.BCRYPT_COST);
   for (const u of DEMO_USERS) {
-    await User.updateOne(
-      { email: u.email },
-      { $set: { role: u.role, status: "active", passwordHash }, $setOnInsert: { name: u.name, email: u.email } },
-      { upsert: true },
-    );
+    await prisma.user.upsert({
+      where: { email: u.email },
+      update: { role: u.role, status: "active", passwordHash },
+      create: { name: u.name, email: u.email, role: u.role, passwordHash },
+    });
     logger.info({ email: u.email, role: u.role }, "demo user ready");
   }
-  await disconnectMongo();
+  await disconnectDb();
 }
 
 main().catch((err: unknown) => {

@@ -2,9 +2,7 @@ import type { Express } from "express";
 import type { Redis } from "ioredis";
 import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { disconnectMongo } from "../../src/lib/mongo.js";
-import { Vendor } from "../../src/modules/vendors/vendor.model.js";
-import { User } from "../../src/modules/users/user.model.js";
+import { disconnectDb } from "../../src/lib/db.js";
 import { bearer, register, signInAdmin, startTestServices, storeApplication, wipe } from "./helpers.js";
 
 let app: Express;
@@ -12,7 +10,6 @@ let redis: Redis;
 
 beforeAll(async () => {
   ({ app, redis } = await startTestServices());
-  await Promise.all([User.init(), Vendor.init()]);
 });
 
 beforeEach(async () => {
@@ -21,7 +18,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await wipe(redis);
-  await Promise.allSettled([disconnectMongo(), redis.quit()]);
+  await Promise.allSettled([disconnectDb(), redis.quit()]);
 });
 
 const api = () => request(app);

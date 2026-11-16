@@ -1,6 +1,8 @@
 import type { Storage } from "../../lib/s3.js";
-import { Product, type ProductDoc } from "../catalog/product.model.js";
-import { Vendor, type VendorDoc } from "../vendors/vendor.model.js";
+import { prisma } from "../../lib/db.js";
+import { isEntityId } from "../../middleware/validate.js";
+import { withImages, type ProductRow } from "../catalog/product.model.js";
+import type { VendorRow } from "../vendors/vendor.model.js";
 import type { CartLine } from "./cart-store.js";
 
 // What can stop a line from being bought right now. The cart keeps such lines (so the shopper sees what changed)
@@ -44,9 +46,9 @@ export const emptyCart = (): CartView => ({
   grandTotal: 0,
 });
 
-export const isBuyable = (p: ProductDoc, v: VendorDoc | null | undefined) => p.status === "active" && v?.status === "approved";
+export const isBuyable = (p: Pick<ProductRow, "status">, v: Pick<VendorRow, "status"> | null | undefined) => p.status === "active" && v?.status === "approved";
 
-export function lineProblem(p: ProductDoc, v: VendorDoc | undefined, qty: number): LineProblem | null {
+export function lineProblem(p: Pick<ProductRow, "status" | "stock">, v: Pick<VendorRow, "status"> | undefined, qty: number): LineProblem | null {
   if (!isBuyable(p, v)) return "unavailable";
   if (p.stock <= 0) return "out_of_stock";
   if (qty > p.stock) return "not_enough_stock";
@@ -57,10 +59,12 @@ export function lineProblem(p: ProductDoc, v: VendorDoc | undefined, qty: number
 // Lines whose product was deleted are returned in `gone` so the caller can drop them from Redis.
 export async function buildCartView(lines: CartLine[], storage: Storage): Promise<{ cart: CartView; gone: string[] }> {
   if (lines.length === 0) return { cart: emptyCart(), gone: [] };
-  const products = await Product.find({ _id: { $in: lines.map((l) => l.productId) } });
-  const byId = new Map(products.map((p) => [p.id as string, p]));
-  const vendors = await Vendor.find({ _id: { $in: [...new Set(products.map((p) => p.vendorId.toString()))] } });
-  const vendorById = new Map(vendors.map((v) => [v.id as string, v]));
+  // An id that isn't a UUID (e.g. a cart kept from before the database moved) can't match a product: it counts as gone.
+  const products = await prisma.product.findMany({
+    where: { id: { in: lines.map((l) => l.productId).filter(isEntityId) } },
+    include: { ...withImages, vendor: true },
+  });
+  const byId = new Map(products.map((p) => [p.id, p]));
 
   const groups = new Map<string, CartView["groups"][number]>();
   const gone: string[] = [];
@@ -74,7 +78,7 @@ export async function buildCartView(lines: CartLine[], storage: Storage): Promis
       gone.push(line.productId);
       continue;
     }
-    const vendor = vendorById.get(p.vendorId.toString());
+    const vendor = p.vendor;
     const problem = lineProblem(p, vendor, line.qty);
     const cover = p.images[0];
     const item: CartItemView = {
@@ -88,7 +92,7 @@ export async function buildCartView(lines: CartLine[], storage: Storage): Promis
       lineTotal: p.price * line.qty,
       problem,
     };
-    const vendorKey = p.vendorId.toString();
+    const vendorKey = p.vendorId;
     let group = groups.get(vendorKey);
     if (!group) {
       group = {

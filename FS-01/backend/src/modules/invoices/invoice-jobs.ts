@@ -2,10 +2,10 @@ import { Queue } from "bullmq";
 import type { Redis } from "ioredis";
 import { logger } from "../../lib/logger.js";
 import type { Storage } from "../../lib/s3.js";
-import { Order, SubOrder } from "../orders/order.model.js";
-import { Vendor } from "../vendors/vendor.model.js";
+import { isUniqueViolation, prisma } from "../../lib/db.js";
+import { shippingAddressOf } from "../orders/order.model.js";
 import { renderInvoice } from "./invoice-pdf.js";
-import { Invoice, nextInvoiceNumber } from "./invoice.model.js";
+import { nextInvoiceNumber } from "./invoice.model.js";
 
 export const INVOICE_QUEUE = "invoice-pdf";
 
@@ -51,41 +51,45 @@ const DISCOUNT_LABEL = { platform: "Coupon (paid by ShopSphere)", vendor: "Store
 
 // Makes the part's invoice once: a second run finds it and does nothing.
 export async function generateInvoice(storage: Storage, subOrderId: string): Promise<string> {
-  const existing = await Invoice.findOne({ subOrderId });
+  const existing = await prisma.invoice.findUnique({ where: { subOrderId } });
   if (existing) return `already ${existing.invoiceNumber}`;
-  const part = await SubOrder.findById(subOrderId);
+  const part = await prisma.subOrder.findUnique({
+    where: { id: subOrderId },
+    include: { lines: { orderBy: { position: "asc" } }, order: true, vendor: true },
+  });
   if (!part?.placedAt) return "part not paid";
-  const [order, vendor] = await Promise.all([Order.findById(part.orderId), Vendor.findById(part.vendorId)]);
-  if (!order || !vendor) return "order or store missing";
+  const { order, vendor } = part;
 
   const invoiceNumber = await nextInvoiceNumber();
-  const a = order.shippingAddress;
+  const a = shippingAddressOf(order);
   const pdf = await renderInvoice({
     invoiceNumber,
     issuedAt: new Date(),
     orderNumber: order.orderNumber,
-    paidAt: order.payment?.paidAt ?? null,
-    seller: { name: vendor.storeName, email: vendor.contactEmail, phone: vendor.phone, gstin: vendor.gstin ?? null },
+    paidAt: order.paidAt,
+    seller: { name: vendor.storeName, email: vendor.contactEmail, phone: vendor.phone, gstin: vendor.gstin },
     buyer: { name: a.name, phone: a.phone, address: [a.line1, ...(a.line2 ? [a.line2] : []), `${a.city}, ${a.state} ${a.pincode}`] },
-    lines: part.items.map((l) => ({ title: l.title, qty: l.qty, price: l.price })),
+    lines: part.lines.map((l) => ({ title: l.title, qty: l.qty, price: l.price })),
     itemsTotal: part.itemsTotal,
-    discount: part.discountShare ?? 0,
-    discountLabel: part.discountBy ? DISCOUNT_LABEL[part.discountBy as "platform" | "vendor"] : null,
+    discount: part.discountShare,
+    discountLabel: part.discountBy ? DISCOUNT_LABEL[part.discountBy] : null,
     total: part.payable,
-    paymentRef: order.payment?.providerPaymentId ?? null,
+    paymentRef: order.paymentProviderPaymentId,
   });
-  const s3Key = `invoices/${vendor.id as string}/${invoiceNumber}.pdf`;
+  const s3Key = `invoices/${vendor.id}/${invoiceNumber}.pdf`;
   await storage.put(s3Key, pdf, "application/pdf");
   try {
-    await Invoice.create({ subOrderId: part._id, orderId: order._id, vendorId: vendor._id, customerId: part.customerId, invoiceNumber, s3Key, generatedAt: new Date() });
+    await prisma.invoice.create({
+      data: { subOrderId: part.id, orderId: order.id, vendorId: vendor.id, customerId: part.customerId, invoiceNumber, s3Key, generatedAt: new Date() },
+    });
   } catch (err) {
     // Another run made it at the same moment; keep theirs and drop this file.
-    if ((err as { code?: number }).code === 11000) {
+    if (isUniqueViolation(err)) {
       await storage.deleteMany([s3Key]);
       return "made by another run";
     }
     throw err;
   }
-  await SubOrder.updateOne({ _id: part._id }, { $set: { invoiceNumber } });
+  await prisma.subOrder.update({ where: { id: part.id }, data: { invoiceNumber } });
   return invoiceNumber;
 }

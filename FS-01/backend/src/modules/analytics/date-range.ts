@@ -18,7 +18,7 @@ export const addDays = (day: string, n: number) => new Date(Date.parse(`${day}T0
 export interface DateRange {
   from: string;
   to: string;
-  // [start, end) as instants, for MongoDB queries.
+  // [start, end) as instants, for database queries.
   start: Date;
   end: Date;
   days: string[];
@@ -40,9 +40,6 @@ export function resolveRange(q: { from?: string; to?: string }, now = new Date()
   }
   return { from, to, start, end, days: Array.from({ length: count }, (_, i) => addDays(from, i)) };
 }
-
-// MongoDB groups instants into Indian days with this.
-export const istDay = (field: string) => ({ $dateToString: { format: "%Y-%m-%d", date: `$${field}`, timezone: TIME_ZONE } });
 
 // Every day of the range, zero where nothing happened, so a chart has no gaps.
 export function fillDays<T extends Record<string, number>>(days: string[], rows: ({ _id: string } & T)[], zero: T): ({ day: string } & T)[] {

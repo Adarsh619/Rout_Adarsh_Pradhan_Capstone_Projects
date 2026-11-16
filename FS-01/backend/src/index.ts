@@ -2,7 +2,7 @@ import { createApp } from "./app.js";
 import { corsOrigins, loadEnv } from "./config/env.js";
 import { createElasticsearch, pingElasticsearch } from "./lib/elasticsearch.js";
 import { logger } from "./lib/logger.js";
-import { connectMongo, disconnectMongo, pingMongo } from "./lib/mongo.js";
+import { connectDb, disconnectDb, pingDb } from "./lib/db.js";
 import { createRedis, pingRedis } from "./lib/redis.js";
 import { createS3, createStorage, ensureBucket, pingS3 } from "./lib/s3.js";
 import { SearchIndexer } from "./modules/search/search-indexer.js";
@@ -16,7 +16,7 @@ import { queuedSearchSync } from "./modules/search/search-sync.js";
 async function main(): Promise<void> {
   const env = loadEnv();
 
-  await connectMongo(env.MONGO_URL);
+  await connectDb(env.DATABASE_URL);
   const redis = createRedis(env.REDIS_URL);
   const es = createElasticsearch(env.ELASTICSEARCH_URL);
   const s3 = createS3(env);
@@ -41,7 +41,7 @@ async function main(): Promise<void> {
     invoiceJobs,
     reservations,
     healthChecks: {
-      mongo: pingMongo,
+      postgres: pingDb,
       redis: () => pingRedis(redis),
       elasticsearch: () => pingElasticsearch(es),
       s3: () => pingS3(s3, env.S3_BUCKET),
@@ -56,7 +56,7 @@ async function main(): Promise<void> {
   const shutdown = (signal: string) => {
     logger.info({ signal }, "shutting down");
     server.close(async () => {
-      await Promise.allSettled([searchSync.queue.close(), reservations.queue.close(), moneyJobs.queue.close(), invoiceJobs.queue.close(), disconnectMongo(), redis.quit(), es.close()]);
+      await Promise.allSettled([searchSync.queue.close(), reservations.queue.close(), moneyJobs.queue.close(), invoiceJobs.queue.close(), disconnectDb(), redis.quit(), es.close()]);
       process.exit(0);
     });
     setTimeout(() => process.exit(1), 10_000).unref();

@@ -1,43 +1,14 @@
-import { model, Schema, type HydratedDocument, type InferSchemaType } from "mongoose";
+import type { Address as AddressRow, User as UserRow } from "../../generated/prisma/client.js";
 
 export const ROLES = ["customer", "vendor", "admin"] as const;
 export type Role = (typeof ROLES)[number];
-
 export const MAX_ADDRESSES = 5;
 
-// A delivery address. Checkout copies it into the order, so later edits never change a placed order.
-const addressSchema = new Schema({
-  label: { type: String, trim: true, maxlength: 30 },
-  name: { type: String, required: true, trim: true, maxlength: 80 },
-  phone: { type: String, required: true },
-  line1: { type: String, required: true, trim: true, maxlength: 120 },
-  line2: { type: String, trim: true, maxlength: 120 },
-  city: { type: String, required: true, trim: true, maxlength: 60 },
-  state: { type: String, required: true, trim: true, maxlength: 60 },
-  pincode: { type: String, required: true },
-  isDefault: { type: Boolean, default: false },
-});
+export type { UserRow, AddressRow };
 
-const userSchema = new Schema(
-  {
-    name: { type: String, required: true, trim: true, minlength: 2, maxlength: 80 },
-    // Stored lower-case so sign-in works whatever case the user types.
-    email: { type: String, required: true, unique: true, lowercase: true, trim: true, maxlength: 254 },
-    // Never returned unless a query asks for it with .select("+passwordHash").
-    passwordHash: { type: String, required: true, select: false },
-    role: { type: String, enum: ROLES, required: true },
-    status: { type: String, enum: ["active", "suspended"], default: "active" },
-    passwordChangedAt: { type: Date },
-    lastLoginAt: { type: Date },
-    addresses: { type: [addressSchema], default: [] },
-  },
-  { timestamps: true },
-);
+// Never send passwordHash: every query that returns a user to a route selects these columns.
+export const publicUserSelect = { id: true, name: true, email: true, role: true, status: true, createdAt: true } as const;
 
-export type UserDoc = HydratedDocument<InferSchemaType<typeof userSchema>>;
-export const User = model("User", userSchema);
-
-// The only shape of a user the API ever sends to a browser.
 export interface PublicUser {
   id: string;
   name: string;
@@ -47,16 +18,14 @@ export interface PublicUser {
   createdAt: string;
 }
 
-export const toPublicUser = (u: UserDoc): PublicUser => ({
-  id: u.id as string,
+export const toPublicUser = (u: Pick<UserRow, "id" | "name" | "email" | "role" | "status" | "createdAt">): PublicUser => ({
+  id: u.id,
   name: u.name,
   email: u.email,
-  role: u.role as Role,
-  status: u.status as "active" | "suspended",
-  createdAt: (u.createdAt as Date).toISOString(),
+  role: u.role,
+  status: u.status,
+  createdAt: u.createdAt.toISOString(),
 });
-
-export type AddressDoc = UserDoc["addresses"][number];
 
 export interface Address {
   id: string;
@@ -71,13 +40,13 @@ export interface Address {
   isDefault: boolean;
 }
 
-export const toAddress = (a: AddressDoc): Address => ({
-  id: a._id.toString(),
-  label: a.label ?? null,
+export const toAddress = (a: AddressRow): Address => ({
+  id: a.id,
+  label: a.label,
   name: a.name,
   phone: a.phone,
   line1: a.line1,
-  line2: a.line2 ?? null,
+  line2: a.line2,
   city: a.city,
   state: a.state,
   pincode: a.pincode,
