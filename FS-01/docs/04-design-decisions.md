@@ -74,10 +74,11 @@ Each decision lists what was chosen, the alternatives, and why.
 
 ## 10. Separate frontend and backend hosting, always on
 
-- **Chosen:** frontend on Vercel; backend (API, worker, Redis, Elasticsearch) on its own Oracle Cloud Always Free ARM VM with Caddy for HTTPS; MongoDB Atlas; AWS S3.
+- **Chosen:** frontend on Vercel; backend (API, worker, Redis, Elasticsearch) on its own server with Caddy for HTTPS; MongoDB Atlas; AWS S3. First choice for the server was an Oracle Cloud Always Free ARM VM.
 - **Alternatives:** Render's free tier sleeps after 15 minutes (30–60 s first load), and hosted Elasticsearch trials expire after 14 days.
 - **Why:** the brief asks for separate deployments, and reviewers may open the link at any time, weeks later.
 - **Fallback (taken on 7 Nov):** Oracle's A1 capacity in Hyderabad was full every day of the first week, so the same Docker setup runs on an AWS EC2 t4g.small in Mumbai (2 vCPU, 2 GB plus swap, Elasticsearch heap 512 MB), paid from the AWS free-plan credits with a zero-spend budget alert. Render was dropped as the fallback because its free tier sleeps and can't run Elasticsearch.
+- **One origin for the browser:** Vercel rewrites `/api/*` to the server instead of the app calling the API's domain directly. Cross-site calls would make the sign-in and cart cookies third-party, which Safari and private windows block (signed out on every reload). The API trusts two proxy hops (Vercel, Caddy) so rate limits still see each visitor's address. See [DevOps](11-devops.md).
 
 ## 11. TypeScript and Zod on the backend
 

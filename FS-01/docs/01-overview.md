@@ -24,7 +24,7 @@ ShopSphere builds all three sides, with real search, a real order lifecycle and 
 | Files | AWS S3 (Adobe S3Mock locally) | Product images and invoice PDFs through presigned URLs |
 | Payments | Razorpay test mode (Orders, Checkout, webhooks, refunds) · own split-and-escrow engine · simulated vendor payouts | INR + UPI; one payment split into per-vendor shares, released on delivery |
 | Infra | Docker Compose · nginx · GitHub Actions | One-command local stack; CI on every push |
-| Live hosting | Vercel (frontend) · Oracle Cloud Always Free VM (backend) · MongoDB Atlas · AWS S3 | Frontend and backend deployed separately; always on |
+| Live hosting | Vercel (frontend) · AWS EC2 t4g.small in Mumbai with Docker Compose + Caddy (backend) · MongoDB Atlas · AWS S3 | Frontend and backend deployed separately; always on; the server deploys each commit that passes CI ([DevOps](11-devops.md)) |
 
 ## Scope against the brief
 

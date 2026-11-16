@@ -13,7 +13,7 @@ held until delivery. Self-contained: never share servers, files or code with FS-
 | Payments | Razorpay **test mode only** (`rzp_live_` keys are refused) + own ledger/escrow; `mock` provider for local/CI; simulated payouts |
 | Tests | Vitest + Supertest (backend), Vitest + Testing Library (frontend), `scripts/smoke-test.sh` (whole stack) |
 | CI | `../.github/workflows/fs01-ci.yml` (repo root): backend, frontend, Docker smoke test |
-| Hosting | AWS EC2 t4g.small, Mumbai: `docker-compose.prod.yml` (Caddy HTTPS on `shopsphere-adarsh.duckdns.org` → `/api` to the API, the rest to the web app, one origin); MongoDB Atlas M0; S3 `shopsphere-media-2026` (ap-south-1) via the EC2 role, no AWS keys. Vercel not used (cross-site cookies and shared proxy IPs) |
+| Hosting | Frontend on **Vercel** (`frontend/vercel.json` rewrites `/api/*` to the server → one origin, first-party cookies); backend on AWS EC2 t4g.small, Mumbai: `docker-compose.prod.yml` (Caddy HTTPS on `shopsphere-adarsh.duckdns.org`, `/api` → API, rest → fallback copy of the web app); `TRUST_PROXY_HOPS=2`; MongoDB Atlas M0; S3 `shopsphere-media-2026` via the EC2 role (no AWS keys). The brief requires frontend and backend deployed separately |
 
 ## Commands
 
@@ -76,28 +76,26 @@ PAYMENT_PROVIDER=mock docker compose up -d api worker   # temporarily, when .env
 - Keys, passwords, tokens and connection strings never go into chat or Git (`.env` is git-ignored); only test keys.
 - Don't enable anything billable (Oracle PAYG, paid Atlas tiers, AWS upgrades) without the user deciding.
 
-## Progress and pending (as of Sat 14 Nov 2026; deadline Fri 20 Nov, one submission)
+## Progress and pending (as of Mon 16 Nov 2026; deadline Fri 20 Nov, one submission)
 
-**Done:** Days 1–8 built, tested, documented (docs 01–10) and green on CI; last FS-01 commits `c3b9b4d`, `2da4515`,
-`c2d00e3`, `07d0345`, `84595bf` (8 Nov). Hosting decided: AWS (see stack table). Accounts ready: MongoDB Atlas M0,
-DuckDNS, Vercel, AWS (free plan, $100 credits, MFA, budget alert).
+**Done:** Days 1–8 (docs 01–10, green CI). Day 9: backend LIVE since 14 Nov at https://shopsphere-adarsh.duckdns.org
+(EC2 t4g.small, Ubuntu 24.04 arm64; repo at `~/Rout_Adarsh_Pradhan_Capstone_Projects` on the server; secrets only in the
+server's `FS-01/.env`; compose with `-f docker-compose.prod.yml`). Seeded on Atlas; Razorpay test webhook connected
+(signed deliveries 200); UptimeRobot up; live purchase with coupon + invoice verified 16 Nov. k6 browse test on live
+(16 Nov, 50 users): 0 errors, p95 104 ms overall, search p95 115 ms, product p95 cache hit 82 ms / miss 144 ms
+(`perf/results-live.json`). Doc 11 (DevOps) written.
 
-**Waiting on the user:**
-- S3 bucket `shopsphere-media-2026` (named; user creating it): public read only for `products/*` and `stores/*` (`invoices/*` stays private). CORS for `https://shopsphere-adarsh.duckdns.org`.
-- IAM policy `shopsphere-s3-access` (PutObject, GetObject, DeleteObject on the bucket; ListBucket for the HeadBucket health ping) and role `shopsphere-ec2-role` for EC2. No IAM user or access key.
-- DuckDNS subdomain: `shopsphere-adarsh`. Finish UptimeRobot signup.
+**Written 16 Nov, waiting to go live:** `deploy/auto-deploy.sh` (server pulls newest commit whose CI passed),
+`deploy/demo-reset.sh` (snapshot/restore, nightly 03:00 IST), `deploy/install-timers.sh` (systemd timers),
+`frontend/vercel.json`, `TRUST_PROXY_HOPS`. User steps after the push: on the server `git pull`, `bash deploy/demo-reset.sh
+--save`, `sudo bash deploy/install-timers.sh`, `docker compose -f docker-compose.prod.yml up -d --build` (picks up hops=2 +
+Caddy trust); import the repo in Vercel (root `FS-01/frontend`); add the Vercel origin to S3 CORS; check that req.ip is
+the visitor via Vercel.
 
-**Day 9 (deploy, Sat 14 – Sun 15):**
-- **LIVE since Sat 14 Nov ~03:00 IST: https://shopsphere-adarsh.duckdns.org** (EC2 t4g.small, Ubuntu 24.04 arm64, repo cloned at `~/Rout_Adarsh_Pradhan_Capstone_Projects`, secrets in `FS-01/.env` on the server only). Seeded on Atlas; health ok; S3 photos public, invoices 403. Run compose there with `-f docker-compose.prod.yml`. Next (user, morning of 14 Nov): Razorpay test webhook + `RAZORPAY_WEBHOOK_SECRET` in the server `.env`, then `up -d api worker`; UptimeRobot on `/api/v1/health`.
-- Code (written 14 Nov): empty S3 keys → SDK default credentials (`s3Credentials()`); `docker-compose.prod.yml`, `deploy/Caddyfile`, `deploy/server-setup.sh`, `deploy/production.env.example`.
-- Launch EC2 t4g.small (Ubuntu arm64, Mumbai) with the role; security group 22 (user's IP only), 80, 443. DuckDNS → server IP; Caddy HTTPS.
-- Atlas: allow the server IP. S3 CORS for the DuckDNS origin. Seed users, catalog, orders on Atlas.
-- Razorpay test webhook + secret; UptimeRobot on `/api/v1/health`.
-- CI auto-deploy; nightly demo reset at 03:00 IST; k6 load test (20k-product dataset can be dropped); one Playwright end-to-end test (can be dropped).
-- Check whether the refused ₹3,399 test refund (order SS-2026-000010) went through after the 9 Nov settlement.
+**Day 10 (Tue 17 – Thu 19):** docs 12 (testing + performance), 13 (challenges, next steps), 14 (setup) + `openapi.yaml`,
+test and coverage report, presentation outline, reflection template, bug sweep, README live links; Wed: user records
+the demo video (Drive link, anyone with the link). Known: seeded orders are dated around 14 Nov, so the 7-day analytics
+view thins out after ~21 Nov (30-day view is fine). Check the refused ₹3,399 test refund (SS-2026-000010, local DB).
 
-**Day 10 (Mon 16 – Thu 19):** docs 11–14 (DevOps/CI, testing and performance, challenges and next steps, setup) +
-`openapi.yaml`, test and coverage report, presentation outline, reflection template, bug sweep; user records the demo
-video (Drive link, anyone with the link). Re-date the remaining days in `docs/guides/DAY_PLAN.md`.
-
-**Fri 20 Nov:** submit once: GitHub link, live URL `https://shopsphere-adarsh.duckdns.org`, FS-04 live link in notes, Drive folder link.
+**Fri 20 Nov:** submit once: GitHub link, Vercel URL (frontend) + API URL, demo logins and the live demo password in
+the form's notes (not in the README), FS-04 live link, Drive folder link.

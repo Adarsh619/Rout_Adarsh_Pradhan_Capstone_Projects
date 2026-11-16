@@ -60,6 +60,9 @@ const schema = z.object({
   COOKIE_SECURE: bool.default(false),
   COOKIE_SAME_SITE: z.enum(["lax", "strict", "none"]).default("lax"),
   BCRYPT_COST: z.coerce.number().int().min(4).max(15).default(12),
+  // Proxies in front of the API whose X-Forwarded-For is trusted, so req.ip (used by the sign-in rate limits) is the
+  // visitor. 1 = nginx locally / Caddy alone; 2 on the live server, where browsers come through Vercel, then Caddy.
+  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(1),
 });
 
 const DEV_JWT_SECRET = "dev-only-insecure-jwt-secret-change-me-0123456789";

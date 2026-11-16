@@ -58,8 +58,8 @@ export function createApp(deps: AppDeps): Express {
   const { env } = deps;
   const app = express();
   app.disable("x-powered-by");
-  // One proxy hop (nginx locally, Caddy on the server) so req.ip is the real client address.
-  app.set("trust proxy", 1);
+  // Trust the proxies in front of us (nginx locally; Vercel + Caddy live) so req.ip is the real client address.
+  app.set("trust proxy", env.TRUST_PROXY_HOPS);
 
   app.use(helmet());
   app.use(

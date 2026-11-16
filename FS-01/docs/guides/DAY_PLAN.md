@@ -87,12 +87,13 @@ Started **Tue 3 Nov 2026**. Days 4 and 7 each finished a day early, so the remai
 - [x] 🛠 Demo order history: `seed-orders` (40 orders over 30 days through the real checkout, payment, delivery, payout and refund code)
 - [x] ✅ Dashboards show correct numbers for the seeded data (checked against direct database sums)
 
-## Day 9 · Mon 9 Nov · Live deployment & performance (brief step 7, part 3)
-- [ ] 🛠 `docker-compose.prod.yml`, `deploy/Caddyfile`, `deploy/server-setup.sh`
-- [ ] 🛠 Server (Oracle VM or AWS EC2): Docker, swap, Elasticsearch setting, ports 80/443, HTTPS via Caddy + DuckDNS
-- [ ] 🛠 Backend live on the server; frontend live on Vercel; Atlas, S3, Razorpay test webhook connected
-- [ ] 🛠 CI: Docker smoke test + automatic deploy job; UptimeRobot on `/health`; nightly demo reset (03:00 IST)
-- [ ] 🛠 Performance: k6 search speed (with ~20k Amazon products), cache hit vs miss; one Playwright end-to-end test
+## Day 9 · Sat 14 – Mon 16 Nov · Live deployment & performance (brief step 7, part 3)
+- [x] 🛠 `docker-compose.prod.yml`, `deploy/Caddyfile`, `deploy/server-setup.sh`
+- [x] 🛠 Server (AWS EC2 t4g.small, Mumbai): Docker, swap, Elasticsearch setting, ports 80/443, HTTPS via Caddy + DuckDNS
+- [x] 🛠 Backend live on the server (14 Nov); Atlas, S3 (instance role), Razorpay test webhook connected (16 Nov)
+- [ ] 👤 Frontend live on Vercel (`/api` rewrite to the server)
+- [x] 🛠 UptimeRobot on `/api/v1/health`; automatic deploy of commits that pass CI; nightly demo reset (03:00 IST) — scripts written, timers to install
+- [x] 🛠 Performance: k6 browse test on the live site (214 products, 50 users, cache hit vs miss). The 20k-product dataset and the Playwright test were dropped for time
 - [ ] ✅ Live links run the full demo; results recorded
 
 ## Day 10 · Tue 10 Nov · Deliverables

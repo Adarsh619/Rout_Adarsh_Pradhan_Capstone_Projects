@@ -9,6 +9,8 @@ describe("loadEnv", () => {
     expect(env.PAYMENT_PROVIDER).toBe("mock");
     expect(env.S3_ENDPOINT).toBeUndefined();
     expect(env.S3_CREATE_BUCKET).toBe(false);
+    expect(env.TRUST_PROXY_HOPS).toBe(1);
+    expect(loadEnv({ TRUST_PROXY_HOPS: "2" }).TRUST_PROXY_HOPS).toBe(2);
   });
 
   it("parses booleans and treats an empty S3 endpoint as real AWS", () => {

@@ -2,7 +2,8 @@
 
 [← API reference](06-api-reference.md) · [Index](README.md) · [Next: Background jobs and search →](08-background-jobs.md)
 
-A single-page React app in `frontend/`, served by nginx locally and by Vercel on the live site. It talks to the API
+A single-page React app in `frontend/`, served by nginx locally and by Vercel on the live site (whose `/api/*` rewrite
+forwards to the API server, so the app always calls its own origin). It talks to the API
 only; it never holds a secret, and everything it shows comes from the server.
 
 | | Choice |

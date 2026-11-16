@@ -1,6 +1,6 @@
 # 10 · Security
 
-[← Payments, escrow and payouts](09-payments.md) · [Index](README.md) · Next: DevOps (written on Day 9)
+[← Payments, escrow and payouts](09-payments.md) · [Index](README.md) · [Next: DevOps →](11-devops.md)
 
 This page covers how ShopSphere signs people in, keeps them signed in, decides what each account may do, and the
 protections around that, and how vendors upload photos safely. Later days add payments and webhooks.

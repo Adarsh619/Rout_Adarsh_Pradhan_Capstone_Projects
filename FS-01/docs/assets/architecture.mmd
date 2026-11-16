@@ -1,6 +1,6 @@
 flowchart TB
   B["Browser<br/>React SPA"]
-  V["Frontend host<br/>Vercel (live) · nginx (Docker)"]
+  V["Frontend host<br/>Vercel (live, /api rewrite) · nginx (Docker)"]
 
   subgraph SRV["Backend server (Docker Compose)"]
     direction LR

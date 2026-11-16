@@ -1,8 +1,9 @@
 # ShopSphere live server (AWS EC2 t4g.small, Mumbai). On the server, from FS-01/:
 #   cp deploy/production.env.example .env   # then fill in the secrets (never committed)
 #   docker compose -f docker-compose.prod.yml up -d --build
-# One public domain: Caddy gets the HTTPS certificate and sends /api/* to the API and everything else to the web app,
-# so the app and the API share one origin (first-party cookies, no CORS for API calls).
+# The frontend is deployed separately on Vercel (frontend/vercel.json), which forwards /api/* here, so for the browser
+# the app and the API share one origin (first-party cookies, no CORS). Caddy gets the HTTPS certificate for DOMAIN and
+# sends /api/* to the API; everything else gets a copy of the web app, so DOMAIN also works on its own.
 # MongoDB is Atlas (MONGO_URL); files are in AWS S3 through the instance role (no AWS keys anywhere).
 # Nothing but Caddy publishes a port.
 name: shopsphere
@@ -21,6 +22,8 @@ x-backend-env: &backend-env
   S3_BUCKET: ${S3_BUCKET:?set S3_BUCKET in .env}
   S3_FORCE_PATH_STYLE: "false"
   CORS_ORIGINS: https://${DOMAIN:?set DOMAIN in .env}
+  # Vercel (frontend) → Caddy → API: two proxies whose X-Forwarded-For is trusted. See deploy/Caddyfile.
+  TRUST_PROXY_HOPS: "2"
   PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-razorpay}
   RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-}
   RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-}
@@ -61,7 +64,10 @@ services:
       start_period: 60s
 
   api:
-    build: ./backend
+    build: &backend-build
+      context: ./backend
+      # Shown by /api/v1/health as "version", so anyone can see which commit is live (set by deploy/auto-deploy.sh).
+      args: { APP_VERSION: "${APP_VERSION:-manual}" }
     environment:
       <<: *backend-env
       PORT: "4000"
@@ -79,7 +85,7 @@ services:
     logging: *logging
 
   worker:
-    build: ./backend
+    build: *backend-build
     command: ["node", "dist/worker.js"]
     environment: *backend-env
     depends_on:

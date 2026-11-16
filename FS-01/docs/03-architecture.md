@@ -58,11 +58,11 @@ FS-01/
 
 | | Local (Docker Compose) | Live |
 |---|---|---|
-| Frontend | nginx container on `localhost:3000`, proxies `/api` | Vercel, calls the API domain directly |
-| API + worker | containers | Docker on an Oracle Cloud Always Free ARM VM (2 OCPU / 12 GB) behind Caddy (HTTPS) |
+| Frontend | nginx container on `localhost:3000`, proxies `/api` | Vercel; its `/api/*` rewrite forwards to the API server, so the browser sees one origin |
+| API + worker | containers | Docker Compose on an AWS EC2 t4g.small in Mumbai, behind Caddy (HTTPS via Let's Encrypt, DuckDNS name) |
 | MongoDB | container, single-node replica set | MongoDB Atlas M0 |
 | Redis, Elasticsearch | containers | containers on the same VM |
-| S3 | Adobe S3Mock container | AWS S3, `ap-south-1` |
+| S3 | Adobe S3Mock container | AWS S3, `ap-south-1`, through the server's IAM role (no access keys) |
 | Payments | `mock` driver | Razorpay test mode; payouts simulated |
 
-The same images and code run in both; only environment variables change.
+The same images and code run in both; only environment variables change. Details: [DevOps](11-devops.md).

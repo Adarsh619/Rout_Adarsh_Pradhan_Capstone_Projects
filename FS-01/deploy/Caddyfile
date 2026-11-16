@@ -1,5 +1,15 @@
 # Caddy gets and renews the Let's Encrypt certificate for {$DOMAIN} by itself (ports 80 and 443 must be open)
 # and redirects http to https.
+
+# Browsers reach the API through Vercel's rewrite (the frontend's /api/* → here), so Caddy keeps the incoming
+# X-Forwarded-For (Vercel puts the visitor's address in it) and appends Vercel's; the API trusts 2 hops.
+# Vercel publishes no fixed address range, so every sender is trusted here: someone calling this host directly could
+# fake their address for the per-IP sign-in limit, but the per-email failure limit still applies.
+{
+	servers {
+		trusted_proxies static 0.0.0.0/0 ::/0
+	}
+}
 {$DOMAIN} {
 	encode zstd gzip
 
@@ -8,12 +18,12 @@
 		-Server
 	}
 
-	# API straight to Node (one proxy hop, so the API's `trust proxy 1` sees the visitor's real address).
+	# API straight to Node.
 	handle /api/* {
 		reverse_proxy api:4000
 	}
 
-	# Everything else: the web app.
+	# Everything else: a copy of the web app (the main one is on Vercel), so this address works on its own too.
 	handle {
 		reverse_proxy web:80
 	}
