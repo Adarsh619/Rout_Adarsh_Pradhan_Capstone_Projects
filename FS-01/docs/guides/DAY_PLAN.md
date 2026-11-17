@@ -15,7 +15,7 @@ Started **Tue 3 Nov 2026**. Days 4 and 7 each finished a day early, so the remai
 - [x] 🛠 `.env.example`, `/health` endpoint, CI `.github/workflows/fs01-ci.yml` (lint + test)
 - [x] 🛠 Docs 01–05 drafted (overview, features & roles, architecture, design decisions, data model)
 - [x] 👤 Create Razorpay account (test mode). Route and RazorpayX checked: not available to unregistered businesses → own split engine + simulated payouts (design decision 1)
-- [ ] 👤 Create FS-01's own Oracle A1 VM (2 OCPU / 12 GB, its own network), following [ORACLE_SERVER_SETUP.md](ORACLE_SERVER_SETUP.md). Retry daily if out of capacity
+- [x] 👤 ~~Create FS-01's own Oracle A1 VM~~ (dropped: no capacity; AWS EC2 used instead). (2 OCPU / 12 GB, its own network), following [ORACLE_SERVER_SETUP.md](ORACLE_SERVER_SETUP.md). Retry daily if out of capacity
 - [x] ✅ `docker compose up` → all services healthy, CI green
 
 ## Day 2 · Wed 4 Nov · Authentication & roles (brief step 2)
@@ -24,7 +24,7 @@ Started **Tue 3 Nov 2026**. Days 4 and 7 each finished a day early, so the remai
 - [x] 🛠 `requireAuth` / `requireRole` middleware, login rate limit, Helmet, CORS
 - [x] 🛠 React: login/register pages, role-based routes (customer, vendor, admin dashboards)
 - [x] 🛠 Tests: auth flows, role checks, token rotation; doc 10 (security) started
-- [ ] 👤 Oracle VM retry
+- [x] 👤 ~~Oracle VM retry~~ (stopped 7 Nov: no capacity all week; moved to AWS)
 - [x] ✅ All three roles sign in and land on their own dashboard
 
 ## Day 3 · Thu 5 Nov · Vendors, products, S3 images (brief step 3)
@@ -33,7 +33,7 @@ Started **Tue 3 Nov 2026**. Days 4 and 7 each finished a day early, so the remai
 - [x] 🛠 Image upload straight from the browser to S3 (S3Mock locally), type and size limits
 - [x] 🛠 Seed script: DummyJSON + Fake Store → 214 products, 5 vendors (+1 pending), 27 categories, photos copied to S3 (sample reviews kept for Day 7)
 - [x] 🛠 Tests: ownership, validation, approval flow; doc 06 (API) started
-- [ ] 👤 Oracle VM retry
+- [x] 👤 ~~Oracle VM retry~~ (stopped 7 Nov: no capacity all week; moved to AWS)
 - [x] ✅ A vendor adds a product with images and it shows on the store page
 
 ## Day 4 · Fri 6 Nov · Elasticsearch search (brief step 4)
@@ -43,7 +43,7 @@ Started **Tue 3 Nov 2026**. Days 4 and 7 each finished a day early, so the remai
 - [x] 🛠 Sorting: relevance, price ↑↓, rating, newest; facet counts; autocomplete
 - [x] 🛠 Search page with filters kept in the URL
 - [x] 🛠 Tests for search; doc 08 (background jobs) started
-- [ ] 👤 Oracle VM retry
+- [x] 👤 ~~Oracle VM retry~~ (stopped 7 Nov: no capacity all week; moved to AWS)
 - [x] ✅ Search "iphne" finds iPhones, filters show live counts
 
 ## Day 5 · Fri 6 Nov · Cart, checkout, order lifecycle (brief step 5)
@@ -54,7 +54,7 @@ Started **Tue 3 Nov 2026**. Days 4 and 7 each finished a day early, so the remai
 - [x] 🛠 Customer "My orders" page with timeline; vendor orders page (plus addresses and a test payment screen)
 - [x] 🛠 Tests: status rules, parallel checkouts never oversell
 - [x] 👤 AWS: free plan with $100 credits (unused), root MFA on, zero-spend budget set
-- [ ] 👤 Oracle VM retry
+- [x] 👤 ~~Oracle VM retry~~ (stopped 7 Nov: no capacity all week; moved to AWS)
 - [x] ✅ Cart with items from 2 vendors → 1 order, 2 sub-orders
 
 ## Day 6 · Sat 7 Nov · Razorpay payments + split engine (brief step 6)
@@ -65,7 +65,7 @@ Started **Tue 3 Nov 2026**. Days 4 and 7 each finished a day early, so the remai
 - [x] 🛠 Delivered → release that share → payout job pays it out; cancel → reverse the hold + real Razorpay test refund
 - [x] 🛠 Vendor payout details (only last 4 digits stored); tests for split maths, escrow states and webhooks; doc 09 (payments)
 - [x] 👤 Generate Razorpay **test** keys and put them in `.env` yourself (never in chat or Git)
-- [ ] 👤 Oracle VM retry
+- [x] 👤 ~~Oracle VM retry~~ (stopped 7 Nov: no capacity all week; moved to AWS)
 - [x] ✅ Pay with real Razorpay test UPI → 2 vendor shares held → deliver → released → paid out (simulated); payment and refund visible in the Razorpay test dashboard
   - Paid with test Netbanking (UPI isn't offered on this account); payment captured and visible in the dashboard. Refunds are refused by Razorpay for this test account, dashboard included ("invalid request sent"), so the refund shows as failed and is retried hourly ([doc 09](../09-payments.md#known-limit-razorpay-test-accounts-may-refuse-refunds))
 
@@ -83,7 +83,7 @@ Started **Tue 3 Nov 2026**. Days 4 and 7 each finished a day early, so the remai
 - [x] 🛠 Admin pages: vendors, commission rates, refunds, review moderation
 - [x] 🛠 UI polish: loading, empty and error states; mobile layout; doc 07 (frontend)
 - [x] 👤 **Hosting decision:** Oracle VM if it was created by now, otherwise the AWS fallback (EC2 t4g.small in Mumbai on free-plan credits). **Decided Sat 7 Nov: AWS** (Oracle out of capacity every day since 3 Nov)
-- [ ] 👤 Create the S3 bucket and a limited access key
+- [x] 👤 Create the S3 bucket (access through the EC2 instance role instead of an access key, so no key exists)
 - [x] 🛠 Demo order history: `seed-orders` (40 orders over 30 days through the real checkout, payment, delivery, payout and refund code)
 - [x] ✅ Dashboards show correct numbers for the seeded data (checked against direct database sums)
 
@@ -99,8 +99,8 @@ Started **Tue 3 Nov 2026**. Days 4 and 7 each finished a day early, so the remai
 ## Day 10 · Tue 17 – Thu 19 Nov · Deliverables
 - [x] 🛠 Brief changed (17 Nov): data layer moved from MongoDB + Mongoose to **PostgreSQL + Prisma** (branch `fs01-postgres`; all tests and the smoke test green; CI, production compose, nightly reset and docs updated)
 - [x] 👤 Live on PostgreSQL (17 Nov): PR #1 merged, server redeployed itself, re-seeded, reset baseline saved, test purchase confirmed by the webhook, ledger balances
-- [ ] 🛠 Finish docs 01–14 + `openapi.yaml`, README with setup instructions, root README row
-- [ ] 🛠 Test and coverage report, performance numbers in doc 12
+- [x] 🛠 Finish docs 01–14 + `openapi.yaml` (checked against the routes by a test), README with setup instructions, root README row (17 Nov)
+- [x] 🛠 Test and coverage report, performance numbers in doc 12 (backend 93.5% lines, frontend 83%; k6 on live PostgreSQL: 0 errors, p95 110 ms)
 - [ ] 🛠 Presentation outline (10 min: problem, design, challenges, results, next steps) and reflection template
 - [x] 🛠 Final bug sweep (17 Nov): live API fuzzing, every screen as each role, code review; 6 issues fixed with tests ([doc 12](../12-testing-and-performance.md#bug-sweep-17-nov))
 - [ ] 👤 Next morning: open the live link and check that it's fast, search works and the demo data was reset
@@ -110,10 +110,10 @@ Started **Tue 3 Nov 2026**. Days 4 and 7 each finished a day early, so the remai
 ---
 
 ## Deliverables checklist
-- [ ] Working demo: live link + screen recording
-- [ ] GitHub repo with clean commits, README and setup instructions
-- [ ] Architecture diagram + data model + API docs
-- [ ] Test results + performance numbers
+- [ ] Working demo: live link ✓ (https://shopsphere-fs01.vercel.app) + screen recording (to do)
+- [x] GitHub repo with clean commits, README and setup instructions
+- [x] Architecture diagram + data model + API docs (incl. OpenAPI 3.1)
+- [x] Test results + performance numbers (doc 12)
 - [ ] 10-minute presentation
 - [ ] Individual reflection
 
@@ -124,8 +124,8 @@ Started **Tue 3 Nov 2026**. Days 4 and 7 each finished a day early, so the remai
 4. Neither Oracle nor AWS works out → fallback C (recorded demo, run locally)
 
 ## Buffer · Wed 11 – Fri 20 Nov
-- [ ] Wed 11 – Fri 13: catch up on anything that slipped, then put back whatever was cut above (20k dataset first); FS-04's optional live site
-- [ ] Sat 14 – Sun 15: watch the live site for two nights (uptime, nightly reset, credits used); fix what shows up
-- [ ] Mon 16 – Tue 17: rehearse the 10-minute presentation twice; write the reflection
-- [ ] Wed 18 – Thu 19: final read of the docs and README; re-record the demo if the app changed
+- [x] Wed 11 – Fri 13: used for the AWS deployment instead (the 20k dataset and Playwright stayed cut)
+- [x] Sat 14 – Mon 16: live site watched (UptimeRobot, nightly reset, auto-deploy); Vercel frontend added
+- [x] Tue 17: brief changed → moved to PostgreSQL + Prisma, live the same day; docs 12–14, OpenAPI, bug sweep
+- [ ] Wed 18: record the demo video · Thu 19: rehearse the presentation twice, write the reflection
 - [ ] Fri 20 Nov: submit

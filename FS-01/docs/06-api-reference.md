@@ -56,7 +56,7 @@ Every error has the same shape. Form errors list **one message per field**, so t
 
 ## Auth and account
 
-Built on Day 2 and described in [Security](10-security.md): `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`,
+Described in [Security](10-security.md): `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`,
 `POST /auth/logout`, `GET /auth/me`, `PATCH /account`, `POST /account/password`. Signing in or up also moves a guest's cart
 into the account (below).
 
@@ -291,8 +291,8 @@ POST /checkout/verify   { "orderId": "…", "providerOrderId": "order_mock_…",
 200 { "order": { "status": "confirmed", "payment": { "status": "paid", … }, "parts": [{ "status": "placed", … }, …] } }
 ```
 
-The signature is HMAC-SHA256 of `order id|payment id`, Razorpay's own scheme, so on Day 6 the real Razorpay popup replaces
-the mock gateway and `/checkout/verify` stays the same. A wrong signature is `400 invalid_signature`; verifying the same
+The signature is HMAC-SHA256 of `order id|payment id`, Razorpay's own scheme, so with `PAYMENT_PROVIDER=razorpay` the
+real Razorpay popup takes the mock gateway's place and `/checkout/verify` stays the same. A wrong signature is `400 invalid_signature`; verifying the same
 payment twice changes nothing; paying an order that already expired is `409 order_not_payable`.
 
 ### Paying with Razorpay (`PAYMENT_PROVIDER=razorpay`)

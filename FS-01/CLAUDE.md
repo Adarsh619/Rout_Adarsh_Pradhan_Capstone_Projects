@@ -81,25 +81,31 @@ PAYMENT_PROVIDER=mock docker compose up -d api worker   # temporarily, when .env
 - Keys, passwords, tokens and connection strings never go into chat or Git (`.env` is git-ignored); only test keys.
 - Don't enable anything billable (Oracle PAYG, RDS, AWS upgrades) without the user deciding.
 
-## Progress and pending (as of Tue 17 Nov 2026; deadline Fri 20 Nov, one submission)
+## Progress and pending (as of Tue 17 Nov 2026, 08:00 IST; deadline Fri 20 Nov, one submission)
 
-**Done:** Days 1–9 (docs 01–11, green CI). Live: frontend https://shopsphere-fs01.vercel.app (Vercel), API
+**Build: complete and live.** Frontend https://shopsphere-fs01.vercel.app (Vercel, builds from `main`), API
 https://shopsphere-adarsh.duckdns.org (EC2 t4g.small, Ubuntu 24.04 arm64; repo at `~/Rout_Adarsh_Pradhan_Capstone_Projects`
-on the server; secrets only in the server's `FS-01/.env`; compose with `-f docker-compose.prod.yml`). Auto-deploy timer
-(5 min, commits whose CI passed), nightly reset (03:00 IST), UptimeRobot, Razorpay test webhook (200s), `clientIp` via
-Vercel verified. k6 on live (16 Nov, 50 users): 0 errors, p95 104 ms, search p95 115 ms (`perf/results-live-mongodb.json`,
-measured on the MongoDB build).
+on the server; secrets only in the server's `FS-01/.env`; compose with `-f docker-compose.prod.yml`). Live version
+`e556c42`. Auto-deploy timer (5 min, newest commit whose CI passed), nightly reset at 03:00 IST from
+`~/.shopsphere/baseline.dump` (156K, saved 17 Nov after re-seeding; first PostgreSQL reset runs the night of 17→18 Nov:
+check it on the 18th), UptimeRobot, Razorpay test webhook verified (payment.captured → "order confirmed").
 
-**17 Nov: brief changed to PostgreSQL + Prisma — LIVE.** PR #1 merged (5e665e7) after green CI; server auto-deployed
-(Postgres container, `POSTGRES_PASSWORD` in the server `.env`); re-seeded (214 products, 40 orders), reset baseline
-`~/.shopsphere/baseline.dump` (156K) saved; live test purchase via Vercel: confirmed by the webhook ("order
-confirmed"), invoice opened, ledger balances, 41 orders. `main` has a ruleset blocking force pushes and deletion (PRs
-and direct pushes still allowed). Leftovers to tidy later: Atlas cluster + IP rule, old S3 photos under old store ids,
-`~/.shopsphere/baseline.archive.gz`. k6 results: `perf/results-live.json` (Postgres), `perf/results-live-mongodb.json` (before).
+**17 Nov:** brief changed to PostgreSQL + Prisma → migrated, PR #1 merged (5e665e7), live and re-seeded the same day
+(214 products, 40 demo orders). Then: docs 12 (testing + performance), 13 (challenges, next steps), 14 (setup),
+`docs/openapi.yaml` (67 operations; `tests/openapi.test.ts` keeps it matching the routes), coverage commands
+(`npm run test:coverage`: backend 93.5% lines with all tests, frontend 83%), k6 on live Postgres (0 errors, p95 110 ms;
+`perf/results-live.json`; MongoDB run kept as `results-live-mongodb.json`), bug sweep (6 fixes with tests, recorded in
+doc 12), docs audit (all links/anchors resolve, stale "Day N" notes removed, day plan ticked). Tests now: 97 unit, 104
+integration, 65 frontend, smoke test. `main` has a ruleset blocking force pushes and deletion.
 
-**Day 10 (Tue 17 – Thu 19):** docs 12 (testing + performance), 13 (challenges, next steps; include the DB switch), 14
-(setup) + `openapi.yaml`, test and coverage report, presentation outline, reflection template, bug sweep; Wed: user
-records the demo video (Drive link, anyone with the link). Re-seeded orders are dated around the go-live day.
-
-**Fri 20 Nov:** submit once: GitHub link, Vercel URL (frontend) + API URL, demo logins and the live demo password in
-the form's notes (not in the README), FS-04 live link, Drive folder link.
+**Left (user unless noted):**
+- Claude: presentation outline (10 min: problem, design, challenges, results, next steps), reflection template, demo
+  video script.
+- Wed 18: check the live site after the first PostgreSQL nightly reset (products 214, sign-in works); record the demo
+  video (Drive link, anyone with the link).
+- Thu 19: slides + rehearse twice; write the individual reflection (in the user's own words).
+- Fri 20: submit once: GitHub link, Vercel URL + API URL, demo logins and the live demo password in the form's notes
+  (not in the README), FS-04 live link, Drive folder link.
+- Optional tidy-up after submission: delete the unused MongoDB Atlas cluster + its IP rule, old S3 photos under the
+  pre-migration store ids, `~/.shopsphere/baseline.archive.gz` on the server. Seeded orders are dated around 17 Nov, so
+  the 7-day analytics view thins out after ~24 Nov (30-day view is fine).

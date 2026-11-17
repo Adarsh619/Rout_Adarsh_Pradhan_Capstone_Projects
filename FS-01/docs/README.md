@@ -1,7 +1,7 @@
 # ShopSphere Documentation
 
 ShopSphere is a multi-vendor marketplace: many vendors sell, customers buy from several of them in one checkout, and the platform splits each payment and keeps a commission.
-Read the files in order, or jump to the topic you need. Topics without a link are written on the day that feature is built.
+Read the files in order, or jump to the topic you need.
 
 ## Design documentation
 

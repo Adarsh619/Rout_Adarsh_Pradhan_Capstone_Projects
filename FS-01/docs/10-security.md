@@ -3,7 +3,8 @@
 [← Payments, escrow and payouts](09-payments.md) · [Index](README.md) · [Next: DevOps →](11-devops.md)
 
 This page covers how ShopSphere signs people in, keeps them signed in, decides what each account may do, and the
-protections around that, and how vendors upload photos safely. Later days add payments and webhooks.
+protections around that, and how vendors upload photos safely. Payment signatures and signed webhooks are covered in
+[Payments](09-payments.md).
 
 ## Sign-in at a glance
 
