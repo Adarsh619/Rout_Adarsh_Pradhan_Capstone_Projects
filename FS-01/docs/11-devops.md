@@ -1,6 +1,6 @@
 # 11 · DevOps: containers, CI/CD and live hosting
 
-[← Security](10-security.md) · [Index](README.md) · Next: Testing and performance (written on Day 10)
+[← Security](10-security.md) · [Index](README.md) · [Next: Testing and performance →](12-testing-and-performance.md)
 
 ShopSphere runs as the same Docker images on a laptop, in CI and on the live server; only environment variables
 change. The frontend and the backend are **deployed separately**: the React app on Vercel, the API and its services on

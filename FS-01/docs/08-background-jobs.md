@@ -145,8 +145,8 @@ there are, ready to add. All counts come from the same single request.
 | `bike` | 12, motorcycles first | 7 ms |
 | `red dress` | 17 dresses, "matching some of your words" | 14 ms |
 
-Measured locally through nginx (Elasticsearch `took`). Load-test numbers with a 20 000-product catalogue follow on
-Day 9 in [Testing and performance](README.md).
+Measured locally through nginx (Elasticsearch `took`). Live load-test numbers (50 shoppers, search p95 122 ms) are in
+[Testing and performance](12-testing-and-performance.md).
 
 ## Tests
 
