@@ -19,7 +19,7 @@ Read the files in order, or jump to the topic you need. Topics without a link ar
 | 10 | [Security](10-security.md) | Passwords, tokens and sessions, roles, rate limits, CSRF | ✓ |
 | 11 | [DevOps](11-devops.md) | Live architecture (Vercel + AWS EC2 with PostgreSQL + S3), one origin for the browser, no AWS keys, CI, the server deploying commits that passed CI, nightly demo reset, setup from nothing, cost | ✓ |
 | 12 | [Testing and performance](12-testing-and-performance.md) | Test levels and counts, coverage, the risky cases tested, CI, live load-test numbers | ✓ |
-| 13 | Challenges and next steps | Problems solved, known limits, future work | Day 10 |
+| 13 | [Challenges and next steps](13-challenges-and-next-steps.md) | The database switch, races, payments without Route, hosting and cookies; known limits; what comes next | ✓ |
 | 14 | Setup | Run it locally, folder layout | Day 10 |
 
 ## Product and technical specs

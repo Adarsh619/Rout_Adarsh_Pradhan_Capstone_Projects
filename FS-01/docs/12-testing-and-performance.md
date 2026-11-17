@@ -1,6 +1,6 @@
 # 12 · Testing and performance
 
-[← DevOps](11-devops.md) · [Index](README.md) · Next: Challenges and next steps (written on Day 10)
+[← DevOps](11-devops.md) · [Index](README.md) · [Next: Challenges and next steps →](13-challenges-and-next-steps.md)
 
 ShopSphere is tested at four levels, every one of them on every push and pull request (CI), and the live site was
 load-tested. All numbers below are from **17 Nov 2026**, on the PostgreSQL + Prisma build.
