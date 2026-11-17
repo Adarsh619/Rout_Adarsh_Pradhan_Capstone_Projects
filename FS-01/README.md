@@ -87,4 +87,4 @@ CI ([`.github/workflows/fs01-ci.yml`](../.github/workflows/fs01-ci.yml)) runs al
 
 ## Documentation
 
-Everything is in [`docs/`](docs/README.md): overview, features and roles, architecture, design decisions, data model, API reference (including cart, checkout and orders), background jobs and search, payments and escrow, security, PRD, app flow, database schema and API list. More topics are added as each part is built.
+Everything is in [`docs/`](docs/README.md), 14 numbered topics: overview, features and roles, architecture, design decisions, data model, API reference, frontend, background jobs and search, payments and escrow, security, DevOps, testing and performance, challenges and next steps, and setup; plus the PRD, app flow, database schema, API list and the [OpenAPI spec](docs/openapi.yaml).

@@ -2,8 +2,10 @@
 
 [← Data model](05-data-model.md) · [Index](README.md) · [Next: Frontend →](07-frontend.md)
 
-This page documents the endpoints that exist today, with real request and response shapes (Days 1–8). The full plan, including
-endpoints still to come, is the [API list](specs/04-api-list.md). A machine-readable `openapi.yaml` follows on Day 10.
+This page documents every endpoint with real request and response shapes. The same API as a machine-readable
+**OpenAPI 3.1** file: [`openapi.yaml`](openapi.yaml) (open it in [Swagger Editor](https://editor.swagger.io) or any
+OpenAPI viewer; a test checks it lists exactly the routes the code has). The original plan is the
+[API list](specs/04-api-list.md).
 
 ## Conventions
 

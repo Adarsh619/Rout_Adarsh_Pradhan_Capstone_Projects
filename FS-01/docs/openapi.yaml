@@ -1,0 +1,1574 @@
+openapi: 3.1.0
+info:
+  title: ShopSphere API
+  version: "1.0.0"
+  summary: Multi-vendor marketplace — one cart from many stores, one payment split per store with commission.
+  description: |
+    REST API of ShopSphere (FS-01). Human-friendly reference with examples: `docs/06-api-reference.md`.
+
+    **Conventions**
+    - All money is **integer paise** (₹499.00 = `49900`); rates are **basis points** (`1000` = 10%).
+    - Ids are UUIDs. An id that can't exist answers `404`, the same as one that doesn't.
+    - Dates are ISO 8601 strings (UTC).
+    - Lists take `page` (from 1) and `limit` (1–50, default 20) and answer `{ items, page, limit, total }`.
+    - Errors always have the shape `{ "error": { "code", "message", "details" } }`; validation errors list one message
+      per field in `details.fields`.
+
+    **Authentication**
+    - Sign-in returns a short-lived **access token** (15 min) to send as `Authorization: Bearer <token>`, and sets an
+      httpOnly **refresh cookie** (`ss_refresh`, path `/api/v1/auth`) used by `POST /auth/refresh`.
+    - Endpoints that act on cookies (refresh, logout, guest cart) need the header `X-Requested-With: ShopSphere` (CSRF).
+    - Guests get a cart cookie (`ss_guest`); it's merged into the account on sign-in.
+  contact:
+    name: ShopSphere (capstone FS-01)
+    url: https://github.com/Adarsh619/Rout_Adarsh_Pradhan_Capstone_Projects/tree/main/FS-01
+servers:
+  - url: https://shopsphere-fs01.vercel.app/api/v1
+    description: Live (frontend origin; Vercel forwards /api to the API server)
+  - url: https://shopsphere-adarsh.duckdns.org/api/v1
+    description: Live API server (AWS, Mumbai)
+  - url: http://localhost:3000/api/v1
+    description: Local Docker Compose stack
+
+tags:
+  - { name: System }
+  - { name: Auth, description: Sign-up, sign-in, sessions and the user's own account }
+  - { name: Addresses }
+  - { name: Catalogue, description: Categories, products and store pages (public) }
+  - { name: Search, description: Elasticsearch-backed search and autocomplete }
+  - { name: Cart, description: Guest or signed-in cart, coupon applied to it }
+  - { name: Checkout, description: Placing and paying for orders }
+  - { name: Orders, description: The customer's orders and cancellations }
+  - { name: Reviews }
+  - { name: Invoices }
+  - { name: Vendor, description: The signed-in vendor's store, products, orders, coupons and earnings }
+  - { name: Admin, description: Stores, categories, orders and refunds, coupons, reviews, analytics }
+  - { name: Webhooks }
+
+security:
+  - bearerAuth: []
+
+paths:
+  # ---------------------------------------------------------------- System
+  /health:
+    get:
+      tags: [System]
+      summary: Status of the API and every service it depends on
+      security: []
+      responses:
+        "200":
+          description: Everything is up
+          content: { application/json: { schema: { $ref: "#/components/schemas/Health" } } }
+        "503":
+          description: At least one service is down (the report says which)
+          content: { application/json: { schema: { $ref: "#/components/schemas/Health" } } }
+
+  # ---------------------------------------------------------------- Auth
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Create a customer or vendor account and sign in
+      description: Admins can't sign up. Rate limit 10 per IP per hour. A guest cart is merged into the new account.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password]
+              properties:
+                name: { type: string, minLength: 2, maxLength: 80 }
+                email: { type: string, format: email, maxLength: 254 }
+                password: { $ref: "#/components/schemas/Password" }
+                role: { type: string, enum: [customer, vendor], default: customer }
+      responses:
+        "201": { $ref: "#/components/responses/SignedIn" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "409": { description: "`email_taken`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Sign in
+      description: Same error for an unknown email and a wrong password. 5 failures lock that email for 15 minutes.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, minLength: 1, maxLength: 200 }
+      responses:
+        "200": { $ref: "#/components/responses/SignedIn" }
+        "401": { description: "`invalid_credentials`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "403": { description: "`account_suspended`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Get a new access token with the refresh cookie (the cookie rotates)
+      description: Reusing an old refresh token signs the user out everywhere (`session_reused`).
+      security: [{ refreshCookie: [], csrfHeader: [] }]
+      responses:
+        "200": { $ref: "#/components/responses/SignedIn" }
+        "401": { description: "`session_ended` or `session_reused`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "409": { description: "`refresh_in_progress` (another tab refreshed a moment ago; retry)", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: End this session and clear the refresh cookie
+      security: [{ refreshCookie: [], csrfHeader: [] }]
+      responses:
+        "204": { description: Signed out }
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: The signed-in user
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object, properties: { user: { $ref: "#/components/schemas/User" } } } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /account:
+    patch:
+      tags: [Auth]
+      summary: Change the account's name
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [name], properties: { name: { type: string, minLength: 2, maxLength: 80 } } } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object, properties: { user: { $ref: "#/components/schemas/User" } } } } } }
+        "400": { $ref: "#/components/responses/ValidationError" }
+  /account/password:
+    post:
+      tags: [Auth]
+      summary: Change the password; every other session is signed out
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword, newPassword]
+              properties:
+                currentPassword: { type: string }
+                newPassword: { $ref: "#/components/schemas/Password" }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object, properties: { ok: { type: boolean }, signedOutSessions: { type: integer } } } } } }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  # ---------------------------------------------------------------- Addresses
+  /account/addresses:
+    get:
+      tags: [Addresses]
+      summary: The user's saved addresses (up to 5, exactly one default)
+      responses:
+        "200": { $ref: "#/components/responses/AddressList" }
+    post:
+      tags: [Addresses]
+      summary: Add an address
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AddressInput" } } } }
+      responses:
+        "201": { $ref: "#/components/responses/AddressSaved" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "409": { description: "`too_many_addresses`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /account/addresses/{id}:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    patch:
+      tags: [Addresses]
+      summary: Change an address (send only what changes); `isDefault true` moves the default here
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AddressPatch" } } } }
+      responses:
+        "200": { $ref: "#/components/responses/AddressSaved" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Addresses]
+      summary: Delete an address (the next one becomes the default)
+      responses:
+        "200": { $ref: "#/components/responses/AddressList" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # ---------------------------------------------------------------- Catalogue
+  /categories:
+    get:
+      tags: [Catalogue]
+      summary: Category tree (departments with sub-categories), cached 5 minutes
+      security: []
+      responses:
+        "200":
+          description: OK (header `X-Cache` says HIT or MISS)
+          content: { application/json: { schema: { type: object, properties: { items: { type: array, items: { $ref: "#/components/schemas/CategoryNode" } } } } } }
+  /products:
+    get:
+      tags: [Catalogue]
+      summary: Browse active products of approved stores (straight from the database)
+      security: []
+      parameters:
+        - { name: category, in: query, schema: { type: string }, description: Category or department slug }
+        - { name: sort, in: query, schema: { type: string, enum: [newest, price_asc, price_desc, rating], default: newest } }
+        - { $ref: "#/components/parameters/Page" }
+        - { $ref: "#/components/parameters/Limit" }
+      responses:
+        "200": { $ref: "#/components/responses/ProductCardPage" }
+  /products/{id}:
+    get:
+      tags: [Catalogue]
+      summary: A product page, cached 5 minutes
+      security: []
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200":
+          description: OK (header `X-Cache` says HIT or MISS)
+          content: { application/json: { schema: { type: object, properties: { product: { $ref: "#/components/schemas/PublicProduct" } } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /stores/{slug}:
+    get:
+      tags: [Catalogue]
+      summary: An approved store's page and its products
+      security: []
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+        - { name: category, in: query, schema: { type: string } }
+        - { name: sort, in: query, schema: { type: string, enum: [newest, price_asc, price_desc, rating] } }
+        - { $ref: "#/components/parameters/Page" }
+        - { $ref: "#/components/parameters/Limit" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  store: { $ref: "#/components/schemas/PublicStore" }
+                  products: { $ref: "#/components/schemas/ProductCardPage" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # ---------------------------------------------------------------- Search
+  /search:
+    get:
+      tags: [Search]
+      summary: Full-text search with typo tolerance, filters, facets and sorting
+      description: Each facet counts with every filter except its own. `503 search_unavailable` if Elasticsearch is down.
+      security: []
+      parameters:
+        - { name: q, in: query, schema: { type: string, maxLength: 100 }, description: Words to search; empty = browse everything }
+        - { name: category, in: query, schema: { type: string } }
+        - { name: brand, in: query, schema: { type: array, items: { type: string }, maxItems: 20 }, style: form, explode: true }
+        - { name: vendor, in: query, schema: { type: string }, description: Store slug }
+        - { name: minPrice, in: query, schema: { type: integer, minimum: 0 }, description: Paise, inclusive }
+        - { name: maxPrice, in: query, schema: { type: integer, minimum: 0 }, description: Paise, inclusive }
+        - { name: rating, in: query, schema: { type: integer, minimum: 1, maximum: 4 }, description: Average rating at least this }
+        - { name: inStock, in: query, schema: { type: boolean } }
+        - { name: sort, in: query, schema: { type: string, enum: [relevance, newest, price_asc, price_desc, rating] } }
+        - { $ref: "#/components/parameters/Page" }
+        - { $ref: "#/components/parameters/Limit" }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/SearchResult" } } } }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "503": { description: "`search_unavailable`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /search/suggest:
+    get:
+      tags: [Search]
+      summary: Up to 8 product titles for autocomplete
+      security: []
+      parameters: [{ name: q, in: query, required: true, schema: { type: string, minLength: 2, maxLength: 100 } }]
+      responses:
+        "200":
+          description: OK
+          content: { application/json: { schema: { type: object, properties: { items: { type: array, items: { type: object, properties: { id: { type: string, format: uuid }, title: { type: string } } } } } } } }
+
+  # ---------------------------------------------------------------- Cart
+  /cart:
+    get:
+      tags: [Cart]
+      summary: The cart with today's prices and stock, grouped by store
+      security: [{}, { bearerAuth: [] }, { guestCookie: [] }]
+      responses:
+        "200": { $ref: "#/components/responses/Cart" }
+  /cart/items:
+    post:
+      tags: [Cart]
+      summary: Add a product (a guest gets a cart cookie)
+      description: Up to 50 lines and 10 of each product. Guests must also send `X-Requested-With`.
+      security: [{ bearerAuth: [] }, { guestCookie: [], csrfHeader: [] }, { csrfHeader: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [productId]
+              properties:
+                productId: { type: string, format: uuid }
+                qty: { type: integer, minimum: 1, maximum: 10, default: 1 }
+      responses:
+        "200": { $ref: "#/components/responses/Cart" }
+        "201": { $ref: "#/components/responses/Cart" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { description: "`not_found` (product not on sale)", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "409": { description: "`out_of_stock` (details.available) or `cart_full`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /cart/items/{productId}:
+    parameters: [{ name: productId, in: path, required: true, schema: { type: string, format: uuid } }]
+    patch:
+      tags: [Cart]
+      summary: Change a line's quantity
+      security: [{ bearerAuth: [] }, { guestCookie: [], csrfHeader: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [qty], properties: { qty: { type: integer, minimum: 1, maximum: 10 } } } } }
+      responses:
+        "200": { $ref: "#/components/responses/Cart" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Cart]
+      summary: Remove a line
+      security: [{ bearerAuth: [] }, { guestCookie: [], csrfHeader: [] }]
+      responses:
+        "200": { $ref: "#/components/responses/Cart" }
+  /cart/coupon:
+    post:
+      tags: [Cart]
+      summary: Apply a coupon code to the cart
+      security: [{ bearerAuth: [] }, { guestCookie: [], csrfHeader: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [code], properties: { code: { type: string, maxLength: 30 } } } } }
+      responses:
+        "200": { $ref: "#/components/responses/Cart" }
+        "409": { description: "`cart_empty`, or `coupon_invalid` with the reason", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+    delete:
+      tags: [Cart]
+      summary: Remove the coupon
+      security: [{ bearerAuth: [] }, { guestCookie: [], csrfHeader: [] }]
+      responses:
+        "200": { $ref: "#/components/responses/Cart" }
+
+  # ---------------------------------------------------------------- Checkout
+  /checkout:
+    post:
+      tags: [Checkout]
+      summary: Turn the cart into one order (one part per store) and reserve the stock for 15 minutes
+      description: |
+        Re-reads every price and stock level; in one transaction takes the stock, creates the order, its parts and lines,
+        and redeems the coupon. Then creates the payment order at the provider.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [addressId]
+              properties:
+                addressId: { type: string, format: uuid }
+                expectedTotal: { type: integer, minimum: 0, description: The total the shopper saw (paise); a different current total stops checkout with `price_changed` }
+      responses:
+        "201":
+          description: Order placed, waiting for payment
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  order: { $ref: "#/components/schemas/CustomerOrder" }
+                  payment: { $ref: "#/components/schemas/PaymentStep" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "409": { description: "`cart_empty`, `cart_changed`, `price_changed`, `coupon_invalid`, `coupon_exhausted` or `out_of_stock`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "502": { description: "`payment_unavailable` (nothing charged; stock returned)", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /checkout/verify:
+    post:
+      tags: [Checkout]
+      summary: Confirm a payment with the signature from the payment screen
+      description: Safe to send twice; also confirmed by the webhook if the customer never comes back.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [orderId, providerOrderId, providerPaymentId, signature]
+              properties:
+                orderId: { type: string, format: uuid }
+                providerOrderId: { type: string }
+                providerPaymentId: { type: string }
+                signature: { type: string }
+      responses:
+        "200": { description: Paid, content: { application/json: { schema: { type: object, properties: { order: { $ref: "#/components/schemas/CustomerOrder" } } } } } }
+        "400": { description: "`invalid_signature`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "409": { description: "`order_not_payable` (expired or cancelled; the payment is refunded in full)", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /payments/mock/pay:
+    post:
+      tags: [Checkout]
+      summary: The test payment screen (only when PAYMENT_PROVIDER=mock)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [providerOrderId]
+              properties:
+                providerOrderId: { type: string }
+                outcome: { type: string, enum: [success, failure], default: success }
+      responses:
+        "200":
+          description: A signed test payment, to send to /checkout/verify
+          content: { application/json: { schema: { type: object, properties: { providerOrderId: { type: string }, providerPaymentId: { type: string }, signature: { type: string } } } } }
+        "402": { description: "`payment_failed` (outcome failure)", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "409": { description: "`order_not_payable`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+
+  # ---------------------------------------------------------------- Orders
+  /orders:
+    get:
+      tags: [Orders]
+      summary: The customer's orders, newest first
+      parameters: [{ $ref: "#/components/parameters/Page" }, { $ref: "#/components/parameters/Limit" }]
+      responses:
+        "200":
+          description: OK
+          content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/PageInfo" }, { type: object, properties: { items: { type: array, items: { $ref: "#/components/schemas/OrderSummary" } } } }] } } }
+  /orders/{id}:
+    get:
+      tags: [Orders]
+      summary: One order with each store's part, timeline, tracking and refund
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200":
+          description: OK (`payment` is set while the order waits for payment)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  order: { $ref: "#/components/schemas/CustomerOrder" }
+                  payment: { oneOf: [{ $ref: "#/components/schemas/PaymentStep" }, { type: "null" }] }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /orders/{id}/cancel:
+    post:
+      tags: [Orders]
+      summary: Cancel an order that hasn't been paid (its stock goes back on sale)
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/CustomerOrder" }
+        "409": { description: "`invalid_transition` (already paid: cancel a part instead)", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /orders/{id}/sub-orders/{subId}/cancel:
+    post:
+      tags: [Orders]
+      summary: Cancel one store's paid part before it ships; it's refunded through the payment provider
+      parameters: [{ $ref: "#/components/parameters/Id" }, { $ref: "#/components/parameters/SubId" }]
+      requestBody:
+        content: { application/json: { schema: { type: object, properties: { reason: { type: string, maxLength: 300 } } } } }
+      responses:
+        "200": { $ref: "#/components/responses/CustomerOrder" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: "`invalid_transition` (already shipped, or changed at the same moment)", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+
+  # ---------------------------------------------------------------- Reviews
+  /products/{id}/reviews:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [Reviews]
+      summary: Visible reviews with the star breakdown; a signed-in customer also learns whether they may review
+      security: [{}, { bearerAuth: [] }]
+      parameters: [{ $ref: "#/components/parameters/Page" }, { $ref: "#/components/parameters/Limit" }]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ReviewPage" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Reviews]
+      summary: Review a product from a delivered order (customers, once per product)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rating, body]
+              properties:
+                rating: { type: integer, minimum: 1, maximum: 5 }
+                title: { type: string, maxLength: 120 }
+                body: { type: string, minLength: 10, maxLength: 2000 }
+      responses:
+        "201":
+          description: Saved; the product's and store's ratings are recalculated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  review: { $ref: "#/components/schemas/Review" }
+                  summary: { type: object, properties: { ratingAvg: { type: number }, ratingCount: { type: integer } } }
+        "403": { description: "`not_delivered`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "409": { description: "`already_reviewed`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+
+  # ---------------------------------------------------------------- Invoices
+  /invoices/{subId}:
+    get:
+      tags: [Invoices]
+      summary: A 5-minute download link for one part's invoice PDF (buyer, selling store, admins)
+      parameters: [{ $ref: "#/components/parameters/SubId" }]
+      responses:
+        "200":
+          description: OK
+          content: { application/json: { schema: { type: object, properties: { invoiceNumber: { type: string, examples: [INV-2026-000123] }, url: { type: string, format: uri }, expiresInSeconds: { type: integer } } } } }
+        "404": { description: "`not_found`, or `invoice_not_ready` right after payment", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+
+  # ---------------------------------------------------------------- Vendor
+  /vendors/apply:
+    post:
+      tags: [Vendor]
+      summary: Apply for a store (or edit / re-send a pending or rejected application)
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/StoreInput" } } } }
+      responses:
+        "200": { $ref: "#/components/responses/OwnStore" }
+        "201": { $ref: "#/components/responses/OwnStore" }
+        "409": { description: "`already_applied`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /vendors/me:
+    get:
+      tags: [Vendor]
+      summary: The vendor's own store (null before applying)
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object, properties: { store: { oneOf: [{ $ref: "#/components/schemas/OwnStore" }, { type: "null" }] } } } } } }
+    patch:
+      tags: [Vendor]
+      summary: Edit the store (logo from POST /uploads/presign, or null to remove it)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - { $ref: "#/components/schemas/StoreInput" }
+                - { type: object, properties: { logoKey: { type: [string, "null"] } } }
+              description: Every field optional
+      responses:
+        "200": { $ref: "#/components/responses/OwnStore" }
+        "403": { description: "`vendor_not_approved` (suspended)", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /vendors/me/payout:
+    put:
+      tags: [Vendor]
+      summary: Save the payout account (simulated provider); only the last 4 digits are kept
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [accountHolder, accountNumber, ifsc]
+              properties:
+                accountHolder: { type: string, minLength: 3, maxLength: 80 }
+                accountNumber: { type: string, pattern: "^[0-9 ]{9,18}$" }
+                ifsc: { type: string, pattern: "^[A-Za-z]{4}0[A-Za-z0-9]{6}$" }
+      responses:
+        "200":
+          description: Saved; shares already released are paid out now
+          content: { application/json: { schema: { type: object, properties: { store: { $ref: "#/components/schemas/OwnStore" }, payoutsStarted: { type: integer } } } } }
+  /uploads/presign:
+    post:
+      tags: [Vendor]
+      summary: A one-file upload link to S3 (product photo or store logo)
+      description: PUT the file to `uploadUrl` with exactly `headers`, then send `key` with the product or store. 120 links per 15 minutes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [purpose, contentType, size]
+              properties:
+                purpose: { type: string, enum: [product-image, store-logo] }
+                contentType: { type: string, enum: [image/jpeg, image/png, image/webp] }
+                size: { type: integer, minimum: 1, maximum: 5242880 }
+      responses:
+        "201":
+          description: Upload link
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  key: { type: string }
+                  uploadUrl: { type: string, format: uri }
+                  method: { type: string, const: PUT }
+                  headers: { type: object, additionalProperties: { type: string } }
+                  url: { type: string, format: uri }
+                  expiresIn: { type: integer, examples: [300] }
+        "403": { description: "`vendor_not_approved` (product photos need an approved store)", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /vendor/products:
+    get:
+      tags: [Vendor]
+      summary: The vendor's own products with counts per status
+      parameters:
+        - { name: status, in: query, schema: { $ref: "#/components/schemas/ProductStatus" } }
+        - { name: q, in: query, schema: { type: string, maxLength: 100 }, description: Title contains (case-insensitive) }
+        - { $ref: "#/components/parameters/Page" }
+        - { $ref: "#/components/parameters/Limit" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: "#/components/schemas/PageInfo" }
+                  - type: object
+                    properties:
+                      items: { type: array, items: { $ref: "#/components/schemas/VendorProduct" } }
+                      counts: { type: object, additionalProperties: { type: integer } }
+    post:
+      tags: [Vendor]
+      summary: Create a product (approved stores)
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/ProductInput" } } } }
+      responses:
+        "201": { $ref: "#/components/responses/VendorProduct" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "409": { description: "`sku_taken`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /vendor/products/{id}:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [Vendor]
+      summary: One of the vendor's products
+      responses:
+        "200": { $ref: "#/components/responses/VendorProduct" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Vendor]
+      summary: Change a product (send only what changes; `images` replaces the whole list)
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/ProductInput" } } } }
+      responses:
+        "200": { $ref: "#/components/responses/VendorProduct" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Vendor]
+      summary: Delete a product that was never ordered (set it inactive otherwise)
+      responses:
+        "204": { description: Deleted }
+        "409": { description: "`product_has_orders`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /vendor/orders:
+    get:
+      tags: [Vendor]
+      summary: The store's paid parts of orders, with counts per status
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [placed, packed, shipped, delivered, cancelled] } }
+        - { $ref: "#/components/parameters/Page" }
+        - { $ref: "#/components/parameters/Limit" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: "#/components/schemas/PageInfo" }
+                  - type: object
+                    properties:
+                      items: { type: array, items: { $ref: "#/components/schemas/VendorPart" } }
+                      counts: { type: object, additionalProperties: { type: integer } }
+  /vendor/orders/{subId}/status:
+    post:
+      tags: [Vendor]
+      summary: Move a part one step (placed → packed → shipped → delivered); delivery releases the share
+      parameters: [{ $ref: "#/components/parameters/SubId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [packed, shipped, delivered] }
+                tracking:
+                  type: object
+                  description: Required for shipped
+                  properties:
+                    carrier: { type: string, minLength: 2, maxLength: 60 }
+                    number: { type: string, minLength: 4, maxLength: 60 }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object, properties: { part: { $ref: "#/components/schemas/VendorPart" } } } } } }
+        "409": { description: "`invalid_transition`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /vendor/earnings:
+    get:
+      tags: [Vendor]
+      summary: Sales, commission and net earnings in a date range, daily chart, escrow and each part's payout
+      parameters:
+        - { $ref: "#/components/parameters/From" }
+        - { $ref: "#/components/parameters/To" }
+        - { $ref: "#/components/parameters/Page" }
+        - { $ref: "#/components/parameters/Limit" }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/VendorEarnings" } } } }
+  /vendor/coupons:
+    get:
+      tags: [Vendor]
+      summary: The store's own coupons
+      parameters: [{ $ref: "#/components/parameters/Active" }, { $ref: "#/components/parameters/Page" }, { $ref: "#/components/parameters/Limit" }]
+      responses: { "200": { $ref: "#/components/responses/CouponPage" } }
+    post:
+      tags: [Vendor]
+      summary: Create a store coupon (applies to the store's items only; the store pays for it)
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CouponInput" } } } }
+      responses:
+        "201": { $ref: "#/components/responses/Coupon" }
+        "409": { description: "`code_taken`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /vendor/coupons/{id}:
+    patch:
+      tags: [Vendor]
+      summary: Change a store coupon (everything but the code)
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CouponInput" } } } }
+      responses: { "200": { $ref: "#/components/responses/Coupon" }, "404": { $ref: "#/components/responses/NotFound" } }
+
+  # ---------------------------------------------------------------- Admin
+  /admin/vendors:
+    get:
+      tags: [Admin]
+      summary: Store applications and stores (pending oldest first), with owners, product counts and counts per status
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [pending, approved, rejected, suspended] } }
+        - { $ref: "#/components/parameters/Page" }
+        - { $ref: "#/components/parameters/Limit" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: "#/components/schemas/PageInfo" }
+                  - type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          allOf:
+                            - { $ref: "#/components/schemas/OwnStore" }
+                            - type: object
+                              properties:
+                                owner: { type: object, properties: { id: { type: string }, name: { type: string }, email: { type: string } } }
+                                productCount: { type: integer }
+                      counts: { type: object, additionalProperties: { type: integer } }
+  /admin/vendors/{id}/{action}:
+    post:
+      tags: [Admin]
+      summary: Approve, reject, suspend or restore a store
+      description: "approve: pending → approved · reject: pending → rejected (reason) · suspend: approved → suspended (reason) · restore: suspended → approved"
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+        - { name: action, in: path, required: true, schema: { type: string, enum: [approve, reject, suspend, restore] } }
+      requestBody:
+        content: { application/json: { schema: { type: object, properties: { reason: { type: string, minLength: 5, maxLength: 500, description: Required for reject and suspend } } } } }
+      responses:
+        "200": { $ref: "#/components/responses/OwnStore" }
+        "409": { description: "`invalid_transition`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /admin/vendors/{id}/commission:
+    patch:
+      tags: [Admin]
+      summary: A store's own commission rate for new orders (null = the categories' rates)
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [commissionRateBp], properties: { commissionRateBp: { type: [integer, "null"], minimum: 0, maximum: 5000 } } } } }
+      responses: { "200": { $ref: "#/components/responses/OwnStore" }, "404": { $ref: "#/components/responses/NotFound" } }
+  /admin/categories:
+    get:
+      tags: [Admin]
+      summary: Every category, including hidden ones, with product counts
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string, format: uuid }
+                        name: { type: string }
+                        slug: { type: string }
+                        parentId: { type: [string, "null"], format: uuid }
+                        commissionRateBp: { type: [integer, "null"] }
+                        isActive: { type: boolean }
+                        sortOrder: { type: integer }
+                        productCount: { type: integer }
+    post:
+      tags: [Admin]
+      summary: Add a department or a sub-category (two levels)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, minLength: 2, maxLength: 60 }
+                parentId: { type: [string, "null"], format: uuid }
+                commissionRateBp: { type: [integer, "null"], minimum: 0, maximum: 5000 }
+                sortOrder: { type: integer, minimum: 0, maximum: 1000 }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { type: object, properties: { category: { $ref: "#/components/schemas/CategoryRef" } } } } } }
+  /admin/categories/{id}:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    patch:
+      tags: [Admin]
+      summary: Rename, hide/show, change the rate or order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                commissionRateBp: { type: [integer, "null"] }
+                sortOrder: { type: integer }
+                isActive: { type: boolean }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object, properties: { category: { $ref: "#/components/schemas/CategoryRef" } } } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Admin]
+      summary: Delete an empty category (hide one in use instead)
+      responses:
+        "204": { description: Deleted }
+        "409": { description: "`category_in_use`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /admin/orders:
+    get:
+      tags: [Admin]
+      summary: All orders, searchable by order number or customer email, filterable by refund status
+      parameters:
+        - { name: q, in: query, schema: { type: string, maxLength: 100 }, description: "An order number (SS-2026-000123, or its end) or a customer's email" }
+        - { name: refund, in: query, schema: { type: string, enum: [failed, pending, processed] } }
+        - { $ref: "#/components/parameters/Page" }
+        - { $ref: "#/components/parameters/Limit" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: "#/components/schemas/PageInfo" }
+                  - { type: object, properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminOrder" } } } }
+  /admin/sub-orders/{subId}/refund:
+    post:
+      tags: [Admin]
+      summary: Cancel and refund a part (e.g. lost in transit); same money rules as a customer cancellation
+      parameters: [{ $ref: "#/components/parameters/SubId" }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [reason], properties: { reason: { type: string, minLength: 5, maxLength: 300 } } } } }
+      responses:
+        "200":
+          description: Cancelled; refund requested
+          content: { application/json: { schema: { type: object, properties: { part: { type: object, properties: { id: { type: string }, status: { $ref: "#/components/schemas/SubOrderStatus" }, refund: { $ref: "#/components/schemas/Refund" } } } } } } }
+        "409": { description: "`invalid_transition`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /admin/sub-orders/{subId}/refund/retry:
+    post:
+      tags: [Admin]
+      summary: Try a refused refund again now (instead of waiting for the hourly retry)
+      parameters: [{ $ref: "#/components/parameters/SubId" }]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object, properties: { refund: { $ref: "#/components/schemas/Refund" } } } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: "`invalid_transition` (already sent)", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /admin/coupons:
+    get:
+      tags: [Admin]
+      summary: Platform coupons
+      parameters: [{ $ref: "#/components/parameters/Active" }, { $ref: "#/components/parameters/Page" }, { $ref: "#/components/parameters/Limit" }]
+      responses: { "200": { $ref: "#/components/responses/CouponPage" } }
+    post:
+      tags: [Admin]
+      summary: Create a platform coupon (the platform pays for the discount)
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CouponInput" } } } }
+      responses:
+        "201": { $ref: "#/components/responses/Coupon" }
+        "409": { description: "`code_taken`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /admin/coupons/{id}:
+    patch:
+      tags: [Admin]
+      summary: Change a platform coupon (everything but the code)
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CouponInput" } } } }
+      responses: { "200": { $ref: "#/components/responses/Coupon" }, "404": { $ref: "#/components/responses/NotFound" } }
+  /admin/reviews:
+    get:
+      tags: [Admin]
+      summary: Reviews to moderate, newest first
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [visible, hidden] } }
+        - { $ref: "#/components/parameters/Page" }
+        - { $ref: "#/components/parameters/Limit" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: "#/components/schemas/PageInfo" }
+                  - type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          allOf:
+                            - { $ref: "#/components/schemas/Review" }
+                            - type: object
+                              properties:
+                                status: { type: string, enum: [visible, hidden] }
+                                hiddenReason: { type: [string, "null"] }
+                                product: { type: object, properties: { id: { type: string }, title: { type: string } } }
+  /admin/reviews/{id}:
+    patch:
+      tags: [Admin]
+      summary: Hide or show a review; ratings are recalculated at once
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [visible, hidden] }
+                reason: { type: string, maxLength: 300 }
+      responses:
+        "200": { description: OK }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /admin/analytics:
+    get:
+      tags: [Admin]
+      summary: Sales, commission, refunds, daily chart, top stores and products, escrow (from the ledger)
+      parameters: [{ $ref: "#/components/parameters/From" }, { $ref: "#/components/parameters/To" }]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AdminAnalytics" } } } }
+
+  # ---------------------------------------------------------------- Webhooks
+  /webhooks/razorpay:
+    post:
+      tags: [Webhooks]
+      summary: Razorpay events (payment.captured, payment.failed, refund.processed, refund.failed)
+      description: |
+        Signed with the webhook secret (`X-Razorpay-Signature` over the raw body); each event id
+        (`X-Razorpay-Event-Id`) is handled once. A failure answers 500 so Razorpay delivers it again.
+      security: []
+      parameters:
+        - { name: X-Razorpay-Signature, in: header, required: true, schema: { type: string } }
+        - { name: X-Razorpay-Event-Id, in: header, schema: { type: string } }
+      requestBody: { required: true, content: { application/json: { schema: { type: object } } } }
+      responses:
+        "200":
+          description: Handled (or a repeat, acknowledged)
+          content: { application/json: { schema: { type: object, properties: { ok: { type: boolean }, result: { type: string }, duplicate: { type: boolean } } } } }
+        "400": { description: "`invalid_signature`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "503": { description: "`webhook_not_configured`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT, description: Access token from sign-in or /auth/refresh (15 minutes) }
+    refreshCookie: { type: apiKey, in: cookie, name: ss_refresh, description: httpOnly refresh cookie (path /api/v1/auth) }
+    guestCookie: { type: apiKey, in: cookie, name: ss_guest, description: Guest cart id }
+    csrfHeader: { type: apiKey, in: header, name: X-Requested-With, description: "Must be `ShopSphere` on cookie-authenticated writes" }
+
+  parameters:
+    Id: { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    SubId: { name: subId, in: path, required: true, schema: { type: string, format: uuid }, description: A store's part of an order (sub-order) }
+    Page: { name: page, in: query, schema: { type: integer, minimum: 1, maximum: 1000, default: 1 } }
+    Limit: { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 50, default: 20 } }
+    From: { name: from, in: query, schema: { type: string, format: date }, description: "First day, YYYY-MM-DD in Indian time (default: 29 days before `to`)" }
+    To: { name: to, in: query, schema: { type: string, format: date }, description: "Last day, inclusive (default: today in India); at most 366 days" }
+    Active: { name: active, in: query, schema: { type: string, enum: ["true", "false"] } }
+
+  responses:
+    ValidationError:
+      description: "`validation_error` with one message per field in details.fields"
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    Unauthorized:
+      description: "`unauthenticated`, `token_expired` or `session_ended`"
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    NotFound:
+      description: "`not_found`"
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    RateLimited:
+      description: "`rate_limited` (details.retryAfterSeconds; also the Retry-After header)"
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    SignedIn:
+      description: Signed in; sets the refresh cookie
+      headers: { Set-Cookie: { schema: { type: string }, description: "ss_refresh=…; HttpOnly; Path=/api/v1/auth" } }
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              user: { $ref: "#/components/schemas/User" }
+              accessToken: { type: string }
+              expiresIn: { type: integer, examples: [900] }
+    AddressList:
+      description: OK
+      content: { application/json: { schema: { type: object, properties: { items: { type: array, items: { $ref: "#/components/schemas/Address" } } } } } }
+    AddressSaved:
+      description: OK
+      content: { application/json: { schema: { type: object, properties: { address: { $ref: "#/components/schemas/Address" }, items: { type: array, items: { $ref: "#/components/schemas/Address" } } } } } }
+    ProductCardPage:
+      description: OK
+      content: { application/json: { schema: { $ref: "#/components/schemas/ProductCardPage" } } }
+    Cart:
+      description: The cart
+      content: { application/json: { schema: { type: object, properties: { cart: { $ref: "#/components/schemas/Cart" } } } } }
+    CustomerOrder:
+      description: The order after the change
+      content: { application/json: { schema: { type: object, properties: { order: { $ref: "#/components/schemas/CustomerOrder" } } } } }
+    OwnStore:
+      description: The store
+      content: { application/json: { schema: { type: object, properties: { store: { $ref: "#/components/schemas/OwnStore" } } } } }
+    VendorProduct:
+      description: The product
+      content: { application/json: { schema: { type: object, properties: { product: { $ref: "#/components/schemas/VendorProduct" } } } } }
+    Coupon:
+      description: The coupon
+      content: { application/json: { schema: { type: object, properties: { coupon: { $ref: "#/components/schemas/Coupon" } } } } }
+    CouponPage:
+      description: OK
+      content:
+        application/json:
+          schema:
+            allOf:
+              - { $ref: "#/components/schemas/PageInfo" }
+              - { type: object, properties: { items: { type: array, items: { $ref: "#/components/schemas/Coupon" } } } }
+
+  schemas:
+    Paise: { type: integer, description: Amount in paise (₹1 = 100) }
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string, examples: [validation_error, not_found, out_of_stock] }
+            message: { type: string }
+            details:
+              type: object
+              properties:
+                fields: { type: array, items: { type: object, properties: { field: { type: string }, message: { type: string } } } }
+              additionalProperties: true
+    PageInfo:
+      type: object
+      properties:
+        page: { type: integer }
+        limit: { type: integer }
+        total: { type: integer }
+    Health:
+      type: object
+      properties:
+        status: { type: string, enum: [ok, degraded] }
+        services: { type: object, additionalProperties: { type: string, enum: [up, down] }, examples: [{ postgres: up, redis: up, elasticsearch: up, s3: up }] }
+        version: { type: string, description: Commit deployed on the server }
+        time: { type: string, format: date-time }
+    Password: { type: string, minLength: 10, maxLength: 72, description: "At least 10 characters with letters and numbers" }
+    User:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        email: { type: string, format: email }
+        role: { type: string, enum: [customer, vendor, admin] }
+        status: { type: string, enum: [active, suspended] }
+        createdAt: { type: string, format: date-time }
+    AddressInput:
+      type: object
+      required: [name, phone, line1, city, state, pincode]
+      properties:
+        label: { type: string, maxLength: 30 }
+        name: { type: string, minLength: 2, maxLength: 80 }
+        phone: { type: string, description: "10-digit Indian mobile, with or without +91" }
+        line1: { type: string, minLength: 3, maxLength: 120 }
+        line2: { type: string, maxLength: 120 }
+        city: { type: string, minLength: 2, maxLength: 60 }
+        state: { type: string, minLength: 2, maxLength: 60 }
+        pincode: { type: string, pattern: "^[1-9][0-9]{5}$" }
+        isDefault: { type: boolean, default: false }
+    AddressPatch:
+      description: Any fields of AddressInput; an empty label or line2 clears it
+      allOf: [{ $ref: "#/components/schemas/AddressInput" }]
+    Address:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        label: { type: [string, "null"] }
+        name: { type: string }
+        phone: { type: string }
+        line1: { type: string }
+        line2: { type: [string, "null"] }
+        city: { type: string }
+        state: { type: string }
+        pincode: { type: string }
+        isDefault: { type: boolean }
+    CategoryRef:
+      type: object
+      properties: { id: { type: string, format: uuid }, name: { type: string }, slug: { type: string } }
+    CategoryNode:
+      allOf:
+        - { $ref: "#/components/schemas/CategoryRef" }
+        - { type: object, properties: { children: { type: array, items: { $ref: "#/components/schemas/CategoryNode" } } } }
+    ProductStatus: { type: string, enum: [draft, active, inactive] }
+    ProductCard:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        brand: { type: [string, "null"] }
+        image: { oneOf: [{ type: object, properties: { url: { type: string, format: uri }, alt: { type: string } } }, { type: "null" }] }
+        price: { $ref: "#/components/schemas/Paise" }
+        mrp: { $ref: "#/components/schemas/Paise" }
+        discountPercent: { type: integer }
+        inStock: { type: boolean }
+        ratingAvg: { type: number }
+        ratingCount: { type: integer }
+        vendor: { type: object, properties: { storeName: { type: string }, slug: { type: string } } }
+    ProductCardPage:
+      allOf:
+        - { $ref: "#/components/schemas/PageInfo" }
+        - { type: object, properties: { items: { type: array, items: { $ref: "#/components/schemas/ProductCard" } } } }
+    PublicProduct:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        slug: { type: string }
+        description: { type: string }
+        brand: { type: [string, "null"] }
+        category: { oneOf: [{ $ref: "#/components/schemas/CategoryRef" }, { type: "null" }] }
+        vendor: { type: object, properties: { id: { type: string }, storeName: { type: string }, slug: { type: string } } }
+        images: { type: array, items: { type: object, properties: { url: { type: string, format: uri }, alt: { type: string } } } }
+        price: { $ref: "#/components/schemas/Paise" }
+        mrp: { $ref: "#/components/schemas/Paise" }
+        discountPercent: { type: integer }
+        inStock: { type: boolean }
+        stock: { type: integer }
+        attributes: { type: object, additionalProperties: { type: string } }
+        ratingAvg: { type: number }
+        ratingCount: { type: integer }
+        createdAt: { type: string, format: date-time }
+    ProductInput:
+      type: object
+      description: For PATCH every field is optional
+      required: [title, categoryId, price, stock]
+      properties:
+        title: { type: string, minLength: 3, maxLength: 150 }
+        description: { type: string, maxLength: 5000 }
+        brand: { type: string, maxLength: 60 }
+        categoryId: { type: string, format: uuid }
+        price: { type: integer, minimum: 100, maximum: 1000000000, description: Paise }
+        mrp: { type: integer, minimum: 100, description: "Paise, ≥ price (defaults to the price)" }
+        stock: { type: integer, minimum: 0, maximum: 100000 }
+        sku: { type: string, maxLength: 40, pattern: "^[A-Za-z0-9._-]+$" }
+        attributes: { type: object, maxProperties: 20, additionalProperties: { type: string, maxLength: 200 } }
+        images:
+          type: array
+          maxItems: 6
+          description: Keys from POST /uploads/presign; the first is the cover; at least one to publish
+          items: { type: object, required: [key], properties: { key: { type: string }, alt: { type: string, maxLength: 150 } } }
+        status: { $ref: "#/components/schemas/ProductStatus" }
+    VendorProduct:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        slug: { type: string }
+        description: { type: string }
+        brand: { type: [string, "null"] }
+        categoryId: { type: string, format: uuid }
+        images: { type: array, items: { type: object, properties: { key: { type: string }, alt: { type: string }, url: { type: string, format: uri } } } }
+        price: { $ref: "#/components/schemas/Paise" }
+        mrp: { $ref: "#/components/schemas/Paise" }
+        stock: { type: integer }
+        sku: { type: [string, "null"] }
+        attributes: { type: object, additionalProperties: { type: string } }
+        status: { $ref: "#/components/schemas/ProductStatus" }
+        soldCount: { type: integer }
+        ratingAvg: { type: number }
+        ratingCount: { type: integer }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    SearchResult:
+      allOf:
+        - { $ref: "#/components/schemas/ProductCardPage" }
+        - type: object
+          properties:
+            matchedAllWords: { type: boolean, description: false = no product had every word, so results match all but one }
+            tookMs: { type: integer }
+            facets:
+              type: object
+              properties:
+                categories: { type: array, items: { type: object, properties: { slug: { type: string }, name: { type: string }, count: { type: integer } } } }
+                brands: { type: array, items: { type: object, properties: { value: { type: string }, count: { type: integer } } } }
+                vendors: { type: array, items: { type: object, properties: { slug: { type: string }, name: { type: string }, count: { type: integer } } } }
+                price: { type: array, items: { type: object, properties: { key: { type: string }, min: { type: integer }, max: { type: [integer, "null"] }, count: { type: integer } } } }
+                rating: { type: array, items: { type: object, properties: { min: { type: integer }, count: { type: integer } } } }
+                inStock: { type: integer }
+    PublicStore:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        storeName: { type: string }
+        slug: { type: string }
+        description: { type: string }
+        logoUrl: { type: [string, "null"], format: uri }
+        ratingAvg: { type: number }
+        ratingCount: { type: integer }
+        since: { type: string, format: date-time }
+    StoreInput:
+      type: object
+      required: [storeName, contactEmail, phone]
+      properties:
+        storeName: { type: string, minLength: 3, maxLength: 60 }
+        description: { type: string, maxLength: 1000 }
+        contactEmail: { type: string, format: email }
+        phone: { type: string, description: "10-digit Indian mobile" }
+        gstin: { type: string, description: "15-character GSTIN (optional)" }
+    OwnStore:
+      allOf:
+        - { $ref: "#/components/schemas/PublicStore" }
+        - type: object
+          properties:
+            logoKey: { type: [string, "null"] }
+            status: { type: string, enum: [pending, approved, rejected, suspended] }
+            rejectionReason: { type: [string, "null"] }
+            contactEmail: { type: string }
+            phone: { type: string }
+            gstin: { type: [string, "null"] }
+            commissionRateBp: { type: [integer, "null"] }
+            payout:
+              oneOf:
+                - { type: object, properties: { accountHolder: { type: string }, bankLast4: { type: string }, ifsc: { type: string }, provider: { type: string } } }
+                - { type: "null" }
+            submittedAt: { type: string, format: date-time }
+            approvedAt: { type: [string, "null"], format: date-time }
+    CartItem:
+      type: object
+      properties:
+        productId: { type: string, format: uuid }
+        title: { type: string }
+        image: { oneOf: [{ type: object, properties: { url: { type: string }, alt: { type: string } } }, { type: "null" }] }
+        price: { $ref: "#/components/schemas/Paise" }
+        mrp: { $ref: "#/components/schemas/Paise" }
+        qty: { type: integer }
+        stock: { type: integer }
+        lineTotal: { $ref: "#/components/schemas/Paise" }
+        problem: { type: [string, "null"], enum: [unavailable, out_of_stock, not_enough_stock, null] }
+    Cart:
+      type: object
+      properties:
+        groups:
+          type: array
+          description: One group per store (each becomes one part of the order)
+          items:
+            type: object
+            properties:
+              vendor: { type: object, properties: { id: { type: string }, storeName: { type: string }, slug: { type: string } } }
+              items: { type: array, items: { $ref: "#/components/schemas/CartItem" } }
+              subtotal: { $ref: "#/components/schemas/Paise" }
+        itemCount: { type: integer }
+        itemsTotal: { $ref: "#/components/schemas/Paise" }
+        problems: { type: integer }
+        canCheckout: { type: boolean }
+        coupon:
+          oneOf:
+            - { type: object, properties: { code: { type: string }, description: { type: [string, "null"] }, scope: { type: string, enum: [platform, vendor] }, storeName: { type: [string, "null"] } } }
+            - { type: "null" }
+        couponProblem: { type: [string, "null"] }
+        discount: { $ref: "#/components/schemas/Paise" }
+        grandTotal: { $ref: "#/components/schemas/Paise" }
+    PaymentStep:
+      type: object
+      description: What the browser needs to open the payment screen
+      properties:
+        provider: { type: string, enum: [mock, razorpay] }
+        providerOrderId: { type: string }
+        amount: { $ref: "#/components/schemas/Paise" }
+        currency: { type: string, const: INR }
+        expiresAt: { type: string, format: date-time }
+        keyId: { type: string, description: Razorpay test key id (razorpay only) }
+    OrderStatus: { type: string, enum: [pending_payment, confirmed, completed, cancelled, expired] }
+    SubOrderStatus: { type: string, enum: [awaiting_payment, placed, packed, shipped, delivered, cancelled] }
+    OrderLine:
+      type: object
+      properties:
+        productId: { type: string, format: uuid }
+        title: { type: string }
+        image: { type: [string, "null"], format: uri }
+        price: { $ref: "#/components/schemas/Paise" }
+        qty: { type: integer }
+        lineTotal: { $ref: "#/components/schemas/Paise" }
+    TimelineEntry:
+      type: object
+      properties:
+        status: { $ref: "#/components/schemas/SubOrderStatus" }
+        at: { type: string, format: date-time }
+        byRole: { type: string, enum: [customer, vendor, admin, system] }
+        note: { type: [string, "null"] }
+    ShippingAddress:
+      type: object
+      properties:
+        name: { type: string }
+        phone: { type: string }
+        line1: { type: string }
+        line2: { type: [string, "null"] }
+        city: { type: string }
+        state: { type: string }
+        pincode: { type: string }
+    Tracking:
+      oneOf:
+        - { type: object, properties: { carrier: { type: string }, number: { type: string } } }
+        - { type: "null" }
+    Refund:
+      oneOf:
+        - type: object
+          properties:
+            amount: { $ref: "#/components/schemas/Paise" }
+            status: { type: string, enum: [pending, processed, failed] }
+            lastError: { type: [string, "null"] }
+        - { type: "null" }
+    CustomerOrder:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        orderNumber: { type: string, examples: [SS-2026-000123] }
+        status: { $ref: "#/components/schemas/OrderStatus" }
+        createdAt: { type: string, format: date-time }
+        itemsTotal: { $ref: "#/components/schemas/Paise" }
+        discount: { $ref: "#/components/schemas/Paise" }
+        shipping: { $ref: "#/components/schemas/Paise" }
+        grandTotal: { $ref: "#/components/schemas/Paise" }
+        coupon: { oneOf: [{ type: object, properties: { code: { type: string }, scope: { type: string, enum: [platform, vendor] } } }, { type: "null" }] }
+        payment:
+          type: object
+          properties:
+            provider: { type: string, enum: [mock, razorpay] }
+            status: { type: string, enum: [created, paid, failed, refunded, partially_refunded] }
+            paidAt: { type: [string, "null"], format: date-time }
+            refundedAmount: { $ref: "#/components/schemas/Paise" }
+            providerOrderId: { type: [string, "null"], description: Set only while waiting for payment }
+        reservationExpiresAt: { type: [string, "null"], format: date-time }
+        shippingAddress: { $ref: "#/components/schemas/ShippingAddress" }
+        parts:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string, format: uuid }
+              vendor: { type: object, properties: { storeName: { type: string }, slug: { type: string } } }
+              items: { type: array, items: { $ref: "#/components/schemas/OrderLine" } }
+              itemsTotal: { $ref: "#/components/schemas/Paise" }
+              discountShare: { $ref: "#/components/schemas/Paise" }
+              payable: { $ref: "#/components/schemas/Paise" }
+              status: { $ref: "#/components/schemas/SubOrderStatus" }
+              tracking: { $ref: "#/components/schemas/Tracking" }
+              timeline: { type: array, items: { $ref: "#/components/schemas/TimelineEntry" } }
+              invoiceNumber: { type: [string, "null"] }
+              canReview: { type: boolean }
+              canCancel: { type: boolean }
+              cancelReason: { type: [string, "null"] }
+              refund: { $ref: "#/components/schemas/Refund" }
+    OrderSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        orderNumber: { type: string }
+        status: { $ref: "#/components/schemas/OrderStatus" }
+        createdAt: { type: string, format: date-time }
+        grandTotal: { $ref: "#/components/schemas/Paise" }
+        itemCount: { type: integer }
+        image: { type: [string, "null"] }
+        title: { type: string, examples: ["Galaxy Phone and 2 more"] }
+        parts: { type: array, items: { type: object, properties: { storeName: { type: string }, status: { $ref: "#/components/schemas/SubOrderStatus" } } } }
+    VendorPart:
+      type: object
+      description: A store's part of an order, as the store sees it (never shown to customers)
+      properties:
+        id: { type: string, format: uuid }
+        orderNumber: { type: string }
+        status: { $ref: "#/components/schemas/SubOrderStatus" }
+        placedAt: { type: [string, "null"], format: date-time }
+        items: { type: array, items: { $ref: "#/components/schemas/OrderLine" } }
+        itemsTotal: { $ref: "#/components/schemas/Paise" }
+        discountShare: { $ref: "#/components/schemas/Paise" }
+        discountBy: { type: [string, "null"], enum: [platform, vendor, null] }
+        payable: { $ref: "#/components/schemas/Paise" }
+        commission: { $ref: "#/components/schemas/Paise" }
+        vendorNet: { $ref: "#/components/schemas/Paise" }
+        invoiceNumber: { type: [string, "null"] }
+        customer: { type: object, properties: { name: { type: string } } }
+        shippingAddress: { oneOf: [{ $ref: "#/components/schemas/ShippingAddress" }, { type: "null" }] }
+        tracking: { $ref: "#/components/schemas/Tracking" }
+        timeline: { type: array, items: { $ref: "#/components/schemas/TimelineEntry" } }
+        nextStatus: { type: [string, "null"], enum: [packed, shipped, delivered, null] }
+        cancelReason: { type: [string, "null"] }
+        payout:
+          oneOf:
+            - type: object
+              properties:
+                status: { type: string, enum: [held, released, paid, reversed, failed] }
+                amount: { $ref: "#/components/schemas/Paise" }
+                releasedAt: { type: [string, "null"], format: date-time }
+                paidAt: { type: [string, "null"], format: date-time }
+                reference: { type: [string, "null"] }
+            - { type: "null" }
+    Escrow:
+      type: object
+      description: Where vendors' shares stand right now (paise), and how many parts
+      properties:
+        held: { $ref: "#/components/schemas/Paise" }
+        released: { $ref: "#/components/schemas/Paise" }
+        paid: { $ref: "#/components/schemas/Paise" }
+        reversed: { $ref: "#/components/schemas/Paise" }
+        counts: { type: object, additionalProperties: { type: integer } }
+    VendorEarnings:
+      type: object
+      properties:
+        range: { type: object, properties: { from: { type: string, format: date }, to: { type: string, format: date } } }
+        totals:
+          type: object
+          properties:
+            sales: { $ref: "#/components/schemas/Paise" }
+            couponDiscounts: { $ref: "#/components/schemas/Paise" }
+            commission: { $ref: "#/components/schemas/Paise" }
+            net: { $ref: "#/components/schemas/Paise" }
+            orders: { type: integer }
+        escrow: { $ref: "#/components/schemas/Escrow" }
+        daily: { type: array, items: { type: object, properties: { day: { type: string, format: date }, net: { type: integer }, orders: { type: integer } } } }
+        items: { type: array, items: { type: object } }
+        payoutAccount: { type: boolean, description: Released shares wait for a payout account }
+        page: { type: integer }
+        limit: { type: integer }
+        total: { type: integer }
+    AdminAnalytics:
+      type: object
+      properties:
+        range: { type: object, properties: { from: { type: string, format: date }, to: { type: string, format: date } } }
+        totals:
+          type: object
+          properties:
+            gmv: { $ref: "#/components/schemas/Paise" }
+            cancelledValue: { $ref: "#/components/schemas/Paise" }
+            collected: { $ref: "#/components/schemas/Paise" }
+            refunds: { $ref: "#/components/schemas/Paise" }
+            paidOrders: { type: integer }
+            averageOrderValue: { $ref: "#/components/schemas/Paise" }
+            commission: { $ref: "#/components/schemas/Paise" }
+            platformDiscounts: { $ref: "#/components/schemas/Paise" }
+            platformRevenue: { $ref: "#/components/schemas/Paise" }
+            payoutsSent: { $ref: "#/components/schemas/Paise" }
+        ordersByStatus: { type: object, additionalProperties: { type: integer } }
+        partsByStatus: { type: object, additionalProperties: { type: integer } }
+        daily: { type: array, items: { type: object, properties: { day: { type: string, format: date }, sales: { type: integer }, orders: { type: integer } } } }
+        topVendors: { type: array, items: { type: object, properties: { vendorId: { type: string }, storeName: { type: string }, slug: { type: string }, sales: { type: integer }, orders: { type: integer }, commission: { type: integer } } } }
+        topProducts: { type: array, items: { type: object, properties: { productId: { type: string }, title: { type: string }, storeName: { type: string }, units: { type: integer }, sales: { type: integer } } } }
+        escrow: { $ref: "#/components/schemas/Escrow" }
+        failingRefunds: { type: integer }
+        refundsOwed: { $ref: "#/components/schemas/Paise" }
+    AdminOrder:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        orderNumber: { type: string }
+        status: { $ref: "#/components/schemas/OrderStatus" }
+        createdAt: { type: string, format: date-time }
+        grandTotal: { $ref: "#/components/schemas/Paise" }
+        discount: { $ref: "#/components/schemas/Paise" }
+        coupon: { type: [string, "null"] }
+        payment: { type: object, properties: { provider: { type: string }, status: { type: string }, refundedAmount: { type: integer }, reference: { type: [string, "null"] } } }
+        customer: { type: object, properties: { name: { type: string }, email: { type: string } } }
+        parts:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string, format: uuid }
+              storeName: { type: string }
+              status: { $ref: "#/components/schemas/SubOrderStatus" }
+              payable: { $ref: "#/components/schemas/Paise" }
+              payout: { type: [string, "null"] }
+              refund: { $ref: "#/components/schemas/Refund" }
+              canRefund: { type: boolean }
+    Review:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        rating: { type: integer, minimum: 1, maximum: 5 }
+        title: { type: [string, "null"] }
+        body: { type: string }
+        authorName: { type: string }
+        verified: { type: boolean, description: Written by a customer who received the product }
+        createdAt: { type: string, format: date-time }
+    ReviewPage:
+      allOf:
+        - { $ref: "#/components/schemas/PageInfo" }
+        - type: object
+          properties:
+            items: { type: array, items: { $ref: "#/components/schemas/Review" } }
+            summary:
+              type: object
+              properties:
+                ratingAvg: { type: number }
+                ratingCount: { type: integer }
+                stars: { type: object, additionalProperties: { type: integer }, description: "Count per star, 5 to 1" }
+            viewer:
+              oneOf:
+                - type: object
+                  properties:
+                    canReview: { type: boolean }
+                    reason: { type: [string, "null"], enum: [already_reviewed, not_delivered, null] }
+                    mine: { oneOf: [{ $ref: "#/components/schemas/Review" }, { type: "null" }] }
+                - { type: "null" }
+    CouponInput:
+      type: object
+      description: For PATCH every field is optional and the code can't change
+      required: [code, type, value]
+      properties:
+        code: { type: string, pattern: "^[A-Z0-9]{4,20}$" }
+        type: { type: string, enum: [percent, flat] }
+        value: { type: integer, minimum: 1, description: "percent: basis points, 100–9000 (1–90%); flat: paise" }
+        maxDiscount: { type: [integer, "null"], description: Paise (percent coupons only) }
+        minOrder: { type: integer, minimum: 0, description: Paise }
+        startsAt: { type: [string, "null"], format: date-time }
+        endsAt: { type: [string, "null"], format: date-time }
+        usageLimit: { type: [integer, "null"], minimum: 1 }
+        perUserLimit: { type: integer, minimum: 1, maximum: 100, default: 1 }
+        isActive: { type: boolean, default: true }
+        description: { type: string, maxLength: 140 }
+    Coupon:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string }
+        scope: { type: string, enum: [platform, vendor] }
+        vendorId: { type: [string, "null"], format: uuid }
+        type: { type: string, enum: [percent, flat] }
+        value: { type: integer }
+        maxDiscount: { type: [integer, "null"] }
+        minOrder: { type: integer }
+        startsAt: { type: [string, "null"], format: date-time }
+        endsAt: { type: [string, "null"], format: date-time }
+        usageLimit: { type: [integer, "null"] }
+        perUserLimit: { type: integer }
+        usedCount: { type: integer }
+        isActive: { type: boolean }
+        description: { type: [string, "null"] }
+        createdAt: { type: string, format: date-time }

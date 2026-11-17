@@ -7,7 +7,7 @@ load-tested. All numbers below are from **17 Nov 2026**, on the PostgreSQL + Pri
 
 | Level | Tool | What it proves | Count | Result |
 |---|---|---|---|---|
-| Backend unit | Vitest | Pure rules: money splits, coupons, commission, order states, search queries, tokens, config | 94 tests, 11 files | ✅ all pass |
+| Backend unit | Vitest | Pure rules: money splits, coupons, commission, order states, search queries, tokens, config; the OpenAPI spec matching the routes | 97 tests, 12 files | ✅ all pass |
 | Backend integration | Vitest + Supertest against real PostgreSQL, Redis, Elasticsearch and S3Mock | Whole HTTP flows through the real app and databases | 102 tests, 9 files | ✅ all pass |
 | Frontend components | Vitest + Testing Library (jsdom) | Pages and forms behave as a user sees them | 62 tests, 8 files | ✅ all pass |
 | End to end | `scripts/smoke-test.sh` through Docker Compose + nginx | The built images, wired together, do a full sale | ~40 checks | ✅ passes |

@@ -29,6 +29,7 @@ Read the files in order, or jump to the topic you need. Topics without a link ar
 | [Product Requirements (PRD)](specs/01-prd.md) | Problem, goals, personas, user stories, functional and non-functional requirements |
 | [App flow](specs/02-app-flow.md) | Screen map, vendor onboarding, buying journey, sub-order lifecycle, access by role |
 | [Database schema](specs/03-database-schema.md) | Every table, column, index and money rule; what lives in Redis |
+| [OpenAPI spec](openapi.yaml) | Every endpoint (67 operations): parameters, request bodies, response schemas and errors (OpenAPI 3.1), checked against the code by a test |
 | [API list](specs/04-api-list.md) | Every endpoint with its role and the day it's built |
 | [MongoDB → PostgreSQL migration plan](specs/05-postgres-migration-plan.md) | How the data layer moved to PostgreSQL + Prisma when the brief changed (17 Nov) |
 
