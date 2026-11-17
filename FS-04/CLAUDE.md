@@ -10,6 +10,7 @@ Status: build complete, released as **v1.0.1**, live at **https://taskflow-fs04.
 - **Plain `v*` tags belong to FS-04.** `fs04-ci.yml` turns any `v*` tag into a "TaskFlow" GitHub Release. Never link to `releases/latest`; name the FS-04 tag (`releases/download/v1.0.1/…`).
 - **Docs:** one numbered file per topic in `docs/` with an index README and previous / index / next links on every page (never one long file). Update the affected docs and the test counts with every change; regenerate `docs/openapi.yaml` when the API changes.
 - **Every fix gets a regression test.** Commit messages use `type(scope): summary` (`fix(board): …`, `ci: …`, `docs(fs04): …`).
+- **Manual steps for the user are numbered, one action each**, saying where it happens (On your PC / In the browser: Render, Neon, GitHub, UptimeRobot) and what they should see afterwards; point out placeholders with an example value. Never ask them to paste secrets (connection strings, deploy hooks, keys) into the chat.
 
 ## Tech stack
 
@@ -115,7 +116,14 @@ curl -s https://taskflow-fs04.onrender.com/api/health/          # {"status": "ok
 bash scripts/smoke-test.sh --read-only https://taskflow-fs04.onrender.com
 ```
 
-Never run the full smoke test or create test data on the live site unless the user agrees; visitor data is purged after 7 days and the demo resets nightly (21:00 UTC).
+Never run the full smoke test or create test data on the live site unless the user agrees; visitor data is purged after 7 days and the demo resets nightly (21:00 UTC = 02:30 IST; confirmed working on the live site, Nov 2026).
+
+**Operating it (the user's routine):**
+- It runs unattended: UptimeRobot emails on downtime, GitHub emails on failed pipelines. The user checks the site about once a week and before demos; Neon usage (compute < 100 h/month, storage < 1 GB) on the same check.
+- UptimeRobot (account time zone **IST**) uses **HEAD** (GET is paid-only; HEAD counts as traffic for Render) with a 30 s timeout, from North America. A "down" then "up" email pair is **expected on every deploy or Render setting change**: the container needs ~2 min to start on 0.1 CPU.
+- Investigate only if an alert has no deploy or restart around it, or lasts over ~5 min: compare the alert time (IST) with Render → **Events** (also IST), then Render → **Logs**. Render's `Events` list deploys, restarts, out-of-memory kills and spin-downs.
+- A pipeline failure in `docker/setup-buildx-action` (or a cancelled sibling publish job) is a GitHub-side hiccup, not our code: the user clicks **Re-run failed jobs**; nothing is deployed when publishing fails, so the live site keeps the previous version.
+- Keep it running until the capstone submission has been reviewed, not only until the 20 Nov 2026 deadline.
 
 ## Gotchas
 
