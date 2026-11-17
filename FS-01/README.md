@@ -46,7 +46,7 @@ docker compose exec api node dist/scripts/seed-orders.js     # optional: 40 demo
 
 | Email | Role | What to try |
 |---|---|---|
-| `customer@shopsphere.test` | Customer | Fill a cart from two stores, check out, pay (Razorpay: UPI `success@razorpay`; or the mock screen), follow the order, cancel a part to see the refund |
+| `customer@shopsphere.test` | Customer | Fill a cart from two stores, check out, pay (Razorpay test mode: Netbanking → any bank → Success; or the mock screen), follow the order, cancel a part to see the refund |
 | `vendor@shopsphere.test` | Vendor | Vikram Electronics: add a payout account, then pack, ship and deliver paid orders under **Orders to ship** and watch the share go held → paid out |
 | `admin@shopsphere.test` | Admin | Analytics (after `seed-orders`); orders and refunds; commission rates; review the waiting application from Kavya Handicrafts |
 | `meera@`, `arjun@`, `sana@`, `rohan@shopsphere.test` | Vendor | The other four approved stores |
@@ -71,7 +71,8 @@ cd backend && npm install && npm run dev        # API on :4000 (another terminal
 cd frontend && npm install && npm run dev       # app on :5173, /api is proxied to :4000
 ```
 
-The backend's defaults already point at these local services.
+The backend's defaults point at these local services, except file storage: set `S3_ENDPOINT` and
+`S3_PUBLIC_ENDPOINT` to `http://localhost:9090` first. Full guide, settings, tests and common problems: [Setup](docs/14-setup.md).
 
 ## Tests
 

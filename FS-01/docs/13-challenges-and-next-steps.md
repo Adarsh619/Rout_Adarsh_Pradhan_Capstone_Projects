@@ -1,6 +1,6 @@
 # 13 · Challenges and next steps
 
-[← Testing and performance](12-testing-and-performance.md) · [Index](README.md) · Next: Setup (written on Day 10)
+[← Testing and performance](12-testing-and-performance.md) · [Index](README.md) · [Next: Setup →](14-setup.md)
 
 What was hard while building ShopSphere, how each problem was solved, what v1 deliberately leaves out, and what would
 come next.

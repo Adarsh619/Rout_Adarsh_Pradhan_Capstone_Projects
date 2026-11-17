@@ -39,20 +39,26 @@ Paying for an order goes through the API, Razorpay and the worker; see the [buyi
 ```
 FS-01/
 ├── backend/            Express API + worker (TypeScript)
+│   ├── prisma/             schema.prisma and migrations
 │   ├── src/
 │   │   ├── app.ts          builds the Express app from its dependencies (tests pass fakes)
 │   │   ├── index.ts        API entry: connects services, starts HTTP, graceful shutdown
 │   │   ├── worker.ts       worker entry: BullMQ consumers
 │   │   ├── config/env.ts   every setting, validated with Zod at start-up
 │   │   ├── lib/            PostgreSQL (Prisma), Redis, Elasticsearch, S3 clients, health checks, logger
-│   │   ├── middleware/     error handling (and, from Day 2, auth)
-│   │   └── routes/         HTTP routes (one module per area from Day 2)
+│   │   ├── middleware/     auth, CSRF, validation, errors
+│   │   ├── modules/        one folder per feature (routes, services, pure rules)
+│   │   └── scripts/        seeds and reindex
 │   └── tests/              unit tests; tests/integration needs the real services
 ├── frontend/           React app (Vite)
+├── deploy/             live server setup, auto-deploy, nightly reset
+├── perf/               k6 load test
+├── scripts/            smoke test
 ├── docs/               this documentation
-├── scripts/            smoke test (seed and reindex later)
 └── docker-compose.yml  the whole local stack
 ```
+
+The full tree is in [Setup](14-setup.md#8-where-things-are).
 
 ## Local vs live
 
