@@ -3,7 +3,7 @@ import { useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router";
 import { refundPart, retryRefund, useAdminOrders, type AdminOrder } from "../../api/analytics";
 import { ApiError } from "../../api/client";
-import { ORDER_STATUS_LABEL, PART_STATUS_LABEL, type OrderStatus, type PartStatus } from "../../api/orders";
+import { ORDER_STATUS_LABEL, PART_STATUS_LABEL, PAYMENT_STATUS_LABEL, type OrderStatus, type PartStatus } from "../../api/orders";
 import { LoadError, Loading, Pagination, StatusBadge } from "../../components/Catalog";
 import { FormError } from "../../components/Field";
 import { formatINR } from "../../lib/money";
@@ -148,7 +148,7 @@ export function AdminOrdersPage() {
                   </p>
                 </div>
                 <p className="text-sm text-slate-500">
-                  {o.customer.name} · {o.customer.email} · payment {o.payment.status}
+                  {o.customer.name} · {o.customer.email} · payment {PAYMENT_STATUS_LABEL[o.payment.status] ?? o.payment.status}
                   {o.payment.refundedAmount > 0 && `, ${formatINR(o.payment.refundedAmount)} refunded`}
                 </p>
                 <ul className="mt-2 divide-y divide-slate-100">

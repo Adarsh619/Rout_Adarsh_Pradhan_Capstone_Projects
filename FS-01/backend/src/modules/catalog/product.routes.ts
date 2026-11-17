@@ -11,6 +11,7 @@ import { loadOwnStore } from "../vendors/vendor-access.js";
 import type { Prisma } from "../../generated/prisma/client.js";
 import { isUniqueViolation, prisma } from "../../lib/db.js";
 import { inTransaction } from "../../lib/transaction.js";
+import { refreshVendorRating } from "../reviews/ratings.js";
 import type { VendorRow } from "../vendors/vendor.model.js";
 import { imageRows, MAX_IMAGES, PRODUCT_STATUSES, toPublicProduct, toVendorProduct, withImages, type ProductRow } from "./product.model.js";
 import { listStorefront, storefrontQuery } from "./storefront.js";
@@ -218,6 +219,8 @@ export function productRouter(ctx: RouteContext): Router {
       await tx.review.deleteMany({ where: { productId: product.id } });
       await tx.product.delete({ where: { id: product.id } });
     });
+    // The store's rating counted those reviews.
+    await refreshVendorRating(product.vendorId);
     void ctx.storage.deleteMany(product.images.map((img) => img.key));
     await invalidate(ctx.redis, cacheKeys.product(product.id));
     await ctx.searchSync.product(product.id);

@@ -121,6 +121,15 @@ export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
   expired: "Expired (not paid)",
 };
 
+// What the payment's status means, in words (shown to admins).
+export const PAYMENT_STATUS_LABEL: Record<string, string> = {
+  created: "not paid yet",
+  paid: "paid",
+  failed: "last attempt failed",
+  refunded: "refunded in full",
+  partially_refunded: "partly refunded",
+};
+
 export const PART_STATUS_LABEL: Record<PartStatus, string> = {
   awaiting_payment: "Waiting for payment",
   placed: "Order placed",
@@ -152,8 +161,23 @@ export const useMyOrders = (page: number) =>
     placeholderData: (previous) => previous,
   });
 
+// Invoices and refunds finish in the background a moment after the request: true while a paid part still has no
+// invoice, or a refund is still pending.
+export const waitingForBackgroundWork = (order: Pick<Order, "payment" | "parts">) =>
+  order.payment.paidAt !== null &&
+  order.parts.some((p) => (p.status !== "awaiting_payment" && !p.invoiceNumber) || p.refund?.status === "pending");
+
+const POLL_MS = 2_000;
+const POLL_TRIES = 30;
+
 export const useOrder = (id: string) =>
-  useQuery({ queryKey: orderKey(id), queryFn: () => api<{ order: Order; payment: PaymentStep | null }>(`/orders/${id}`) });
+  useQuery({
+    queryKey: orderKey(id),
+    queryFn: () => api<{ order: Order; payment: PaymentStep | null }>(`/orders/${id}`),
+    // Check again every 2 s until invoices appear and refunds settle (about a minute at most), so nobody has to reload.
+    refetchInterval: (query) =>
+      query.state.data && waitingForBackgroundWork(query.state.data.order) && query.state.dataUpdateCount < POLL_TRIES ? POLL_MS : false,
+  });
 
 export const cancelUnpaidOrder = (id: string) => api<{ order: Order }>(`/orders/${id}/cancel`, { method: "POST" });
 
@@ -196,11 +220,18 @@ export const PAYOUT_TEXT: Record<PayoutStatus, string> = {
   failed: "Payout failed, retrying",
 };
 
+// A delivered part's payout and a paid part's invoice are made in the background: true while one is still on its way.
+export const vendorPartsSettling = (parts: Pick<VendorPart, "payout" | "invoiceNumber">[]) =>
+  parts.some((p) => p.payout?.status === "released" || !p.invoiceNumber);
+
 export const useVendorOrders = (params: { status?: VendorPartStatus; page: number }) =>
   useQuery({
     queryKey: ["vendor", "orders", params],
     queryFn: () => api<Page<VendorPart> & { counts: Record<VendorPartStatus, number> }>(`/vendor/orders${queryString({ ...params, limit: 20 })}`),
     placeholderData: (previous) => previous,
+    // Check again every 2 s (about a minute at most) so "being paid out" turns into "paid" without a reload.
+    refetchInterval: (query) =>
+      query.state.data && vendorPartsSettling(query.state.data.items) && query.state.dataUpdateCount < POLL_TRIES ? POLL_MS : false,
   });
 
 export const advancePart = (id: string, status: "packed" | "shipped" | "delivered", tracking?: { carrier: string; number: string }) =>

@@ -63,6 +63,13 @@ describe("store application", () => {
     expect(second.body.store.slug).toBe("same-name-2");
   });
 
+  it("treats a double-clicked application as one", async () => {
+    const token = await newVendor();
+    const results = await Promise.all([apply(token), apply(token)]);
+    expect(results.map((r) => r.status).sort()).toEqual([200, 201]);
+    expect(new Set(results.map((r) => r.body.store.id)).size).toBe(1);
+  });
+
   it("is only for vendor accounts", async () => {
     const { accessToken } = await register(app, { email: "c@example.com" });
     const res = await apply(accessToken);

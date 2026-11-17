@@ -144,7 +144,7 @@ describe("checkout and payment", () => {
     });
     renderWithProviders(<App />, { route: "/checkout" });
     expect(await screen.findByRole("radio", { name: /Priya Sharma/ })).toBeChecked();
-    expect(screen.getByText(/Part 2 of 2/)).toBeInTheDocument();
+    expect(screen.getByText("Ships in 2 parts, one from each store.")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Place order and pay" }));
 
     expect(await screen.findByRole("heading", { name: "Order SS-2026-000001" })).toBeInTheDocument();
@@ -236,6 +236,40 @@ describe("checkout and payment", () => {
     expect(screen.getByText("Tracking: Delhivery DL123456")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Cancel this part" })).not.toBeInTheDocument();
   });
+
+  it("shows the invoice as soon as it's ready, without reloading the page", async () => {
+    const paid = (invoiceNumber: string | null) =>
+      jsonResponse({
+        order: order({
+          status: "confirmed",
+          payment: { provider: "mock", status: "paid", paidAt: "2026-11-06T10:01:00.000Z", refundedAmount: 0, providerOrderId: null },
+          parts: [part({ status: "placed", invoiceNumber })],
+        }),
+        payment: null,
+      });
+    let calls = 0;
+    mockApi({ ...signedIn(), "GET /api/v1/orders/o1": () => paid(++calls === 1 ? null : "INV-2026-000001") });
+    renderWithProviders(<App />, { route: "/orders/o1" });
+    expect(await screen.findByText("Invoice being prepared…")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Download invoice INV-2026-000001" })).toBeInTheDocument();
+  });
+
+  it("shows a refund as sent once it goes through, without reloading the page", async () => {
+    const withRefund = (status: "pending" | "processed") =>
+      jsonResponse({
+        order: order({
+          status: "cancelled",
+          payment: { provider: "mock", status: "refunded", paidAt: "2026-11-06T10:01:00.000Z", refundedAmount: 0, providerOrderId: null },
+          parts: [part({ status: "cancelled", invoiceNumber: "INV-2026-000001", refund: { amount: 2_000_000, status } })],
+        }),
+        payment: null,
+      });
+    let calls = 0;
+    mockApi({ ...signedIn(), "GET /api/v1/orders/o1": () => withRefund(++calls === 1 ? "pending" : "processed") });
+    renderWithProviders(<App />, { route: "/orders/o1" });
+    expect(await screen.findByText(/being processed/)).toBeInTheDocument();
+    expect(await screen.findByText(/sent to your original payment method/)).toBeInTheDocument();
+  });
 });
 
 describe("vendor orders", () => {
@@ -260,6 +294,25 @@ describe("vendor orders", () => {
     cancelReason: null,
     payout: { status: "held", amount: 1_700_000, releasedAt: null, paidAt: null, reference: null },
     ...overrides,
+  });
+
+  it("shows a delivered part as paid out once the payout goes through, without reloading", async () => {
+    const delivered = (status: "released" | "paid") =>
+      jsonResponse({
+        items: [vendorPart({ status: "delivered", nextStatus: null, invoiceNumber: "INV-2026-000001", payout: { status, amount: 1_700_000, releasedAt: "2026-11-06T12:00:00.000Z", paidAt: null, reference: null } })],
+        page: 1,
+        limit: 20,
+        total: 1,
+        counts: { placed: 0, packed: 0, shipped: 0, delivered: 1, cancelled: 0 },
+      });
+    let calls = 0;
+    mockApi({
+      ...signedIn(makeUser({ role: "vendor", name: "Vikram" })),
+      "GET /api/v1/vendor/orders": () => delivered(++calls === 1 ? "released" : "paid"),
+    });
+    renderWithProviders(<App />, { route: "/vendor/orders" });
+    expect(await screen.findByText("Released, being paid out")).toBeInTheDocument();
+    expect(await screen.findByText("Paid out (simulated)")).toBeInTheDocument();
   });
 
   it("shows what the vendor earns and needs tracking to ship", async () => {

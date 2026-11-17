@@ -1,3 +1,4 @@
+import { plural } from "../../lib/text";
 import { useState } from "react";
 import { Link } from "react-router";
 import { useVendorEarnings } from "../../api/analytics";
@@ -44,13 +45,13 @@ export function VendorEarningsPage() {
       )}
 
       <section aria-label="Where your money is now" className="grid gap-4 sm:grid-cols-3">
-        <StatTile label="Held until delivery" value={formatINR(data.escrow.held)} sub={`${data.escrow.counts.held} paid orders on their way`} />
+        <StatTile label="Held until delivery" value={formatINR(data.escrow.held)} sub={`${plural(data.escrow.counts.held, "paid order")} on their way`} />
         <StatTile label="Released, being paid out" value={formatINR(data.escrow.released)} sub="Delivered" />
-        <StatTile label="Paid out" value={formatINR(data.escrow.paid)} sub={`${data.escrow.counts.paid} orders, all time`} />
+        <StatTile label="Paid out" value={formatINR(data.escrow.paid)} sub={`${plural(data.escrow.counts.paid, "order")}, all time`} />
       </section>
 
       <section aria-label="This period" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatTile label="Sales" value={formatINR(t.sales)} sub={`${t.orders} paid orders`} />
+        <StatTile label="Sales" value={formatINR(t.sales)} sub={plural(t.orders, "paid order")} />
         <StatTile label="Your coupons" value={formatINR(t.couponDiscounts)} sub="Discounts your store paid for" />
         <StatTile label="Platform commission" value={formatINR(t.commission)} />
         <StatTile label="Your share" value={formatINR(t.net)} sub="Sales − your coupons − commission" />

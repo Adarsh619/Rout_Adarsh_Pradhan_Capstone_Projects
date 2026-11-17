@@ -4,6 +4,7 @@ import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { disconnectDb, prisma } from "../../src/lib/db.js";
 import type { Storage } from "../../src/lib/s3.js";
+import { refreshVendorRating } from "../../src/modules/reviews/ratings.js";
 import { approvedVendor, bearer, register, signInAdmin, startTestServices, storeApplication, uploadImage, wipe } from "./helpers.js";
 
 let app: Express;
@@ -192,6 +193,19 @@ describe("vendor products", () => {
     });
     expect((await api().delete(`/api/v1/vendor/products/${id}`).set(bearer(vendor.token))).status).toBe(204);
     expect(await prisma.product.count()).toBe(0);
+  });
+
+  it("recomputes the store's rating when a product with imported reviews is deleted", async () => {
+    const { vendor, categoryId } = await setup();
+    const { body } = await api().post("/api/v1/vendor/products").set(bearer(vendor.token)).send(product(categoryId));
+    await prisma.review.create({
+      data: { productId: body.product.id, vendorId: vendor.storeId, authorName: "Imported", rating: 2, body: "Seeded review", source: "seed" },
+    });
+    await refreshVendorRating(vendor.storeId);
+    expect(await prisma.vendor.findUnique({ where: { id: vendor.storeId } })).toMatchObject({ ratingAvg: 2, ratingCount: 1 });
+
+    expect((await api().delete(`/api/v1/vendor/products/${body.product.id}`).set(bearer(vendor.token))).status).toBe(204);
+    expect(await prisma.vendor.findUnique({ where: { id: vendor.storeId } })).toMatchObject({ ratingAvg: 0, ratingCount: 0 });
   });
 
   it("won't attach a photo from another store or one that was never uploaded", async () => {

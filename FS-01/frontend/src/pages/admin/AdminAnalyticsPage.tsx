@@ -1,3 +1,4 @@
+import { plural } from "../../lib/text";
 import { useState } from "react";
 import { Link } from "react-router";
 import { useAdminAnalytics } from "../../api/analytics";
@@ -72,7 +73,7 @@ export function AdminAnalyticsPage() {
         <StatTile label="Commission earned" value={formatINR(t.commission)} sub={t.platformDiscounts ? `${formatINR(t.platformDiscounts)} spent on coupons` : undefined} />
         <StatTile label="Platform revenue" value={formatINR(t.platformRevenue)} sub="Commission minus platform coupons" />
         <StatTile label="Paid orders" value={String(t.paidOrders)} sub={t.paidOrders ? `${formatINR(t.averageOrderValue)} average` : undefined} />
-        <StatTile label="Held for vendors" value={formatINR(data.escrow.held)} sub={`${data.escrow.counts.held} parts not yet delivered (now)`} />
+        <StatTile label="Held for vendors" value={formatINR(data.escrow.held)} sub={`${plural(data.escrow.counts.held, "part")} not yet delivered (now)`} />
         <StatTile label="Waiting to be paid out" value={formatINR(data.escrow.released)} sub="Delivered; payout pending (now)" />
         <StatTile label="Paid out to vendors" value={formatINR(t.payoutsSent)} sub="In this period (simulated payouts)" />
       </div>

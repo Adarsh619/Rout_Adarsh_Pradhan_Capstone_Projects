@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { cacheKeys, invalidate } from "../../lib/cache.js";
-import { prisma } from "../../lib/db.js";
+import { isUniqueViolation, prisma } from "../../lib/db.js";
 import { requireRole } from "../../middleware/auth.js";
 import { AppError } from "../../middleware/errors.js";
 import { idParam, pageQuery, parseQuery, patchSchema, validateBody } from "../../middleware/validate.js";
@@ -83,10 +83,20 @@ export function vendorRouter(ctx: RouteContext): Router {
     const existing = await prisma.vendor.findUnique({ where: { userId: req.auth!.id } });
 
     if (!existing) {
-      const vendor = await prisma.vendor.create({
-        data: { ...body, userId: req.auth!.id, slug: await uniqueSlug(body.storeName, slugTaken), status: "pending" },
-      });
-      res.status(201).json({ store: toOwnStore(vendor, ctx.storage) });
+      const vendor = await prisma.vendor
+        .create({ data: { ...body, userId: req.auth!.id, slug: await uniqueSlug(body.storeName, slugTaken), status: "pending" } })
+        .catch(async (err: unknown) => {
+          // A double-clicked "Apply": the other request created the store a moment ago. Answer with that one.
+          if (!isUniqueViolation(err)) throw err;
+          const created = await prisma.vendor.findUnique({ where: { userId: req.auth!.id } });
+          if (!created) throw err;
+          return null;
+        });
+      if (vendor) {
+        res.status(201).json({ store: toOwnStore(vendor, ctx.storage) });
+      } else {
+        res.json({ store: toOwnStore((await prisma.vendor.findUnique({ where: { userId: req.auth!.id } }))!, ctx.storage) });
+      }
       return;
     }
     if (existing.status !== "pending" && existing.status !== "rejected") {

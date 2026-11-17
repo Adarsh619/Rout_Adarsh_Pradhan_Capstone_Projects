@@ -169,10 +169,13 @@ export function CheckoutPage() {
           <h2 id="review" className="text-lg font-semibold">
             2. Review items
           </h2>
-          {cart.data.groups.map((g, i) => (
+          {cart.data.groups.length > 1 && (
+            <p className="text-sm text-slate-600">Ships in {cart.data.groups.length} parts, one from each store.</p>
+          )}
+          {cart.data.groups.map((g) => (
             <div key={g.vendor.id} className="rounded-xl border border-slate-200 bg-white p-4">
               <p className="mb-2 text-sm text-slate-600">
-                Part {i + 1} of {cart.data.groups.length} · sold and shipped by <span className="font-medium text-slate-900">{g.vendor.storeName}</span>
+                Sold and shipped by <span className="font-medium text-slate-900">{g.vendor.storeName}</span>
               </p>
               <ul className="space-y-1 text-sm">
                 {g.items.map((item) => (

@@ -8,8 +8,8 @@ load-tested. All numbers below are from **17 Nov 2026**, on the PostgreSQL + Pri
 | Level | Tool | What it proves | Count | Result |
 |---|---|---|---|---|
 | Backend unit | Vitest | Pure rules: money splits, coupons, commission, order states, search queries, tokens, config; the OpenAPI spec matching the routes | 97 tests, 12 files | ✅ all pass |
-| Backend integration | Vitest + Supertest against real PostgreSQL, Redis, Elasticsearch and S3Mock | Whole HTTP flows through the real app and databases | 102 tests, 9 files | ✅ all pass |
-| Frontend components | Vitest + Testing Library (jsdom) | Pages and forms behave as a user sees them | 62 tests, 8 files | ✅ all pass |
+| Backend integration | Vitest + Supertest against real PostgreSQL, Redis, Elasticsearch and S3Mock | Whole HTTP flows through the real app and databases | 104 tests, 9 files | ✅ all pass |
+| Frontend components | Vitest + Testing Library (jsdom) | Pages and forms behave as a user sees them | 65 tests, 8 files | ✅ all pass |
 | End to end | `scripts/smoke-test.sh` through Docker Compose + nginx | The built images, wired together, do a full sale | ~40 checks | ✅ passes |
 | Load | k6 against the live site | Speed and errors with 50 shoppers browsing at once | 5,403 requests | ✅ 0 errors, p95 110 ms |
 
@@ -121,6 +121,29 @@ processing is a few milliseconds. Results: [`perf/results-live.json`](../perf/re
 **Not measured:** a 20,000-product catalogue and browser-level (Playwright) tests were planned but dropped for time;
 the live catalogue has 214 products. Elasticsearch query times stay in the tens of milliseconds at that size
 ([Background jobs and search](08-background-jobs.md)).
+
+## Bug sweep (17 Nov)
+
+A final pass before submission, on the PostgreSQL build:
+
+1. **Bad input against the live API:** malformed and unknown ids, out-of-range pages and limits, injection-like
+   category and search strings, wrong types, missing CSRF header, invalid JSON, unsigned webhooks. Every one answered
+   a clean `400`/`401`/`403`/`404`; no `500`.
+2. **Every screen as customer, vendor and admin** (local copy, browser): search with a typo, a cart from two stores,
+   a coupon, checkout with a new address, test payment, cancelling one store's part, packing/shipping/delivering,
+   payout, earnings, analytics, order search, store applications, categories, reviews, coupons.
+3. **A review of the code paths the database switch touched.**
+
+| Found | Fix | Test |
+|---|---|---|
+| The order page kept saying "Invoice being prepared…" (and a refund "being processed") until reloaded, although both were done a second later | The page re-checks every 2 s while an invoice or refund is pending (about a minute at most) | 2 frontend tests |
+| The vendor's orders kept saying "Released, being paid out" after the payout was made | Same re-check while a payout or invoice is on its way | Frontend test |
+| Checkout called the parts "Part 1 of 2 / 2 of 2" in a different order from the order page | Checkout says "Ships in 2 parts, one from each store" without numbers | Frontend test updated |
+| A double-clicked "Apply for a store" answered `500` (second insert hit the one-store-per-account rule) | The second request answers with the store the first one created | Integration test (two applies at once) |
+| Deleting a product with imported reviews left the store's average rating stale | The store's rating is recomputed after the delete | Integration test |
+| "1 paid orders", and the raw value `partially_refunded` shown to admins | Plurals; payment statuses in words | — |
+
+After the fixes: 97 unit, 104 integration and 65 frontend tests pass, and the smoke test passes on rebuilt images.
 
 ## Running the tests
 

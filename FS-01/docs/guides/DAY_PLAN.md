@@ -102,7 +102,7 @@ Started **Tue 3 Nov 2026**. Days 4 and 7 each finished a day early, so the remai
 - [ ] 🛠 Finish docs 01–14 + `openapi.yaml`, README with setup instructions, root README row
 - [ ] 🛠 Test and coverage report, performance numbers in doc 12
 - [ ] 🛠 Presentation outline (10 min: problem, design, challenges, results, next steps) and reflection template
-- [ ] 🛠 Final bug sweep
+- [x] 🛠 Final bug sweep (17 Nov): live API fuzzing, every screen as each role, code review; 6 issues fixed with tests ([doc 12](../12-testing-and-performance.md#bug-sweep-17-nov))
 - [ ] 👤 Next morning: open the live link and check that it's fast, search works and the demo data was reset
 - [ ] 👤 Record the demo video
 - [ ] ✅ Every deliverable below is ticked
