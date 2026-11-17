@@ -118,7 +118,7 @@ sequence in the [API reference](06-api-reference.md#uploads).
 | No SVG | SVG can contain scripts; it's not an allowed type |
 | No precomputed checksum in links | The AWS SDK adds a checksum of an empty body to presigned links by default, which makes real S3 refuse the upload. The client adds checksums only where S3 requires them, and a unit test fails if a link contains one |
 | Cleaned up | Photos removed from a product, or of a deleted product, are deleted from S3 |
-| Bucket | Private. On the live site only `products/` and `stores/` will be publicly readable (bucket policy, Day 8); invoices stay private |
+| Bucket | Private. On the live site only `products/` and `stores/` are publicly readable (bucket policy); invoices stay private |
 
 ## Other protections
 

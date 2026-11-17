@@ -101,7 +101,8 @@ Started **Tue 3 Nov 2026**. Days 4 and 7 each finished a day early, so the remai
 - [x] 👤 Live on PostgreSQL (17 Nov): PR #1 merged, server redeployed itself, re-seeded, reset baseline saved, test purchase confirmed by the webhook, ledger balances
 - [x] 🛠 Finish docs 01–14 + `openapi.yaml` (checked against the routes by a test), README with setup instructions, root README row (17 Nov)
 - [x] 🛠 Test and coverage report, performance numbers in doc 12 (backend 93.5% lines, frontend 83%; k6 on live PostgreSQL: 0 errors, p95 110 ms)
-- [ ] 🛠 Presentation outline (10 min: problem, design, challenges, results, next steps) and reflection template
+- [x] 🛠 Presentation outline (10 min: problem, design, challenges, results, next steps): [PRESENTATION.md](PRESENTATION.md)
+- [ ] 🛠 Reflection template and demo video script
 - [x] 🛠 Final bug sweep (17 Nov): live API fuzzing, every screen as each role, code review; 6 issues fixed with tests ([doc 12](../12-testing-and-performance.md#bug-sweep-17-nov))
 - [ ] 👤 Next morning: open the live link and check that it's fast, search works and the demo data was reset
 - [ ] 👤 Record the demo video

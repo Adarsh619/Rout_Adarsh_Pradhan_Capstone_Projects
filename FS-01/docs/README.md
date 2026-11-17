@@ -38,6 +38,7 @@ Read the files in order, or jump to the topic you need.
 | File | Use |
 |---|---|
 | [10-day build tracker](guides/DAY_PLAN.md) | Day-by-day checklist |
+| [Presentation outline](guides/PRESENTATION.md) | The 10-minute final presentation: slides, timings, what to say, a 2-minute live demo, likely questions |
 | [Oracle server setup](guides/ORACLE_SERVER_SETUP.md) | Not used in the end (no capacity): the plan-A checklist for an Oracle Always Free ARM server. The live server is on AWS ([DevOps](11-devops.md)) |
 
 ## Other files

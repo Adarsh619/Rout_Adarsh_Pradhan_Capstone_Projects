@@ -28,19 +28,47 @@ ShopSphere builds all three sides, with real search, a real order lifecycle and 
 
 ## Scope against the brief
 
+Every step of the brief is built, tested and live at https://shopsphere-fs01.vercel.app.
+
 | Brief step | Where | Status |
 |---|---|---|
-| 1. Roles, database schema, API list | [Features and roles](02-features-and-roles.md), [Database schema](specs/03-database-schema.md), [API list](specs/04-api-list.md) | ✓ Day 1 |
-| 2. JWT authentication, role-based access | [Security](10-security.md) | ✓ Day 2 |
-| 3. Vendor onboarding, product CRUD, S3 images | Vendors and products modules | Day 3 |
-| 4. Elasticsearch search with filters and sorting | Search module | Day 4 |
-| 5. Cart, checkout, order lifecycle, Redis caching | Cart and orders modules | Day 5 |
-| 6. Razorpay split payments and commission | Payments module | Day 6 |
-| 7. Reviews, coupons, PDF invoices, admin analytics, separate deployment | Several modules, live hosting | Days 7–9 |
+| 1. Roles, database schema, API list | [Features and roles](02-features-and-roles.md), [Data model](05-data-model.md), [Database schema](specs/03-database-schema.md), [API reference](06-api-reference.md), [OpenAPI](openapi.yaml) | ✓ |
+| 2. JWT authentication, role-based access | [Security](10-security.md) | ✓ |
+| 3. Vendor onboarding, product CRUD, images to S3 | [API reference](06-api-reference.md#vendors-and-stores), [Design decisions](04-design-decisions.md#7-files-go-straight-between-the-browser-and-s3) | ✓ |
+| 4. Elasticsearch search with filters and sorting | [Background jobs and search](08-background-jobs.md) | ✓ |
+| 5. Cart, checkout, order lifecycle (placed, packed, shipped, delivered); Redis for cart and sessions | [API reference](06-api-reference.md#cart-guests-too), [Design decisions](04-design-decisions.md#8-redis-for-carts-sessions-cache-and-queues) | ✓ |
+| 6. Razorpay test mode, split payments and commission | [Payments, escrow and payouts](09-payments.md) | ✓ Razorpay test mode; own split ledger; simulated payouts |
+| 7. Reviews, coupons, PDF invoices, admin analytics; frontend and backend deployed separately | [API reference](06-api-reference.md), [DevOps](11-devops.md) | ✓ Vercel + AWS |
+| Tools: React, TypeScript, Node.js, Express, PostgreSQL, Prisma, Tailwind CSS, Docker | [Tech stack](#tech-stack) | ✓ all used |
 
-## What works today (Day 2)
+## What works
 
-- `docker compose up --build` starts PostgreSQL, Redis, Elasticsearch, the S3 mock, the API, the worker and the web app.
-- `GET /api/v1/health` checks all four backing services; the home page shows their status.
-- Sign-up (customer or vendor), sign-in, staying signed in across reloads, sign-out, name and password changes; each role lands on its own page and is kept out of the others.
-- CI runs lint, unit tests, integration tests against real services, and a Docker smoke test that signs up and signs in.
+- **Customers:** search with typos, filters and facets; a cart from several stores (as a guest too); coupons; one
+  checkout and one Razorpay payment for all stores; each store's part followed from placed to delivered; cancelling one
+  part refunds it; invoices; reviews after delivery.
+- **Vendors:** apply for a store, list products with photos, pack and ship their part of each order, see their share
+  held until delivery and then paid out, store coupons, earnings.
+- **Admins:** approve or suspend stores, categories and commission rates, platform coupons, orders and refunds, review
+  moderation, analytics from the ledger.
+- **Behind it:** background jobs for search, invoices, refunds, payouts and stock reservations; a ledger that always
+  balances; 266 automated tests plus an end-to-end smoke test in CI; a server that deploys each commit that passes CI
+  and resets the demo every night ([Testing and performance](12-testing-and-performance.md), [DevOps](11-devops.md)).
+
+## Data sources
+
+The brief needs no dataset; it suggests five optional sources of sample data. ShopSphere uses two of them:
+
+| Source | Used | How |
+|---|---|---|
+| [DummyJSON](https://dummyjson.com) | ✓ | 194 products with photos and their **582 reviews** (shown as imported, never as "verified purchase") |
+| [Fake Store API](https://fakestoreapi.com) | ✓ | 20 products (clothing, jewellery, electronics) |
+| Amazon Reviews 2023 metadata (McAuley Lab) | — | Planned for a 20,000-product load test; dropped for time and listed as a [next step](13-challenges-and-next-steps.md#next-steps) |
+| Flipkart Products (Kaggle) | — | Not needed: a manual download, and many of its photo links point at Flipkart's servers |
+| Olist Brazilian E-Commerce (Kaggle) | — | Not needed: real orders, but in reais and Portuguese, and imported orders would bypass ShopSphere's own checkout and ledger |
+
+- **A snapshot, not a live feed.** The 214 products are saved in [`backend/seed/catalog.json`](../backend/seed/catalog.json)
+  (refresh with `npm run seed:snapshot`), so seeding never depends on those sites being up. Prices are converted to
+  rupees; products are spread over 27 categories and 5 demo stores (plus one application waiting for approval).
+- **Photos are copied into our own S3 bucket**, not hot-linked, so the live demo never breaks if a source's CDN does.
+- **Order history is made by the app itself.** `seed-orders.js` places 40 orders from five demo buyers through the real
+  checkout, payment (mock), delivery, payout and cancellation code, so the dashboards and the ledger are consistent.
