@@ -3,6 +3,8 @@
 Full-stack projects built during my internship, based on real-world applications.
 Each project lives in its own folder with its own code, setup instructions and documentation.
 
+**Live demos:** [ShopSphere (FS-01)](https://shopsphere-fs01.vercel.app) · [TaskFlow (FS-04)](https://taskflow-fs04.onrender.com)
+
 ## Projects
 
 | ID | Project | Description | Tech stack | Docs |
@@ -22,15 +24,16 @@ Rout_Adarsh_Pradhan_Capstone_Projects/
 
 ## Running a project
 
-Every project is self-contained. Open its folder and follow its README. For example, FS-04:
+Every project is self-contained: open its folder and follow its README (Docker is all you need to run either one).
 
 ```bash
-cd FS-04
+cd FS-01                    # or FS-04
 cp .env.example .env        # Windows: copy .env.example .env
 docker compose up --build
 ```
 
-Then open http://localhost:3000.
+Then open http://localhost:3000. Both projects use port 3000 by default; to run them side by side, change one
+project's port as its README explains.
 
 ## Documentation standard
 
