@@ -2,24 +2,25 @@
 
 [← Frontend](07-frontend.md) · [Index](README.md) · [Next: Billing →](09-billing.md)
 
-Slow or external work runs on a Celery worker, with Redis as the queue, so API requests stay fast. Celery Beat triggers the scheduled jobs.
+Slow or external work runs on a BullMQ worker, with Redis as the queue, so API requests stay fast. The same worker registers and runs the schedule (BullMQ job schedulers), so there is no separate scheduler process as v1 had with Celery beat.
 
-## Tasks (`apps/integrations/tasks.py`)
+## Jobs (`src/modules/integrations/jobs.ts`, `src/modules/demo/jobs.ts`)
 
-| Task | Trigger | What it does |
+| Job | Trigger | What it does |
 |---|---|---|
-| `deliver_webhook` | After any audited change commits | Checks the receiver's host still resolves to a public address, signs and POSTs the event (no redirects followed), and logs every attempt with the status and response. Retries only what can succeed later (network errors, timeouts, failed DNS lookups, 5xx, 408, 429): up to 4 retries with backoff (30 s, 60 s, 120 s, 240 s). A 4xx or a blocked address isn't retried |
+| `deliver_webhook` | After any audited change commits | Checks the receiver's host still resolves to a public address, signs and POSTs the event (no redirects followed), and logs every attempt with the status and response. Retries only what can succeed later (network errors, timeouts, failed DNS lookups, 5xx, 408, 429): 5 attempts in all, with exponential backoff (30 s, 60 s, 120 s, 240 s). A 4xx or a blocked address isn't retried |
 | `send_notification_emails` | Assignment, comment, card move, due soon, delete request | Emails the people involved (console output in development) |
-| `send_due_date_reminders` | Daily, 07:00 UTC | Notifies assignees of open issues due tomorrow. Runs at most once a day per issue, so a Beat restart or a manual re-run doesn't email twice |
+| `send_due_date_reminders` | Daily, 07:00 UTC | Notifies assignees of open issues due tomorrow. Runs at most once a day per issue, so a worker restart or a manual re-run doesn't email twice |
 | `delete_old_webhook_deliveries` | Daily, 03:30 UTC | Deletes webhook delivery logs older than `WEBHOOK_DELIVERY_RETENTION_DAYS` (30) |
 | `generate_all_weekly_reports` | Mondays, 06:00 UTC | Queues one report per workspace |
 | `generate_weekly_report` | Weekly, or **Generate now** on the Reports page | Created, completed, open and overdue counts plus open issues per assignee; emailed to admins |
+| `reset_demo_data` | Daily, 21:00 UTC (02:30 IST) | Only with `DEMO_MODE=true`: rebuilds the demo companies, then removes visitors' data older than 7 days |
 
-Schedules live in `CELERY_BEAT_SCHEDULE` in `backend/config/settings.py`.
+The schedule (in UTC) is `SCHEDULE` in `src/jobs/registry.ts`, which also maps each job name to its function. Jobs carry only ids and re-read PostgreSQL, so a job that runs twice is harmless.
 
 ## Fired only after the change is saved
 
-Every change goes through one helper, `audit.services.record()`. It writes the audit entry and queues webhooks with `transaction.on_commit`. If the database change rolls back, no webhook is ever sent.
+Every change goes through one helper, `record()` in `src/modules/audit/service.ts`, inside `inTransaction()`. It writes the audit entry and the delivery rows in the same transaction, and queues the jobs with `unit.after()`, which runs only once the transaction has committed. If the database change rolls back, no webhook is ever sent.
 
 ## Webhook events
 
@@ -41,5 +42,6 @@ Each creates an in-app notification (the bell polls every 30 s) and queues an em
 
 ## Running locally
 
-- With Docker: the `worker` and `beat` containers start automatically.
-- Without Docker: `celery -A config worker -l info --pool=solo` (Windows needs `--pool=solo`) and `celery -A config beat -l info`, or set `CELERY_TASK_ALWAYS_EAGER=true` to run tasks inline.
+- With Docker: the `worker` container starts automatically.
+- Without Docker: `npm run dev:worker` in `backend/`, or set `JOBS_INLINE=true` to run jobs inside the API process (no worker or Redis needed).
+- On the live site the worker runs inside the API process (`EMBEDDED_WORKER=true`) to save memory.

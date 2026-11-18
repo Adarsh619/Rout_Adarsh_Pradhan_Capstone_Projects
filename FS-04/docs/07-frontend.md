@@ -2,21 +2,22 @@
 
 [← API reference](06-api.md) · [Index](README.md) · [Next: Background jobs →](08-background-jobs.md)
 
-A React single-page app built with Vite. The workspace slug in the URL (`/w/<slug>/...`) decides which tenant every API call targets.
+A React single-page app in strict TypeScript, built with Vite. The API's data shapes are typed in `types.ts`, so a misspelt field or a missing `null` check fails the build instead of the page. The workspace slug in the URL (`/w/<slug>/...`) decides which tenant every API call targets.
 
 ## Structure (`frontend/src`)
 
 | Part | Responsibility |
 |---|---|
-| `api.js` | Fetch wrapper: adds the JWT and `X-Workspace` header, refreshes expired tokens (one shared refresh for parallel requests), turns every failure into a readable `ApiError` |
-| `auth.jsx` | Login, register and logout state; reacts when the session expires |
-| `App.jsx` | Routes; `Private` sends signed-out visitors to the login page and back afterwards; unknown addresses show a 404 page |
-| `components/Layout.jsx` | Sidebar and notifications bell; loads the workspace, members and projects and shares them (with `reloadMembers`, `reloadProjects`, `reloadWorkspace`) through context |
-| `components/Modal.jsx` | Accessible dialog used by the issue form |
-| `components/Notifications.jsx` | Bell with unread count and a dropdown of recent notifications |
-| `workspace.jsx` | Workspace context and the `can(role, minimum)` helper that hides controls a role can't use |
-| `components/IssueModal.jsx` | Create and edit issues; comments, attachments and history tabs |
-| `boardLogic.js` | Pure functions for the board (allowed moves, card reordering), unit-tested |
+| `api.ts` | Fetch wrapper: adds the JWT and `X-Workspace` header, refreshes expired tokens (one shared refresh for parallel requests), turns every failure into a readable `ApiError` |
+| `auth.tsx` | Login, register and logout state; reacts when the session expires |
+| `App.tsx` | Routes; `Private` sends signed-out visitors to the login page and back afterwards; unknown addresses show a 404 page |
+| `components/Layout.tsx` | Sidebar and notifications bell; loads the workspace, members and projects and shares them (with `reloadMembers`, `reloadProjects`, `reloadWorkspace`) through context |
+| `components/Modal.tsx` | Accessible dialog used by the issue form |
+| `components/Notifications.tsx` | Bell with unread count and a dropdown of recent notifications |
+| `workspace.tsx` | Workspace context and the `can(role, minimum)` helper that hides controls a role can't use |
+| `components/IssueModal.tsx` | Create and edit issues; comments, attachments and history tabs |
+| `boardLogic.ts` | Pure functions for the board (allowed moves, card reordering), unit-tested |
+| `types.ts` | The API's data shapes (`Issue`, `BoardView`, `Workspace`, …), shared by every page |
 | `pages/` | One file per screen (below) |
 
 ## Pages
@@ -41,7 +42,7 @@ A React single-page app built with Vite. The workspace slug in the URL (`/w/<slu
 |---|---|
 | Opens a link (e.g. a board) while signed out | Login page, then **straight back to that link** after signing in |
 | Access token expires | Renewed silently; parallel requests share one refresh, because each refresh token works only once |
-| Session can't be renewed (refresh token expired or revoked) | Tokens cleared, login page with "Your session has expired. Please sign in again." (`api.js` fires `SESSION_EXPIRED`, `AuthProvider` listens) |
+| Session can't be renewed (refresh token expired or revoked) | Tokens cleared, login page with "Your session has expired. Please sign in again." (`api.ts` fires `SESSION_EXPIRED`, `AuthProvider` listens) |
 | Server unreachable or down at start-up | "Can't reach the server…" or "temporarily unavailable" with **Try again**; you stay signed in. Only a rejected token signs you out |
 | Proxy error page (nginx's HTML 502) | A readable message instead of a JSON parse crash |
 | Workspace you don't belong to | "Workspace not found" (404). Other failures show the message and **Try again** |
@@ -108,7 +109,7 @@ The sidebar hides links a role can't use, but anyone can type an address. `Requi
 | Workflows | Shows which projects use each workflow and offers **Delete workflow** only for unused, non-default ones. Columns can be reordered with ‹ ›. Deleting a status asks first. Adding the **first** transition warns that every other move becomes blocked. A move from a status to itself, or one that already exists, can't be added |
 | Webhooks | Deleting a webhook asks first (its delivery log goes too); load errors are shown |
 | Audit log | Filters, paging and CSV export (see [Security](10-security.md)) |
-| Reports | Each report shows the dates it covers and overdue work in red. **Generate now** waits for the Celery worker's report to appear (checks every 2 s, up to about 30 s) and says so if the worker seems stopped |
+| Reports | Each report shows the dates it covers and overdue work in red. **Generate now** waits for the background worker's report to appear (checks every 2 s, up to about 30 s) and says so if the worker seems stopped |
 | Billing | Plan, usage meters, Upgrade or Switch plan (see [Billing](09-billing.md)) |
 | Simulated checkout | Owner only; a link naming a plan that can't be bought falls back to Pro; **Cancel subscription** asks first; managing without a subscription, or checking out while subscribed, explains instead of failing |
 

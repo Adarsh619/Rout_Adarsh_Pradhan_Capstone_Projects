@@ -13,38 +13,45 @@ This was the brief's suggested option and the simplest to build, migrate and tes
 | Schema per tenant | Database-level separation | Migrations run N times; connection routing | |
 | Database per tenant | Strongest | Expensive; heavy operations | |
 
-## How isolation is enforced (`apps/tenancy`)
+## How isolation is enforced (`src/modules/tenancy`)
 
-1. Every tenant model inherits the abstract `TenantModel`, which adds an indexed `workspace` foreign key.
-2. The client sends `X-Workspace: <slug>` on each request. Only the header is read, never a URL parameter, so tenant names stay out of access logs and browser history. `TenantScopedMixin` looks up the caller's membership in that workspace and attaches `request.workspace` and `request.membership`.
+1. Every tenant table in `prisma/schema.prisma` has an indexed `workspaceId` foreign key to `workspaces`.
+2. The client sends `X-Workspace: <slug>` on each request. Only the header is read, never a URL parameter, so tenant names stay out of access logs and browser history. The `useWorkspace` middleware looks up the caller's membership in that workspace and attaches `req.workspace` and `req.membership`.
 3. Not a member → **404**, not 403, so outsiders cannot even confirm a workspace exists.
-4. `get_queryset()` always filters by `request.workspace`; `perform_create()` always stamps it.
-5. Foreign keys in request bodies (`TenantPKField`, `MemberPKField`) only accept objects and users from the same workspace, which blocks cross-tenant references by guessed IDs.
+4. Every query a route makes filters by `workspaceId: ws(req).id`, and every create sets it. A row of another workspace is simply not found.
+5. Ids in request bodies are looked up with `ref()` and `memberRef()` (`src/modules/tracker/common.ts`), which only accept rows and users of the same workspace and otherwise answer like a missing id. That blocks cross-tenant references by guessed IDs.
 6. Attachments are downloaded through a tenant-checked endpoint, never from a public file URL.
-7. Leaving is complete: when a membership ends (`remove_member()`), the person's open issues are unassigned, and notifications and emails only ever go to current members. Someone who has left hears nothing more about the workspace, even as the reporter of an old issue.
+7. Leaving is complete: when a membership ends (`removeMember()`), the person's open issues are unassigned, and notifications and emails only ever go to current members. Someone who has left hears nothing more about the workspace, even as the reporter of an old issue.
 
-```python
-# apps/tenancy/mixins.py (simplified)
-class TenantScopedMixin:
-    permission_classes = [WorkspaceRolePermission]
+```ts
+// src/modules/tenancy/context.ts (simplified)
+export async function useWorkspace(req, _res, next) {
+  const slug = req.get("x-workspace");
+  if (!slug) throw badRequest("X-Workspace header is required.");
+  const membership = await prisma.membership.findFirst({
+    where: { userId: req.user.id, workspace: { slug } },
+    include: { workspace: true },
+  });
+  if (!membership) throw notFound("Workspace not found."); // same answer whether it exists or not
+  req.workspace = membership.workspace;
+  req.membership = membership;
+  next();
+}
 
-    def get_queryset(self):
-        return super().get_queryset().filter(workspace=self.request.workspace)
-
-    def perform_create(self, serializer):
-        serializer.save(workspace=self.request.workspace)
+// a route (src/modules/tracker/projects.ts)
+const project = await prisma.project.findFirst({ where: { id: routeId(req), workspaceId: ws(req).id } });
 ```
 
 ## Proof
 
-`backend/tests/test_auth_and_tenancy.py::test_tenant_isolation` shows that a user in tenant B:
+`backend/tests/auth.test.ts` ("isolates tenants, even when ids are guessed") shows that a user in tenant B:
 
 - sees an empty list of tenant A's issues,
 - gets 404 reading tenant A's project by ID,
 - cannot create an issue in tenant A's project (400),
 - cannot impersonate tenant A by sending its slug in the header (404).
 
-`backend/tests/test_tenancy.py` covers the membership edges: a removed or departed member's open issues are unassigned and they get no further notifications, a slug in the URL is ignored, and only the owner can manage admins or hand over ownership.
+`backend/tests/rules.test.ts` checks that **every** tenant resource (13 URLs, plus a delete and an edit) answers 404 to another workspace. `backend/tests/tenancy.test.ts` covers the membership edges: a removed or departed member's open issues are unassigned and they get no further notifications, a slug in the URL is ignored, and only the owner can manage admins or hand over ownership.
 
 ## Membership lifecycle
 

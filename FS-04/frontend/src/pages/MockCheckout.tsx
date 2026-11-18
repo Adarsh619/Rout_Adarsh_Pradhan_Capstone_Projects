@@ -1,0 +1,98 @@
+import { useEffect, useState, type FormEvent, type MouseEvent } from "react";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { api, messageOf } from "../api";
+import { useWorkspace } from "../workspace";
+import type { BillingOverview } from "../types";
+
+const PAID_PLANS = ["pro", "business"] as const;
+type PaidPlan = (typeof PAID_PLANS)[number];
+const isPaid = (p: string | null): p is PaidPlan => (PAID_PLANS as readonly (string | null)[]).includes(p);
+
+/**
+ * Simulated Stripe Checkout / Customer Portal, used only when the server runs with STRIPE_MOCK=true.
+ * Confirming sends Stripe-signed webhook events through the real webhook handler on the server.
+ */
+export default function MockCheckout() {
+  const { slug } = useParams();
+  const [params] = useSearchParams();
+  const navigate = useNavigate();
+  const manage = params.get("manage") === "1";
+  const { role } = useWorkspace();
+  const [billing, setBilling] = useState<BillingOverview | null>(null);
+  // An edited or stale link (?plan=free, ?plan=xyz) falls back to Pro instead of crashing the page.
+  const requested = params.get("plan");
+  const [plan, setPlan] = useState<PaidPlan>(isPaid(requested) ? requested : "pro");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => { api.get<BillingOverview>("/billing/").then(setBilling).catch((e) => setError(messageOf(e))); }, []);
+
+  const submit = (body: { action: "subscribe" | "cancel"; plan?: PaidPlan }) => async (e?: FormEvent | MouseEvent) => {
+    e?.preventDefault();
+    if (body.action === "cancel" && !window.confirm("Cancel the subscription? The workspace goes back to the Free plan and its limits.")) return;
+    setBusy(true);
+    setError("");
+    // Tell the billing page what happened, so it doesn't say "payment received" after a cancellation.
+    const result = body.action === "cancel" ? "canceled" : manage ? "changed" : "success";
+    try {
+      await api.post("/billing/mock/complete/", body);
+      navigate(`/w/${slug}/billing?checkout=${result}`);
+    } catch (err) { setError(messageOf(err)); setBusy(false); }
+  };
+
+  if (!billing) return <p className="muted">{error || "Loading…"}</p>;
+  const back = <Link to={`/w/${slug}/billing`}>Back to billing</Link>;
+  if (billing.mode !== "mock") return <p>Simulated checkout is only available in Stripe mock mode. {back}</p>;
+  if (role !== "owner") return <p>Only the workspace owner can change the plan. {back}</p>;
+  if (manage && !billing.has_subscription) return <p>This workspace has no subscription to manage. {back}</p>;
+  if (!manage && billing.has_subscription) return <p>This workspace already has a subscription; change plans with Manage subscription. {back}</p>;
+  const p = billing.plans[plan];
+
+  return (
+    <div className="checkout">
+      <div className="mock-banner">SIMULATED STRIPE CHECKOUT · stripe-mock · no real payment</div>
+      <div className="checkout-grid">
+        <div className="panel stack">
+          <Link to={`/w/${slug}/billing`} className="small">← Back to billing</Link>
+          {manage ? (
+            <>
+              <h2>Manage subscription</h2>
+              <p>Current plan: <strong>{billing.plans[billing.plan].name}</strong> ({billing.status})</p>
+              <label>Change plan
+                <select value={plan} onChange={(e) => setPlan(e.target.value as PaidPlan)}>
+                  <option value="pro">Pro · $10/month</option>
+                  <option value="business">Business · $25/month</option>
+                </select>
+              </label>
+              <button className="primary" disabled={busy || plan === billing.plan} onClick={submit({ action: "subscribe", plan })}>Update plan</button>
+              <button className="danger" disabled={busy} onClick={submit({ action: "cancel" })}>Cancel subscription</button>
+            </>
+          ) : (
+            <>
+              <div className="muted small">Subscribe to</div>
+              <h2>TaskFlow {p.name}</h2>
+              <div className="price">${p.price_usd}<span className="muted small"> per month</span></div>
+              <ul className="small">{Object.entries(p.limits).map(([k, v]) => <li key={k}>{v ?? "Unlimited"} {k}</li>)}</ul>
+            </>
+          )}
+        </div>
+        {!manage && (
+          <form className="panel stack" onSubmit={submit({ action: "subscribe", plan })}>
+            <h3>Pay with card</h3>
+            <label>Email<input value="test@example.com" disabled /></label>
+            <label>Card information<input value="4242 4242 4242 4242" disabled /></label>
+            <div className="grid-2">
+              <label>Expiry<input value="12 / 34" disabled /></label>
+              <label>CVC<input value="123" disabled /></label>
+            </div>
+            <p className="muted small">Test details are pre-filled and nothing is charged. Confirming makes the server send Stripe-signed
+              <code> checkout.session.completed</code> and <code>customer.subscription.created</code> events to its webhook.</p>
+            {error && <div className="error">{error}</div>}
+            <button className="primary" disabled={busy}>{busy ? "Processing…" : `Subscribe · $${p.price_usd}/month`}</button>
+          </form>
+        )}
+        {manage && error && <div className="error">{error}</div>}
+      </div>
+    </div>
+  );
+}

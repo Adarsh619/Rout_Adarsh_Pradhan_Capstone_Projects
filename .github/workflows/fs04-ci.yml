@@ -42,37 +42,37 @@ jobs:
         image: stripe/stripe-mock:v0.206.0  # same version as docker-compose.yml
         ports: ["12111:12111"]
     env:
-      DATABASE_URL: postgres://taskflow:taskflow@localhost:5432/taskflow
-      REDIS_URL: redis://localhost:6379/0
-      DJANGO_SECRET_KEY: ci-secret
-      STRIPE_MOCK_URL: http://localhost:12111
+      # The tests create and migrate their own database (taskflow_test) next to this one.
+      DATABASE_URL: postgresql://taskflow:taskflow@localhost:5432/taskflow
+      STRIPE_API_BASE: http://localhost:12111
     defaults:
       run:
         working-directory: FS-04/backend
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-node@v4
         with:
-          python-version: "3.12"
-          cache: pip
-          cache-dependency-path: FS-04/backend/requirements*.txt
-      - run: pip install -r requirements-dev.txt
+          node-version: 24
+          cache: npm
+          cache-dependency-path: FS-04/backend/package-lock.json
+      # Also generates the typed Prisma client (postinstall).
+      - run: npm ci
       - name: Lint
-        run: ruff check .
-      - name: Check migrations are committed
-        run: python manage.py makemigrations --check --dry-run
+        run: npm run lint
+      - name: Type-check
+        run: npm run typecheck
       - name: Tests (fails if backend coverage drops below 90%)
-        run: pytest --cov-report=xml --junitxml=test-results.xml --cov-fail-under=90
+        run: npx vitest run --coverage --reporter=default --reporter=junit --outputFile.junit=test-results.xml
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: backend-test-results
           path: |
             FS-04/backend/test-results.xml
-            FS-04/backend/coverage.xml
+            FS-04/backend/coverage/cobertura-coverage.xml
 
   frontend:
-    name: Frontend · lint + tests + build
+    name: Frontend · lint + type-check + tests + build
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
@@ -82,7 +82,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
           cache-dependency-path: FS-04/frontend/package-lock.json
       - run: npm ci
@@ -106,7 +106,7 @@ jobs:
         run: |
           cp .env.example .env
           docker compose up -d --build --wait --wait-timeout 300
-      - name: Check the app, API, proxy, admin and a sign-up
+      - name: Check the app, API, proxy and a full user flow
         run: bash scripts/smoke-test.sh http://localhost:3000
       - name: Show logs if anything failed
         if: failure()
@@ -183,7 +183,7 @@ jobs:
           echo "Running release images tagged $TASKFLOW_TAG"
           docker compose -f docker-compose.release.yml pull
           docker compose -f docker-compose.release.yml up -d --wait --wait-timeout 300
-      - name: Check the app, API, proxy, admin and a sign-up
+      - name: Check the app, API, proxy and a full user flow
         run: bash scripts/smoke-test.sh http://localhost:3000
       - name: Show logs if anything failed
         if: failure()
@@ -220,7 +220,7 @@ jobs:
           1. Put \`docker-compose.release.yml\` and \`taskflow.env.example\` (below) in one folder and rename \`taskflow.env.example\` to \`.env\`.
           2. In \`.env\`, set \`TASKFLOW_TAG=${VERSION}\`. If port 3000 is already in use, also set \`FRONTEND_PORT=3002\`.
           3. In that folder (PowerShell, Terminal or any shell): \`docker compose -f docker-compose.release.yml up -d --wait\`
-          4. Demo data: \`docker compose -f docker-compose.release.yml exec backend python manage.py seed_demo\`
+          4. Demo data: \`docker compose -f docker-compose.release.yml exec backend node dist/scripts/seed-demo.js\`
           5. Open http://localhost:3000 (or your \`FRONTEND_PORT\`) and sign in as \`owner@acme.test\` / \`demo12345\`.
 
           Full Windows and macOS/Linux steps: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/tree/${GITHUB_REF_NAME}/FS-04#run-the-released-version-no-build
@@ -272,7 +272,7 @@ jobs:
           LIVE_URL: ${{ vars.LIVE_URL }}
         run: |
           for i in $(seq 1 100); do
-            version=$(curl -fsS "$LIVE_URL/api/health/" 2>/dev/null | python3 -c "import json,sys; print(json.load(sys.stdin).get('version',''))" 2>/dev/null || true)
+            version=$(curl -fsS "$LIVE_URL/api/health/" 2>/dev/null | node -e 'let s="";process.stdin.on("data",(d)=>(s+=d)).on("end",()=>console.log(JSON.parse(s).version||""))' 2>/dev/null || true)
             if [ "$version" = "$GITHUB_SHA" ]; then echo "Live site runs $GITHUB_SHA"; exit 0; fi
             echo "waiting ($i): live version is '${version:-unreachable}'"
             sleep 15
