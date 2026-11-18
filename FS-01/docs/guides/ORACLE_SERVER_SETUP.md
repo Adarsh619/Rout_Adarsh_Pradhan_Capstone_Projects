@@ -2,6 +2,12 @@
 
 [Index](../README.md) · [10-day build tracker](DAY_PLAN.md)
 
+> **Not used: kept as a record of plan A.** Oracle's Always Free ARM capacity in Hyderabad was full every day from
+> 2 to 7 Nov 2026, so the server was never created. The live backend runs on an **AWS EC2 t4g.small in Mumbai** with
+> the same Docker setup: see [DevOps](../11-devops.md), [design decision 10](../04-design-decisions.md#10-separate-frontend-and-backend-hosting-always-on)
+> and [Challenges](../13-challenges-and-next-steps.md#7-no-free-server-with-room-for-elasticsearch). Nothing on this
+> page needs doing.
+
 This creates ShopSphere's **own** Always Free ARM server in Oracle Cloud. Later (Day 9) it will run the API, worker,
 Redis, Elasticsearch and Caddy (HTTPS). It is **separate from every other project**: its own compartment, its own
 network, its own SSH key and its own server.
