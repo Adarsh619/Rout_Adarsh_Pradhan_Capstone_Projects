@@ -1,9 +1,9 @@
 # Runs a PUBLISHED release: the images GitHub Actions tested and pushed to GitHub Container Registry.
 # Nothing is built, so you only need this file and a .env (copy of .env.example) in one folder:
 #   docker compose -f docker-compose.release.yml up -d
-#   docker compose -f docker-compose.release.yml exec backend python manage.py seed_demo   # optional demo data
+#   docker compose -f docker-compose.release.yml exec backend node dist/scripts/seed-demo.js   # optional demo data
 # Settings go in .env, which works the same on Windows, macOS and Linux:
-#   TASKFLOW_TAG   which version: latest (default), a release such as 1.0.0, or sha-<commit>
+#   TASKFLOW_TAG   which version: latest (default), a release such as 2.0.0, or sha-<commit>
 #   FRONTEND_PORT  the app's port (default 3000); change it if something else already uses 3000
 # Mirrors docker-compose.yml except that the two app images are pulled instead of built.
 # Its own project name keeps its containers and database apart from a source-built stack on the same machine.
@@ -56,26 +56,18 @@ services:
     <<: *backend
     environment:
       <<: *backend-env
-      RUN_MIGRATIONS: "1"
       TRUSTED_PROXY_COUNT: "1"  # the frontend's nginx; see docs/10-security.md
     ports:
       - "127.0.0.1:8000:8000"
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health/')"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8000/api/health/').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
       interval: 10s
       start_period: 30s
       retries: 10
 
   worker:
     <<: *backend
-    command: celery -A config worker -l info --concurrency 2
-    depends_on:
-      backend:
-        condition: service_healthy
-
-  beat:
-    <<: *backend
-    command: celery -A config beat -l info --schedule /tmp/celerybeat-schedule
+    command: node dist/worker.js
     depends_on:
       backend:
         condition: service_healthy

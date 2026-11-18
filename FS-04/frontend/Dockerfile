@@ -1,5 +1,5 @@
-# Build the React app, then serve it with nginx (which also proxies /api to Django).
-FROM node:22-alpine AS build
+# Build the React app, then serve it with nginx (which also proxies /api to the Node.js API).
+FROM node:24-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci

@@ -1,0 +1,451 @@
+// TaskFlow's database (PostgreSQL 16).
+//
+// Tenant isolation: one shared schema; every tenant-owned table has `workspaceId` (indexed), and the API only
+// queries through the current workspace (src/modules/tenancy). Ids are integers, as the API has always exposed them.
+// Two rules Prisma can't express live in the first migration as raw SQL: one default workflow per workspace and one
+// active sprint per project (partial unique indexes), plus the sprint date check.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "esm"
+  runtime      = "nodejs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ── People and workspaces ────────────────────────────────────────────────────────────────────────────────────
+
+model User {
+  id         Int      @id @default(autoincrement())
+  email      String   @unique // stored lower-case
+  password   String // bcrypt hash
+  fullName   String   @default("")
+  isStaff    Boolean  @default(false)
+  dateJoined DateTime @default(now())
+
+  memberships     Membership[]
+  ownedWorkspaces Workspace[]    @relation("WorkspaceOwner")
+  refreshTokens   RefreshToken[]
+  assigned        Issue[]        @relation("IssueAssignee")
+  reported        Issue[]        @relation("IssueReporter")
+  ledProjects     Project[]      @relation("ProjectLead")
+  comments        Comment[]
+  attachments     Attachment[]
+  notifications   Notification[] @relation("NotificationUser")
+  actedNotes      Notification[] @relation("NotificationActor")
+  auditEntries    AuditLog[]
+
+  @@map("users")
+}
+
+// One row per refresh token issued; rotation and logout set revokedAt (the blacklist).
+model RefreshToken {
+  id        Int       @id @default(autoincrement())
+  jti       String    @unique
+  userId    Int
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+  expiresAt DateTime
+  revokedAt DateTime?
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+enum Role {
+  owner
+  admin
+  member
+  viewer
+}
+
+model Workspace {
+  id        Int      @id @default(autoincrement())
+  name      String
+  slug      String   @unique
+  ownerId   Int
+  owner     User     @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now())
+
+  memberships   Membership[]
+  subscription  Subscription?
+  workflows     Workflow[]
+  statuses      WorkflowStatus[]
+  transitions   WorkflowTransition[]
+  projects      Project[]
+  boards        Board[]
+  sprints       Sprint[]
+  issues        Issue[]
+  comments      Comment[]
+  attachments   Attachment[]
+  auditLogs     AuditLog[]
+  webhooks      Webhook[]
+  deliveries    WebhookDelivery[]
+  notifications Notification[]
+  reports       Report[]
+
+  @@map("workspaces")
+}
+
+model Membership {
+  id          Int       @id @default(autoincrement())
+  workspaceId Int
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId      Int
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role        Role      @default(member)
+  joinedAt    DateTime  @default(now())
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
+  @@map("memberships")
+}
+
+// ── Workflows ────────────────────────────────────────────────────────────────────────────────────────────────
+
+enum StatusCategory {
+  todo
+  in_progress
+  done
+}
+
+model Workflow {
+  id          Int       @id @default(autoincrement())
+  workspaceId Int
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name        String
+  isDefault   Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+
+  statuses    WorkflowStatus[]
+  transitions WorkflowTransition[]
+  projects    Project[]
+
+  @@index([workspaceId])
+  @@map("workflows")
+}
+
+model WorkflowStatus {
+  id          Int            @id @default(autoincrement())
+  workspaceId Int
+  workspace   Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workflowId  Int
+  workflow    Workflow       @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  name        String
+  category    StatusCategory @default(todo)
+  color       String         @default("#64748b")
+  order       Int            @default(0)
+
+  issues   Issue[]
+  fromRule WorkflowTransition[] @relation("TransitionFrom")
+  toRule   WorkflowTransition[] @relation("TransitionTo")
+
+  @@unique([workflowId, name])
+  @@index([workspaceId])
+  @@map("workflow_statuses")
+}
+
+model WorkflowTransition {
+  id           Int            @id @default(autoincrement())
+  workspaceId  Int
+  workspace    Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workflowId   Int
+  workflow     Workflow       @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  fromStatusId Int
+  fromStatus   WorkflowStatus @relation("TransitionFrom", fields: [fromStatusId], references: [id], onDelete: Cascade)
+  toStatusId   Int
+  toStatus     WorkflowStatus @relation("TransitionTo", fields: [toStatusId], references: [id], onDelete: Cascade)
+
+  @@unique([workflowId, fromStatusId, toStatusId])
+  @@index([workspaceId])
+  @@map("workflow_transitions")
+}
+
+// ── Projects, boards, sprints ───────────────────────────────────────────────────────────────────────────────
+
+model Project {
+  id           Int       @id @default(autoincrement())
+  workspaceId  Int
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  key          String
+  name         String
+  description  String    @default("")
+  workflowId   Int
+  workflow     Workflow  @relation(fields: [workflowId], references: [id], onDelete: Restrict)
+  leadId       Int?
+  lead         User?     @relation("ProjectLead", fields: [leadId], references: [id], onDelete: SetNull)
+  issueCounter Int       @default(0)
+  createdAt    DateTime  @default(now())
+
+  boards  Board[]
+  sprints Sprint[]
+  issues  Issue[]
+
+  @@unique([workspaceId, key])
+  @@map("projects")
+}
+
+enum BoardKind {
+  kanban
+  scrum
+}
+
+model Board {
+  id          Int       @id @default(autoincrement())
+  workspaceId Int
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  projectId   Int
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name        String
+  kind        BoardKind @default(kanban)
+  createdAt   DateTime  @default(now())
+
+  @@index([workspaceId])
+  @@index([projectId])
+  @@map("boards")
+}
+
+enum SprintState {
+  planned
+  active
+  closed
+}
+
+model Sprint {
+  id          Int         @id @default(autoincrement())
+  workspaceId Int
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  projectId   Int
+  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name        String
+  goal        String      @default("")
+  startDate   DateTime?   @db.Date
+  endDate     DateTime?   @db.Date
+  state       SprintState @default(planned)
+  createdAt   DateTime    @default(now())
+
+  issues Issue[]
+
+  @@index([workspaceId])
+  @@index([projectId])
+  @@map("sprints")
+}
+
+// ── Issues and their comments and files ─────────────────────────────────────────────────────────────────────
+
+enum IssueType {
+  task
+  bug
+  story
+  epic
+}
+
+enum Priority {
+  low
+  medium
+  high
+  critical
+}
+
+model Issue {
+  id          Int            @id @default(autoincrement())
+  workspaceId Int
+  workspace   Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  projectId   Int
+  project     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  number      Int
+  title       String
+  description String         @default("")
+  type        IssueType      @default(task)
+  priority    Priority       @default(medium)
+  statusId    Int
+  status      WorkflowStatus @relation(fields: [statusId], references: [id], onDelete: Restrict)
+  sprintId    Int?
+  sprint      Sprint?        @relation(fields: [sprintId], references: [id], onDelete: SetNull)
+  assigneeId  Int?
+  assignee    User?          @relation("IssueAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  reporterId  Int?
+  reporter    User?          @relation("IssueReporter", fields: [reporterId], references: [id], onDelete: SetNull)
+  storyPoints Int?
+  dueDate     DateTime?      @db.Date
+  rank        Float          @default(0) // order inside a board column
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  comments      Comment[]
+  attachments   Attachment[]
+  notifications Notification[]
+
+  @@unique([projectId, number])
+  @@index([workspaceId, projectId, statusId])
+  @@index([workspaceId, assigneeId])
+  @@map("issues")
+}
+
+model Comment {
+  id          Int       @id @default(autoincrement())
+  workspaceId Int
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  issueId     Int
+  issue       Issue     @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  authorId    Int?
+  author      User?     @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  body        String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([workspaceId])
+  @@index([issueId])
+  @@map("comments")
+}
+
+model Attachment {
+  id           Int       @id @default(autoincrement())
+  workspaceId  Int
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  issueId      Int
+  issue        Issue     @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  file         String // path under MEDIA_ROOT
+  filename     String    @default("")
+  size         Int       @default(0)
+  uploadedById Int?
+  uploadedBy   User?     @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+  createdAt    DateTime  @default(now())
+
+  @@index([workspaceId])
+  @@index([issueId])
+  @@map("attachments")
+}
+
+// ── Audit log (append-only: no update or delete route; see src/modules/audit) ───────────────────────────────
+
+model AuditLog {
+  id          Int       @id @default(autoincrement())
+  workspaceId Int
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  actorId     Int?
+  actor       User?     @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  actorEmail  String    @default("") // kept so the entry still names the person after their account is deleted
+  action      String // e.g. issue.updated
+  entityType  String
+  entityId    String
+  entityLabel String    @default("")
+  changes     Json      @default("{}")
+  ipAddress   String?
+  createdAt   DateTime  @default(now())
+
+  @@index([action])
+  @@index([createdAt])
+  @@index([workspaceId, entityType, entityId])
+  @@index([workspaceId, createdAt(sort: Desc)])
+  @@map("audit_logs")
+}
+
+// ── Webhooks, notifications, reports ────────────────────────────────────────────────────────────────────────
+
+model Webhook {
+  id          Int       @id @default(autoincrement())
+  workspaceId Int
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  url         String
+  events      Json      @default("[]") // event names; empty = all events
+  secret      String
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+
+  deliveries WebhookDelivery[]
+
+  @@index([workspaceId])
+  @@map("webhooks")
+}
+
+model WebhookDelivery {
+  id           Int       @id @default(autoincrement())
+  workspaceId  Int
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  webhookId    Int
+  webhook      Webhook   @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+  event        String
+  payload      Json
+  statusCode   Int?
+  responseBody String    @default("")
+  success      Boolean   @default(false)
+  attempts     Int       @default(0)
+  createdAt    DateTime  @default(now())
+  deliveredAt  DateTime?
+
+  @@index([webhookId, createdAt(sort: Desc)])
+  @@index([createdAt])
+  @@map("webhook_deliveries")
+}
+
+model Notification {
+  id          Int       @id @default(autoincrement())
+  workspaceId Int
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId      Int
+  user        User      @relation("NotificationUser", fields: [userId], references: [id], onDelete: Cascade)
+  actorId     Int?
+  actor       User?     @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+  verb        String // assigned / commented / moved / due_soon / delete_requested
+  issueId     Int?
+  issue       Issue?    @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  message     String
+  read        Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+
+  @@index([workspaceId, userId, read])
+  @@map("notifications")
+}
+
+model Report {
+  id          Int       @id @default(autoincrement())
+  workspaceId Int
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  kind        String    @default("weekly_summary")
+  data        Json      @default("{}")
+  createdAt   DateTime  @default(now())
+
+  @@index([workspaceId])
+  @@map("reports")
+}
+
+// ── Billing ─────────────────────────────────────────────────────────────────────────────────────────────────
+
+enum SubscriptionStatus {
+  active
+  trialing
+  past_due
+  canceled
+  incomplete
+}
+
+model Subscription {
+  id                   Int                @id @default(autoincrement())
+  workspaceId          Int                @unique
+  workspace            Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  plan                 String             @default("free")
+  status               SubscriptionStatus @default(active)
+  stripeCustomerId     String             @default("")
+  stripeSubscriptionId String             @default("")
+  currentPeriodEnd     DateTime?
+  cancelAtPeriodEnd    Boolean            @default(false)
+  // `created` time (Unix seconds) of the last Stripe subscription event applied; older ones are ignored.
+  stripeEventCreated   BigInt?
+  updatedAt            DateTime           @updatedAt
+
+  @@map("subscriptions")
+}
+
+// Processed Stripe event ids: makes the Stripe webhook idempotent.
+model StripeEvent {
+  id         Int      @id @default(autoincrement())
+  eventId    String   @unique
+  type       String
+  receivedAt DateTime @default(now())
+
+  @@map("stripe_events")
+}

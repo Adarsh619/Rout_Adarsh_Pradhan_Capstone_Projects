@@ -1,0 +1,46 @@
+import { messageOf } from "../api";
+import { useState, type FormEvent, type ChangeEvent } from "react";
+import { Link, Navigate, useNavigate } from "react-router-dom";
+import { useAuth } from "../auth";
+
+export default function Register() {
+  const { user, register } = useAuth();
+  const navigate = useNavigate();
+  const [form, setForm] = useState({ full_name: "", email: "", password: "", workspace_name: "" });
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const set = (k: string) => (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setForm({ ...form, [k]: e.target.value });
+
+  if (user && !busy) return <Navigate to="/" replace />;
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setBusy(true);
+    try {
+      const r = await register(form);
+      navigate(r.workspace ? `/w/${r.workspace}` : "/");
+    } catch (err) { setError(messageOf(err)); setBusy(false); }
+  };
+  return (
+    <div className="auth">
+      <form className="auth-card stack" onSubmit={submit}>
+        <h1><span className="logo">▦</span> TaskFlow</h1>
+        <p className="muted">Create your account and company workspace</p>
+        <label>Full name<input autoFocus autoComplete="name" value={form.full_name} onChange={set("full_name")} /></label>
+        <label>Email<input type="email" required autoComplete="email" value={form.email} onChange={set("email")} /></label>
+        <div className="field">
+          <label>Password
+            <input type="password" required minLength={8} autoComplete="new-password" aria-describedby="password-rules"
+              value={form.password} onChange={set("password")} />
+          </label>
+          <span id="password-rules" className="muted small">At least 8 characters, not only numbers, not a common password and not like your email.</span>
+        </div>
+        <label>Company / workspace name<input autoComplete="organization" value={form.workspace_name} onChange={set("workspace_name")} placeholder="Acme Corp" /></label>
+        {error && <div className="error" role="alert">{error}</div>}
+        <button className="primary" disabled={busy}>{busy ? "Creating account…" : "Create account"}</button>
+        <p className="small">Already registered? <Link to="/login">Sign in</Link></p>
+      </form>
+    </div>
+  );
+}
