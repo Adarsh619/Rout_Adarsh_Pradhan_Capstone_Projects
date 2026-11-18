@@ -64,9 +64,9 @@ These are the default workflow's transitions. Admins can define their own on the
 sequenceDiagram
   actor U as Member
   participant UI as React board
-  participant API as Django API
+  participant API as Node.js API
   participant DB as PostgreSQL
-  participant Q as Redis / Celery
+  participant Q as Redis / BullMQ worker
   U->>UI: start dragging a card
   UI->>UI: dim columns the workflow forbids
   U->>UI: drop in "In Progress", position 2
@@ -102,7 +102,7 @@ flowchart LR
 sequenceDiagram
   actor O as Owner
   participant UI as React app
-  participant API as Django API
+  participant API as Node.js API
   participant S as Stripe or stripe-mock
   O->>UI: Billing → Upgrade to Pro
   UI->>API: POST /billing/checkout/ {plan: pro}

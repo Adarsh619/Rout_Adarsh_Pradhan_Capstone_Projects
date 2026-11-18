@@ -8,7 +8,8 @@ Interactive docs: **`/api/docs/`** (Swagger UI). Machine-readable schema: [`open
 
 - Auth: `Authorization: Bearer <access JWT>` (from `/api/auth/token/` or `/api/auth/register/`)
 - Tenant: `X-Workspace: <workspace slug>` on every endpoint except `auth/*`, `workspaces/*` and the Stripe webhook
-- Lists are paginated (`?limit=&offset=`) and support `?search=` and `?ordering=` where noted
+- Lists are paginated (`?limit=&offset=`, 100 per page, as `{count, next, previous, results}`) and support `?search=` and `?ordering=` where noted
+- Errors are `{"detail": "…"}` or, for invalid input, `{"field": ["message", …]}` (`non_field_errors` for the request as a whole). v2.0.0 kept every URL, field name and error shape of v1, so the web app needed no logic changes
 
 ## Errors
 
@@ -46,7 +47,7 @@ Interactive docs: **`/api/docs/`** (Swagger UI). Machine-readable schema: [`open
 | `GET /api/audit-logs/?kind=&action=&actor_email=&since=&until=&search=&entity_type=&entity_id=` | admin | Audit trail, newest first, paginated (`limit`/`offset`). `kind` is the part of the action before the dot (`issue`, `member`, `billing`…); `since`/`until` are inclusive UTC dates; `search` covers the entity label, action and person. Each entry includes `actor_email` and `ip_address`. `GET /audit-logs/export/` returns the same filtered entries as CSV (up to 10,000 rows) |
 | `/api/webhooks/` | admin | CRUD (create, edit and delete are audited); the `url` must be public http(s), so internal or private addresses get 400; `GET /webhooks/events/`; `POST /webhooks/{id}/ping/`; `POST /webhooks/{id}/rotate_secret/` → new signing secret; `GET /webhooks/{id}/deliveries/` (last 50, with status code and the receiver's response or error); `POST /webhooks/{id}/redeliver/ {delivery}` → sends that delivery's payload again (202) |
 | `GET /api/notifications/` | viewer | Your notifications; `PATCH {read}`; `POST mark_all_read/`; `GET unread_count/` |
-| `GET /api/reports/` · `POST /api/reports/generate/` | member / admin | Weekly summaries; generate queues a Celery task (202) |
+| `GET /api/reports/` · `POST /api/reports/generate/` | member / admin | Weekly summaries; generate queues a background job (202) |
 | `GET /api/billing/` | viewer | Plan, status, limits, usage, plan catalogue |
 | `POST /api/billing/checkout/ {plan}` · `POST /api/billing/portal/` | owner | Stripe Checkout / Customer Portal URLs. Checkout returns 400 if the workspace already has a subscription: plan changes go through the portal |
 | `POST /api/billing/stripe-webhook/` | Stripe signature | Subscription sync (idempotent) |
@@ -65,11 +66,11 @@ X-TaskFlow-Signature: sha256=<hex HMAC-SHA256 of the raw body using the webhook 
  "data":{"entity":{"type":"issue","id":"17","label":"WEB-17 Fix login"},"changes":{"status":["To Do","In Progress"]},"actor":"owner@acme.test"}}
 ```
 
-Verify it in Python:
-```python
-import hmac, hashlib
-expected = "sha256=" + hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
-assert hmac.compare_digest(expected, request.headers["X-TaskFlow-Signature"])
+Verify it in Node.js:
+```ts
+import { createHmac, timingSafeEqual } from "node:crypto";
+const expected = "sha256=" + createHmac("sha256", secret).update(rawBody).digest("hex");
+const ok = timingSafeEqual(Buffer.from(expected), Buffer.from(req.get("X-TaskFlow-Signature") ?? ""));
 ```
 
 Events (all can be subscribed to; a test checks this list against what the API actually sends):

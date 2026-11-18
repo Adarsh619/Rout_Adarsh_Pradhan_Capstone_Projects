@@ -1,19 +1,11 @@
 # Used only by deploy/render/Dockerfile (BuildKit reads <Dockerfile>.dockerignore). Context is FS-04/.
 **/.env
-**/__pycache__
-**/*.pyc
-backend/.venv
-backend/venv
-backend/.pytest_cache
-backend/.ruff_cache
-backend/.coverage
-backend/coverage.xml
-backend/test-results.xml
-backend/htmlcov
+**/node_modules
+backend/dist
+backend/coverage
 backend/media
-backend/staticfiles
-backend/db.sqlite3
-frontend/node_modules
+backend/src/generated
+backend/test-results.xml
 frontend/dist
 frontend/coverage
 docs

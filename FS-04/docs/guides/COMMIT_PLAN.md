@@ -13,6 +13,8 @@ steady progress. Each day: read the files, run them, change what you'd like, the
 > Earlier commits won't run on their own, because `config/urls.py` and `settings.py` already reference every app.
 > From Day 7 on, `pytest` passes after each commit. Test as you go with `pytest tests/<file>` once that file is committed.
 
+> **v1 plan.** This plan was written for v1 (Django, Celery, JavaScript React). In v2.0.0 the stack moved to Node.js, Express, TypeScript, Prisma and Vitest, as the brief's updated tool list requires; the steps and features are the same. See [13 · Stack migration](../13-challenges-and-next-steps.md#stack-migration-to-nodejs-and-typescript-v200).
+
 Repository layout: the Git repo's root is `Rout_Adarsh_Pradhan_Capstone_Projects`, and this project lives in its `FS-04/` subfolder.
 The pipeline must sit at the **repo root** (`.github/workflows/fs04-ci.yml`), so on Day 13 move it up one level (see that row).
 

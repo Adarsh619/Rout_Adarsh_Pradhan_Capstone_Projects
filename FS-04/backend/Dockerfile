@@ -1,19 +1,29 @@
-FROM python:3.12-slim
-
-# WEB_CONCURRENCY is read by gunicorn: the number of web worker processes (override in .env).
-ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 WEB_CONCURRENCY=3
+# One image for both the API (default command) and the background worker (`node dist/worker.js`).
+FROM node:24-alpine AS build
 WORKDIR /app
+COPY package.json package-lock.json prisma.config.ts ./
+COPY prisma ./prisma
+# npm ci runs `prisma generate` (postinstall), which writes the typed client into src/generated.
+RUN npm ci
+COPY tsconfig.json tsconfig.build.json ./
+COPY src ./src
+RUN npx prisma generate && npm run build
 
-COPY requirements.txt requirements-dev.txt ./
-ARG INSTALL_DEV=false
-RUN pip install -r requirements.txt && if [ "$INSTALL_DEV" = "true" ]; then pip install -r requirements-dev.txt; fi
-
-COPY . .
-RUN DJANGO_SECRET_KEY=build python manage.py collectstatic --noinput \
-    && chmod +x entrypoint.sh && sed -i "s/\r$//" entrypoint.sh \
-    && useradd --create-home app && mkdir -p /app/media && chown -R app /app
-USER app
-
+FROM node:24-alpine
+WORKDIR /app
+ENV NODE_ENV=production
+# Prisma's migration engine links against OpenSSL.
+RUN apk add --no-cache openssl
+COPY package.json package-lock.json prisma.config.ts ./
+# Migrations are applied by the API on start (`prisma migrate deploy`). Installing with scripts on also downloads the
+# migration engine now, as root, instead of at start-up as the unprivileged user.
+COPY prisma ./prisma
+RUN npm ci --omit=dev && npm cache clean --force
+COPY --from=build /app/dist ./dist
+COPY openapi.yaml ./openapi.yaml
+RUN mkdir -p /app/media && chown -R node /app/media
+ARG APP_VERSION=dev
+ENV APP_VERSION=$APP_VERSION PORT=8000 MEDIA_ROOT=/app/media
+USER node
 EXPOSE 8000
-ENTRYPOINT ["./entrypoint.sh"]
-CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--access-logfile", "-"]
+CMD ["sh", "-c", "node_modules/.bin/prisma migrate deploy && exec node dist/index.js"]

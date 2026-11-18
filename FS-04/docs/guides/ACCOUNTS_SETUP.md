@@ -18,7 +18,7 @@ Everything this project needs works on free tiers. **You never need to enter a c
 | 2 | **Git** + **VS Code** | Daily commits, editing | Yes | Free |
 | 3 | **Docker Desktop** (Windows: enable WSL 2) | `docker compose up` for the full stack | Yes | Free for personal / education use. Docker Hub account optional (only for `docker login`). |
 | 4 | **Stripe** account in *Test mode* + **Stripe CLI** | Real hosted Stripe Checkout | **No.** Mock mode (default) covers billing without an account | Free, no real charges |
-| 5 | Python 3.12+ and Node 20+ | Running without Docker, VS Code test explorer | Recommended | Free |
+| 5 | Node.js 24+ | Running without Docker, running the tests | Recommended | Free |
 | 6 | **Render** (or similar) | Public deployed demo + auto-deploy from CI | **Optional, skip it**: a screen recording satisfies the deliverable | Free tier only, no card |
 | 7 | webhook.site | Watching outgoing webhooks arrive during the demo | Optional | Free, no signup |
 
@@ -53,7 +53,4 @@ Never commit real keys. `.env` is in `.gitignore`.
 ## GitHub repository settings
 
 - Actions are on by default. The `docker` job pushes to `ghcr.io/<you>/<repo>-backend` / `-frontend` using the built-in `GITHUB_TOKEN`; nothing to set up.
-- Optional deploy: create Render services from those images (or from the repo's Dockerfiles), copy each service's **Deploy Hook URL**, and add them as
-  repository secrets `BACKEND_DEPLOY_HOOK` and `FRONTEND_DEPLOY_HOOK` (Settings → Secrets and variables → Actions). Create an environment called `production`.
-- Render also needs a PostgreSQL database and a Redis (Key Value) instance; set `DATABASE_URL`, `REDIS_URL`, `DJANGO_SECRET_KEY`, `DJANGO_DEBUG=false`,
-  `DJANGO_ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`, `FRONTEND_URL`, `RUN_MIGRATIONS=1` and the Stripe variables on the backend service.
+- Live site: one free Render web service built from `deploy/render/Dockerfile` (everything in one container) with a free Neon Postgres database. The service needs `DATABASE_URL` and `SECRET_KEY` (or the v1 name `DJANGO_SECRET_KEY`); everything else is an image default. Copy the service's **Deploy Hook URL** into the repository secret `BACKEND_DEPLOY_HOOK` and set the variables `LIVE_URL` and `DEPLOY_ENABLED=true` (Settings → Secrets and variables → Actions). Details: [11 · Live deployment](../11-devops.md#live-deployment-free-always-on).

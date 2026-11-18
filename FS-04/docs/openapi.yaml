@@ -1,48 +1,47 @@
 openapi: 3.0.3
 info:
   title: TaskFlow API
-  version: 1.0.0
-  description: 'Multi-tenant project management API. Send `X-Workspace: <slug>` on
-    tenant-scoped endpoints.'
+  version: 2.0.0
+  description: 'Multi-tenant project management API (Node.js, Express, TypeScript, Prisma). Send `X-Workspace:
+    <slug>` on tenant-scoped endpoints.'
 paths:
   /api/attachments/:
     get:
       operationId: attachments_list
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       parameters:
-      - in: query
-        name: issue
-        schema:
-          type: integer
-      - name: limit
-        required: false
-        in: query
-        description: Number of results to return per page.
-        schema:
-          type: integer
-      - name: offset
-        required: false
-        in: query
-        description: The initial index from which to return the results.
-        schema:
-          type: integer
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
+        - in: query
+          name: issue
+          schema:
+            type: integer
+        - name: limit
+          required: false
+          in: query
+          description: Number of results to return per page.
+          schema:
+            type: integer
+        - name: offset
+          required: false
+          in: query
+          description: The initial index from which to return the results.
+          schema:
+            type: integer
+        - name: ordering
+          required: false
+          in: query
+          description: Which field to use when ordering the results.
+          schema:
+            type: string
+        - name: search
+          required: false
+          in: query
+          description: A search term.
+          schema:
+            type: string
       tags:
-      - attachments
+        - attachments
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -52,10 +51,9 @@ paths:
           description: ''
     post:
       operationId: attachments_create
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       tags:
-      - attachments
+        - attachments
       requestBody:
         content:
           multipart/form-data:
@@ -66,7 +64,7 @@ paths:
               $ref: '#/components/schemas/Attachment'
         required: true
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '201':
           content:
@@ -77,19 +75,18 @@ paths:
   /api/attachments/{id}/:
     get:
       operationId: attachments_retrieve
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this attachment.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this attachment.
+          required: true
       tags:
-      - attachments
+        - attachments
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -99,38 +96,36 @@ paths:
           description: ''
     delete:
       operationId: attachments_destroy
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this attachment.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this attachment.
+          required: true
       tags:
-      - attachments
+        - attachments
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '204':
           description: No response body
   /api/attachments/{id}/download/:
     get:
       operationId: attachments_download_retrieve
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this attachment.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this attachment.
+          required: true
       tags:
-      - attachments
+        - attachments
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -141,67 +136,66 @@ paths:
   /api/audit-logs/:
     get:
       operationId: audit_logs_list
-      description: Every queryset is filtered by the current workspace and every create
-        stamps it.
+      description: Every queryset is filtered by the current workspace and every create stamps it.
       parameters:
-      - in: query
-        name: action
-        schema:
-          type: string
-      - in: query
-        name: actor_email
-        schema:
-          type: string
-      - in: query
-        name: entity_id
-        schema:
-          type: string
-      - in: query
-        name: entity_type
-        schema:
-          type: string
-      - in: query
-        name: kind
-        schema:
-          type: string
-      - name: limit
-        required: false
-        in: query
-        description: Number of results to return per page.
-        schema:
-          type: integer
-      - name: offset
-        required: false
-        in: query
-        description: The initial index from which to return the results.
-        schema:
-          type: integer
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
-      - in: query
-        name: since
-        schema:
-          type: string
-          format: date
-      - in: query
-        name: until
-        schema:
-          type: string
-          format: date
+        - in: query
+          name: action
+          schema:
+            type: string
+        - in: query
+          name: actor_email
+          schema:
+            type: string
+        - in: query
+          name: entity_id
+          schema:
+            type: string
+        - in: query
+          name: entity_type
+          schema:
+            type: string
+        - in: query
+          name: kind
+          schema:
+            type: string
+        - name: limit
+          required: false
+          in: query
+          description: Number of results to return per page.
+          schema:
+            type: integer
+        - name: offset
+          required: false
+          in: query
+          description: The initial index from which to return the results.
+          schema:
+            type: integer
+        - name: ordering
+          required: false
+          in: query
+          description: Which field to use when ordering the results.
+          schema:
+            type: string
+        - name: search
+          required: false
+          in: query
+          description: A search term.
+          schema:
+            type: string
+        - in: query
+          name: since
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: until
+          schema:
+            type: string
+            format: date
       tags:
-      - audit-logs
+        - audit-logs
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -212,19 +206,18 @@ paths:
   /api/audit-logs/{id}/:
     get:
       operationId: audit_logs_retrieve
-      description: Every queryset is filtered by the current workspace and every create
-        stamps it.
+      description: Every queryset is filtered by the current workspace and every create stamps it.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this audit log.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this audit log.
+          required: true
       tags:
-      - audit-logs
+        - audit-logs
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -235,12 +228,11 @@ paths:
   /api/audit-logs/export/:
     get:
       operationId: audit_logs_export_retrieve
-      description: The filtered log as CSV (newest first, up to 10,000 rows). Same
-        filters as the list.
+      description: The filtered log as CSV (newest first, up to 10,000 rows). Same filters as the list.
       tags:
-      - audit-logs
+        - audit-logs
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -253,7 +245,7 @@ paths:
       operationId: auth_logout_create
       description: Blacklist the given refresh token so it can't be used again.
       tags:
-      - auth
+        - auth
       requestBody:
         content:
           application/json:
@@ -277,9 +269,9 @@ paths:
     get:
       operationId: auth_me_retrieve
       tags:
-      - auth
+        - auth
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -290,7 +282,7 @@ paths:
     put:
       operationId: auth_me_update
       tags:
-      - auth
+        - auth
       requestBody:
         content:
           application/json:
@@ -303,7 +295,7 @@ paths:
             schema:
               $ref: '#/components/schemas/Me'
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -314,7 +306,7 @@ paths:
     patch:
       operationId: auth_me_partial_update
       tags:
-      - auth
+        - auth
       requestBody:
         content:
           application/json:
@@ -327,7 +319,7 @@ paths:
             schema:
               $ref: '#/components/schemas/PatchedMe'
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -338,10 +330,10 @@ paths:
   /api/auth/password/:
     post:
       operationId: auth_password_create
-      description: Change your password. Every refresh token you hold is revoked;
-        a fresh pair is returned for this session.
+      description: Change your password. Every refresh token you hold is revoked; a fresh pair is returned for this
+        session.
       tags:
-      - auth
+        - auth
       requestBody:
         content:
           application/json:
@@ -355,7 +347,7 @@ paths:
               $ref: '#/components/schemas/PasswordChange'
         required: true
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -366,10 +358,9 @@ paths:
   /api/auth/register/:
     post:
       operationId: auth_register_create
-      description: Create an account (and optionally a first workspace). Returns JWT
-        tokens.
+      description: Create an account (and optionally a first workspace). Returns JWT tokens.
       tags:
-      - auth
+        - auth
       requestBody:
         content:
           application/json:
@@ -383,8 +374,8 @@ paths:
               $ref: '#/components/schemas/Register'
         required: true
       security:
-      - jwtAuth: []
-      - {}
+        - jwtAuth: []
+        - {}
       responses:
         '200':
           content:
@@ -397,7 +388,7 @@ paths:
       operationId: auth_token_create
       description: Email + password → access and refresh tokens.
       tags:
-      - auth
+        - auth
       requestBody:
         content:
           application/json:
@@ -424,7 +415,7 @@ paths:
         Takes a refresh type JSON web token and returns an access type JSON web
         token if the refresh token is valid.
       tags:
-      - auth
+        - auth
       requestBody:
         content:
           application/json:
@@ -449,9 +440,9 @@ paths:
       operationId: billing_retrieve
       description: GET current plan, limits and usage for the workspace.
       tags:
-      - billing
+        - billing
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -462,10 +453,10 @@ paths:
   /api/billing/checkout/:
     post:
       operationId: billing_checkout_create
-      description: 'Start a subscription. Refused (400) if the workspace already has
-        one: change plans through the portal.'
+      description: 'Start a subscription. Refused (400) if the workspace already has one: change plans through the
+        portal.'
       tags:
-      - billing
+        - billing
       requestBody:
         content:
           application/json:
@@ -479,7 +470,7 @@ paths:
               $ref: '#/components/schemas/Checkout'
         required: true
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -495,7 +486,7 @@ paths:
 
         Sends signed Stripe events through the real webhook handler.
       tags:
-      - billing
+        - billing
       requestBody:
         content:
           application/json:
@@ -508,7 +499,7 @@ paths:
             schema:
               $ref: '#/components/schemas/MockAction'
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -521,9 +512,9 @@ paths:
       operationId: billing_portal_create
       description: Open Stripe's Customer Portal to change plan or cancel.
       tags:
-      - billing
+        - billing
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -534,10 +525,9 @@ paths:
   /api/billing/stripe-webhook/:
     post:
       operationId: billing_stripe_webhook_create
-      description: Called by Stripe. Returns 400 for a bad signature; duplicates return
-        status 'duplicate'.
+      description: Called by Stripe. Returns 400 for a bad signature; duplicates return status 'duplicate'.
       tags:
-      - billing
+        - billing
       requestBody:
         content:
           application/json:
@@ -553,7 +543,7 @@ paths:
               type: object
               additionalProperties: {}
       security:
-      - {}
+        - {}
       responses:
         '200':
           content:
@@ -570,41 +560,40 @@ paths:
   /api/boards/:
     get:
       operationId: boards_list
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       parameters:
-      - name: limit
-        required: false
-        in: query
-        description: Number of results to return per page.
-        schema:
-          type: integer
-      - name: offset
-        required: false
-        in: query
-        description: The initial index from which to return the results.
-        schema:
-          type: integer
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - in: query
-        name: project
-        schema:
-          type: integer
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
+        - name: limit
+          required: false
+          in: query
+          description: Number of results to return per page.
+          schema:
+            type: integer
+        - name: offset
+          required: false
+          in: query
+          description: The initial index from which to return the results.
+          schema:
+            type: integer
+        - name: ordering
+          required: false
+          in: query
+          description: Which field to use when ordering the results.
+          schema:
+            type: string
+        - in: query
+          name: project
+          schema:
+            type: integer
+        - name: search
+          required: false
+          in: query
+          description: A search term.
+          schema:
+            type: string
       tags:
-      - boards
+        - boards
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -614,10 +603,9 @@ paths:
           description: ''
     post:
       operationId: boards_create
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       tags:
-      - boards
+        - boards
       requestBody:
         content:
           application/json:
@@ -631,7 +619,7 @@ paths:
               $ref: '#/components/schemas/Board'
         required: true
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '201':
           content:
@@ -642,19 +630,18 @@ paths:
   /api/boards/{id}/:
     get:
       operationId: boards_retrieve
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this board.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this board.
+          required: true
       tags:
-      - boards
+        - boards
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -664,17 +651,16 @@ paths:
           description: ''
     put:
       operationId: boards_update
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this board.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this board.
+          required: true
       tags:
-      - boards
+        - boards
       requestBody:
         content:
           application/json:
@@ -688,7 +674,7 @@ paths:
               $ref: '#/components/schemas/Board'
         required: true
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -698,17 +684,16 @@ paths:
           description: ''
     patch:
       operationId: boards_partial_update
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this board.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this board.
+          required: true
       tags:
-      - boards
+        - boards
       requestBody:
         content:
           application/json:
@@ -721,7 +706,7 @@ paths:
             schema:
               $ref: '#/components/schemas/PatchedBoard'
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -731,19 +716,18 @@ paths:
           description: ''
     delete:
       operationId: boards_destroy
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this board.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this board.
+          required: true
       tags:
-      - boards
+        - boards
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '204':
           description: No response body
@@ -756,16 +740,16 @@ paths:
         Query params: `sprint=<id>|active|backlog|all`, `assignee=<id>`, `q=<text>`.
         Scrum boards default to the active sprint; Kanban boards default to all issues.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this board.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this board.
+          required: true
       tags:
-      - boards
+        - boards
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -776,41 +760,40 @@ paths:
   /api/comments/:
     get:
       operationId: comments_list
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       parameters:
-      - in: query
-        name: issue
-        schema:
-          type: integer
-      - name: limit
-        required: false
-        in: query
-        description: Number of results to return per page.
-        schema:
-          type: integer
-      - name: offset
-        required: false
-        in: query
-        description: The initial index from which to return the results.
-        schema:
-          type: integer
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
+        - in: query
+          name: issue
+          schema:
+            type: integer
+        - name: limit
+          required: false
+          in: query
+          description: Number of results to return per page.
+          schema:
+            type: integer
+        - name: offset
+          required: false
+          in: query
+          description: The initial index from which to return the results.
+          schema:
+            type: integer
+        - name: ordering
+          required: false
+          in: query
+          description: Which field to use when ordering the results.
+          schema:
+            type: string
+        - name: search
+          required: false
+          in: query
+          description: A search term.
+          schema:
+            type: string
       tags:
-      - comments
+        - comments
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -820,10 +803,9 @@ paths:
           description: ''
     post:
       operationId: comments_create
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       tags:
-      - comments
+        - comments
       requestBody:
         content:
           application/json:
@@ -837,7 +819,7 @@ paths:
               $ref: '#/components/schemas/Comment'
         required: true
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '201':
           content:
@@ -848,19 +830,18 @@ paths:
   /api/comments/{id}/:
     get:
       operationId: comments_retrieve
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this comment.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this comment.
+          required: true
       tags:
-      - comments
+        - comments
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -870,17 +851,16 @@ paths:
           description: ''
     put:
       operationId: comments_update
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this comment.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this comment.
+          required: true
       tags:
-      - comments
+        - comments
       requestBody:
         content:
           application/json:
@@ -894,7 +874,7 @@ paths:
               $ref: '#/components/schemas/Comment'
         required: true
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -904,17 +884,16 @@ paths:
           description: ''
     patch:
       operationId: comments_partial_update
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this comment.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this comment.
+          required: true
       tags:
-      - comments
+        - comments
       requestBody:
         content:
           application/json:
@@ -927,7 +906,7 @@ paths:
             schema:
               $ref: '#/components/schemas/PatchedComment'
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -937,100 +916,98 @@ paths:
           description: ''
     delete:
       operationId: comments_destroy
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this comment.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this comment.
+          required: true
       tags:
-      - comments
+        - comments
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '204':
           description: No response body
   /api/issues/:
     get:
       operationId: issues_list
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       parameters:
-      - in: query
-        name: assignee
-        schema:
-          type: integer
-      - name: limit
-        required: false
-        in: query
-        description: Number of results to return per page.
-        schema:
-          type: integer
-      - name: offset
-        required: false
-        in: query
-        description: The initial index from which to return the results.
-        schema:
-          type: integer
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - in: query
-        name: priority
-        schema:
-          type: string
-          enum:
-          - critical
-          - high
-          - low
-          - medium
-        description: |-
-          * `low` - Low
-          * `medium` - Medium
-          * `high` - High
-          * `critical` - Critical
-      - in: query
-        name: project
-        schema:
-          type: integer
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
-      - in: query
-        name: sprint
-        schema:
-          type: integer
-      - in: query
-        name: status
-        schema:
-          type: integer
-      - in: query
-        name: type
-        schema:
-          type: string
-          enum:
-          - bug
-          - epic
-          - story
-          - task
-        description: |-
-          * `task` - Task
-          * `bug` - Bug
-          * `story` - Story
-          * `epic` - Epic
+        - in: query
+          name: assignee
+          schema:
+            type: integer
+        - name: limit
+          required: false
+          in: query
+          description: Number of results to return per page.
+          schema:
+            type: integer
+        - name: offset
+          required: false
+          in: query
+          description: The initial index from which to return the results.
+          schema:
+            type: integer
+        - name: ordering
+          required: false
+          in: query
+          description: Which field to use when ordering the results.
+          schema:
+            type: string
+        - in: query
+          name: priority
+          schema:
+            type: string
+            enum:
+              - critical
+              - high
+              - low
+              - medium
+          description: |-
+            * `low` - Low
+            * `medium` - Medium
+            * `high` - High
+            * `critical` - Critical
+        - in: query
+          name: project
+          schema:
+            type: integer
+        - name: search
+          required: false
+          in: query
+          description: A search term.
+          schema:
+            type: string
+        - in: query
+          name: sprint
+          schema:
+            type: integer
+        - in: query
+          name: status
+          schema:
+            type: integer
+        - in: query
+          name: type
+          schema:
+            type: string
+            enum:
+              - bug
+              - epic
+              - story
+              - task
+          description: |-
+            * `task` - Task
+            * `bug` - Bug
+            * `story` - Story
+            * `epic` - Epic
       tags:
-      - issues
+        - issues
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -1040,10 +1017,9 @@ paths:
           description: ''
     post:
       operationId: issues_create
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       tags:
-      - issues
+        - issues
       requestBody:
         content:
           application/json:
@@ -1057,7 +1033,7 @@ paths:
               $ref: '#/components/schemas/Issue'
         required: true
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '201':
           content:
@@ -1068,19 +1044,18 @@ paths:
   /api/issues/{id}/:
     get:
       operationId: issues_retrieve
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this issue.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this issue.
+          required: true
       tags:
-      - issues
+        - issues
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -1090,17 +1065,16 @@ paths:
           description: ''
     put:
       operationId: issues_update
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this issue.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this issue.
+          required: true
       tags:
-      - issues
+        - issues
       requestBody:
         content:
           application/json:
@@ -1114,7 +1088,7 @@ paths:
               $ref: '#/components/schemas/Issue'
         required: true
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -1124,17 +1098,16 @@ paths:
           description: ''
     patch:
       operationId: issues_partial_update
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this issue.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this issue.
+          required: true
       tags:
-      - issues
+        - issues
       requestBody:
         content:
           application/json:
@@ -1147,7 +1120,7 @@ paths:
             schema:
               $ref: '#/components/schemas/PatchedIssue'
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -1157,38 +1130,36 @@ paths:
           description: ''
     delete:
       operationId: issues_destroy
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this issue.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this issue.
+          required: true
       tags:
-      - issues
+        - issues
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '204':
           description: No response body
   /api/issues/{id}/history/:
     get:
       operationId: issues_history_retrieve
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this issue.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this issue.
+          required: true
       tags:
-      - issues
+        - issues
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -1199,17 +1170,17 @@ paths:
   /api/issues/{id}/move/:
     post:
       operationId: issues_move_create
-      description: 'Drag-and-drop endpoint: {"status": <status id>, "after"/"before":
-        <neighbour issue id>, "index": <position>}.'
+      description: 'Drag-and-drop endpoint: {"status": <status id>, "after"/"before": <neighbour issue id>, "index":
+        <position>}.'
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this issue.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this issue.
+          required: true
       tags:
-      - issues
+        - issues
       requestBody:
         content:
           application/json:
@@ -1223,7 +1194,7 @@ paths:
               $ref: '#/components/schemas/IssueMove'
         required: true
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -1234,17 +1205,16 @@ paths:
   /api/issues/{id}/request_deletion/:
     post:
       operationId: issues_request_deletion_create
-      description: A member who can't delete an issue asks the workspace's admins
-        and owner to do it.
+      description: A member who can't delete an issue asks the workspace's admins and owner to do it.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this issue.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this issue.
+          required: true
       tags:
-      - issues
+        - issues
       requestBody:
         content:
           application/json:
@@ -1258,7 +1228,7 @@ paths:
               $ref: '#/components/schemas/Issue'
         required: true
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -1269,37 +1239,36 @@ paths:
   /api/members/:
     get:
       operationId: members_list
-      description: Every queryset is filtered by the current workspace and every create
-        stamps it.
+      description: Every queryset is filtered by the current workspace and every create stamps it.
       parameters:
-      - name: limit
-        required: false
-        in: query
-        description: Number of results to return per page.
-        schema:
-          type: integer
-      - name: offset
-        required: false
-        in: query
-        description: The initial index from which to return the results.
-        schema:
-          type: integer
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
+        - name: limit
+          required: false
+          in: query
+          description: Number of results to return per page.
+          schema:
+            type: integer
+        - name: offset
+          required: false
+          in: query
+          description: The initial index from which to return the results.
+          schema:
+            type: integer
+        - name: ordering
+          required: false
+          in: query
+          description: Which field to use when ordering the results.
+          schema:
+            type: string
+        - name: search
+          required: false
+          in: query
+          description: A search term.
+          schema:
+            type: string
       tags:
-      - members
+        - members
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -1309,10 +1278,9 @@ paths:
           description: ''
     post:
       operationId: members_create
-      description: Every queryset is filtered by the current workspace and every create
-        stamps it.
+      description: Every queryset is filtered by the current workspace and every create stamps it.
       tags:
-      - members
+        - members
       requestBody:
         content:
           application/json:
@@ -1325,7 +1293,7 @@ paths:
             schema:
               $ref: '#/components/schemas/Membership'
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '201':
           content:
@@ -1336,17 +1304,16 @@ paths:
   /api/members/{id}/:
     patch:
       operationId: members_partial_update
-      description: Every queryset is filtered by the current workspace and every create
-        stamps it.
+      description: Every queryset is filtered by the current workspace and every create stamps it.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this membership.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this membership.
+          required: true
       tags:
-      - members
+        - members
       requestBody:
         content:
           application/json:
@@ -1359,7 +1326,7 @@ paths:
             schema:
               $ref: '#/components/schemas/PatchedMembership'
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -1369,29 +1336,27 @@ paths:
           description: ''
     delete:
       operationId: members_destroy
-      description: Every queryset is filtered by the current workspace and every create
-        stamps it.
+      description: Every queryset is filtered by the current workspace and every create stamps it.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this membership.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this membership.
+          required: true
       tags:
-      - members
+        - members
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '204':
           description: No response body
   /api/members/leave/:
     post:
       operationId: members_leave_create
-      description: Remove yourself from this workspace. The owner must transfer ownership
-        first.
+      description: Remove yourself from this workspace. The owner must transfer ownership first.
       tags:
-      - members
+        - members
       requestBody:
         content:
           application/json:
@@ -1404,7 +1369,7 @@ paths:
             schema:
               $ref: '#/components/schemas/Membership'
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -1415,41 +1380,40 @@ paths:
   /api/notifications/:
     get:
       operationId: notifications_list
-      description: Every queryset is filtered by the current workspace and every create
-        stamps it.
+      description: Every queryset is filtered by the current workspace and every create stamps it.
       parameters:
-      - name: limit
-        required: false
-        in: query
-        description: Number of results to return per page.
-        schema:
-          type: integer
-      - name: offset
-        required: false
-        in: query
-        description: The initial index from which to return the results.
-        schema:
-          type: integer
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - in: query
-        name: read
-        schema:
-          type: boolean
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
+        - name: limit
+          required: false
+          in: query
+          description: Number of results to return per page.
+          schema:
+            type: integer
+        - name: offset
+          required: false
+          in: query
+          description: The initial index from which to return the results.
+          schema:
+            type: integer
+        - name: ordering
+          required: false
+          in: query
+          description: Which field to use when ordering the results.
+          schema:
+            type: string
+        - in: query
+          name: read
+          schema:
+            type: boolean
+        - name: search
+          required: false
+          in: query
+          description: A search term.
+          schema:
+            type: string
       tags:
-      - notifications
+        - notifications
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -1460,17 +1424,16 @@ paths:
   /api/notifications/{id}/:
     patch:
       operationId: notifications_partial_update
-      description: Every queryset is filtered by the current workspace and every create
-        stamps it.
+      description: Every queryset is filtered by the current workspace and every create stamps it.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this notification.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this notification.
+          required: true
       tags:
-      - notifications
+        - notifications
       requestBody:
         content:
           application/json:
@@ -1483,7 +1446,7 @@ paths:
             schema:
               $ref: '#/components/schemas/PatchedNotification'
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -1494,10 +1457,9 @@ paths:
   /api/notifications/mark_all_read/:
     post:
       operationId: notifications_mark_all_read_create
-      description: Every queryset is filtered by the current workspace and every create
-        stamps it.
+      description: Every queryset is filtered by the current workspace and every create stamps it.
       tags:
-      - notifications
+        - notifications
       requestBody:
         content:
           application/json:
@@ -1510,7 +1472,7 @@ paths:
             schema:
               $ref: '#/components/schemas/Notification'
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -1521,12 +1483,11 @@ paths:
   /api/notifications/unread_count/:
     get:
       operationId: notifications_unread_count_retrieve
-      description: Every queryset is filtered by the current workspace and every create
-        stamps it.
+      description: Every queryset is filtered by the current workspace and every create stamps it.
       tags:
-      - notifications
+        - notifications
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -1537,37 +1498,36 @@ paths:
   /api/projects/:
     get:
       operationId: projects_list
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       parameters:
-      - name: limit
-        required: false
-        in: query
-        description: Number of results to return per page.
-        schema:
-          type: integer
-      - name: offset
-        required: false
-        in: query
-        description: The initial index from which to return the results.
-        schema:
-          type: integer
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
+        - name: limit
+          required: false
+          in: query
+          description: Number of results to return per page.
+          schema:
+            type: integer
+        - name: offset
+          required: false
+          in: query
+          description: The initial index from which to return the results.
+          schema:
+            type: integer
+        - name: ordering
+          required: false
+          in: query
+          description: Which field to use when ordering the results.
+          schema:
+            type: string
+        - name: search
+          required: false
+          in: query
+          description: A search term.
+          schema:
+            type: string
       tags:
-      - projects
+        - projects
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -1577,10 +1537,9 @@ paths:
           description: ''
     post:
       operationId: projects_create
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       tags:
-      - projects
+        - projects
       requestBody:
         content:
           application/json:
@@ -1594,7 +1553,7 @@ paths:
               $ref: '#/components/schemas/Project'
         required: true
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '201':
           content:
@@ -1605,19 +1564,18 @@ paths:
   /api/projects/{id}/:
     get:
       operationId: projects_retrieve
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this project.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this project.
+          required: true
       tags:
-      - projects
+        - projects
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -1627,17 +1585,16 @@ paths:
           description: ''
     put:
       operationId: projects_update
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this project.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this project.
+          required: true
       tags:
-      - projects
+        - projects
       requestBody:
         content:
           application/json:
@@ -1651,7 +1608,7 @@ paths:
               $ref: '#/components/schemas/Project'
         required: true
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -1661,17 +1618,16 @@ paths:
           description: ''
     patch:
       operationId: projects_partial_update
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this project.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this project.
+          required: true
       tags:
-      - projects
+        - projects
       requestBody:
         content:
           application/json:
@@ -1684,7 +1640,7 @@ paths:
             schema:
               $ref: '#/components/schemas/PatchedProject'
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -1694,38 +1650,36 @@ paths:
           description: ''
     delete:
       operationId: projects_destroy
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this project.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this project.
+          required: true
       tags:
-      - projects
+        - projects
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '204':
           description: No response body
   /api/projects/{id}/stats/:
     get:
       operationId: projects_stats_retrieve
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this project.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this project.
+          required: true
       tags:
-      - projects
+        - projects
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -1736,37 +1690,36 @@ paths:
   /api/reports/:
     get:
       operationId: reports_list
-      description: Every queryset is filtered by the current workspace and every create
-        stamps it.
+      description: Every queryset is filtered by the current workspace and every create stamps it.
       parameters:
-      - name: limit
-        required: false
-        in: query
-        description: Number of results to return per page.
-        schema:
-          type: integer
-      - name: offset
-        required: false
-        in: query
-        description: The initial index from which to return the results.
-        schema:
-          type: integer
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
+        - name: limit
+          required: false
+          in: query
+          description: Number of results to return per page.
+          schema:
+            type: integer
+        - name: offset
+          required: false
+          in: query
+          description: The initial index from which to return the results.
+          schema:
+            type: integer
+        - name: ordering
+          required: false
+          in: query
+          description: Which field to use when ordering the results.
+          schema:
+            type: string
+        - name: search
+          required: false
+          in: query
+          description: A search term.
+          schema:
+            type: string
       tags:
-      - reports
+        - reports
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -1777,19 +1730,18 @@ paths:
   /api/reports/{id}/:
     get:
       operationId: reports_retrieve
-      description: Every queryset is filtered by the current workspace and every create
-        stamps it.
+      description: Every queryset is filtered by the current workspace and every create stamps it.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this report.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this report.
+          required: true
       tags:
-      - reports
+        - reports
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -1800,9 +1752,9 @@ paths:
   /api/reports/generate/:
     post:
       operationId: reports_generate_create
-      description: Queue a report on demand (runs on the Celery worker).
+      description: Queue a report on demand (runs on the background worker).
       tags:
-      - reports
+        - reports
       requestBody:
         content:
           application/json:
@@ -1815,7 +1767,7 @@ paths:
             schema:
               $ref: '#/components/schemas/Report'
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -1832,122 +1784,122 @@ paths:
         - YAML: application/vnd.oai.openapi
         - JSON: application/vnd.oai.openapi+json
       parameters:
-      - in: query
-        name: format
-        schema:
-          type: string
-          enum:
-          - json
-          - yaml
-      - in: query
-        name: lang
-        schema:
-          type: string
-          enum:
-          - af
-          - ar
-          - ar-dz
-          - ast
-          - az
-          - be
-          - bg
-          - bn
-          - br
-          - bs
-          - ca
-          - ckb
-          - cs
-          - cy
-          - da
-          - de
-          - dsb
-          - el
-          - en
-          - en-au
-          - en-gb
-          - eo
-          - es
-          - es-ar
-          - es-co
-          - es-mx
-          - es-ni
-          - es-ve
-          - et
-          - eu
-          - fa
-          - fi
-          - fr
-          - fy
-          - ga
-          - gd
-          - gl
-          - he
-          - hi
-          - hr
-          - hsb
-          - hu
-          - hy
-          - ia
-          - id
-          - ig
-          - io
-          - is
-          - it
-          - ja
-          - ka
-          - kab
-          - kk
-          - km
-          - kn
-          - ko
-          - ky
-          - lb
-          - lt
-          - lv
-          - mk
-          - ml
-          - mn
-          - mr
-          - ms
-          - my
-          - nb
-          - ne
-          - nl
-          - nn
-          - os
-          - pa
-          - pl
-          - pt
-          - pt-br
-          - ro
-          - ru
-          - sk
-          - sl
-          - sq
-          - sr
-          - sr-latn
-          - sv
-          - sw
-          - ta
-          - te
-          - tg
-          - th
-          - tk
-          - tr
-          - tt
-          - udm
-          - ug
-          - uk
-          - ur
-          - uz
-          - vi
-          - zh-hans
-          - zh-hant
+        - in: query
+          name: format
+          schema:
+            type: string
+            enum:
+              - json
+              - yaml
+        - in: query
+          name: lang
+          schema:
+            type: string
+            enum:
+              - af
+              - ar
+              - ar-dz
+              - ast
+              - az
+              - be
+              - bg
+              - bn
+              - br
+              - bs
+              - ca
+              - ckb
+              - cs
+              - cy
+              - da
+              - de
+              - dsb
+              - el
+              - en
+              - en-au
+              - en-gb
+              - eo
+              - es
+              - es-ar
+              - es-co
+              - es-mx
+              - es-ni
+              - es-ve
+              - et
+              - eu
+              - fa
+              - fi
+              - fr
+              - fy
+              - ga
+              - gd
+              - gl
+              - he
+              - hi
+              - hr
+              - hsb
+              - hu
+              - hy
+              - ia
+              - id
+              - ig
+              - io
+              - is
+              - it
+              - ja
+              - ka
+              - kab
+              - kk
+              - km
+              - kn
+              - ko
+              - ky
+              - lb
+              - lt
+              - lv
+              - mk
+              - ml
+              - mn
+              - mr
+              - ms
+              - my
+              - nb
+              - ne
+              - nl
+              - nn
+              - os
+              - pa
+              - pl
+              - pt
+              - pt-br
+              - ro
+              - ru
+              - sk
+              - sl
+              - sq
+              - sr
+              - sr-latn
+              - sv
+              - sw
+              - ta
+              - te
+              - tg
+              - th
+              - tk
+              - tr
+              - tt
+              - udm
+              - ug
+              - uk
+              - ur
+              - uz
+              - vi
+              - zh-hans
+              - zh-hant
       tags:
-      - schema
+        - schema
       security:
-      - jwtAuth: []
-      - {}
+        - jwtAuth: []
+        - {}
       responses:
         '200':
           content:
@@ -1971,53 +1923,52 @@ paths:
   /api/sprints/:
     get:
       operationId: sprints_list
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       parameters:
-      - name: limit
-        required: false
-        in: query
-        description: Number of results to return per page.
-        schema:
-          type: integer
-      - name: offset
-        required: false
-        in: query
-        description: The initial index from which to return the results.
-        schema:
-          type: integer
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - in: query
-        name: project
-        schema:
-          type: integer
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
-      - in: query
-        name: state
-        schema:
-          type: string
-          enum:
-          - active
-          - closed
-          - planned
-        description: |-
-          * `planned` - Planned
-          * `active` - Active
-          * `closed` - Closed
+        - name: limit
+          required: false
+          in: query
+          description: Number of results to return per page.
+          schema:
+            type: integer
+        - name: offset
+          required: false
+          in: query
+          description: The initial index from which to return the results.
+          schema:
+            type: integer
+        - name: ordering
+          required: false
+          in: query
+          description: Which field to use when ordering the results.
+          schema:
+            type: string
+        - in: query
+          name: project
+          schema:
+            type: integer
+        - name: search
+          required: false
+          in: query
+          description: A search term.
+          schema:
+            type: string
+        - in: query
+          name: state
+          schema:
+            type: string
+            enum:
+              - active
+              - closed
+              - planned
+          description: |-
+            * `planned` - Planned
+            * `active` - Active
+            * `closed` - Closed
       tags:
-      - sprints
+        - sprints
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -2027,10 +1978,9 @@ paths:
           description: ''
     post:
       operationId: sprints_create
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       tags:
-      - sprints
+        - sprints
       requestBody:
         content:
           application/json:
@@ -2044,7 +1994,7 @@ paths:
               $ref: '#/components/schemas/Sprint'
         required: true
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '201':
           content:
@@ -2055,19 +2005,18 @@ paths:
   /api/sprints/{id}/:
     get:
       operationId: sprints_retrieve
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this sprint.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this sprint.
+          required: true
       tags:
-      - sprints
+        - sprints
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -2077,17 +2026,16 @@ paths:
           description: ''
     put:
       operationId: sprints_update
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this sprint.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this sprint.
+          required: true
       tags:
-      - sprints
+        - sprints
       requestBody:
         content:
           application/json:
@@ -2101,7 +2049,7 @@ paths:
               $ref: '#/components/schemas/Sprint'
         required: true
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -2111,17 +2059,16 @@ paths:
           description: ''
     patch:
       operationId: sprints_partial_update
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this sprint.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this sprint.
+          required: true
       tags:
-      - sprints
+        - sprints
       requestBody:
         content:
           application/json:
@@ -2134,7 +2081,7 @@ paths:
             schema:
               $ref: '#/components/schemas/PatchedSprint'
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -2144,36 +2091,34 @@ paths:
           description: ''
     delete:
       operationId: sprints_destroy
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this sprint.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this sprint.
+          required: true
       tags:
-      - sprints
+        - sprints
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '204':
           description: No response body
   /api/sprints/{id}/complete/:
     post:
       operationId: sprints_complete_create
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this sprint.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this sprint.
+          required: true
       tags:
-      - sprints
+        - sprints
       requestBody:
         content:
           application/json:
@@ -2187,7 +2132,7 @@ paths:
               $ref: '#/components/schemas/Sprint'
         required: true
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -2198,17 +2143,16 @@ paths:
   /api/sprints/{id}/start/:
     post:
       operationId: sprints_start_create
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this sprint.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this sprint.
+          required: true
       tags:
-      - sprints
+        - sprints
       requestBody:
         content:
           application/json:
@@ -2222,7 +2166,7 @@ paths:
               $ref: '#/components/schemas/Sprint'
         required: true
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -2233,41 +2177,40 @@ paths:
   /api/statuses/:
     get:
       operationId: statuses_list
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       parameters:
-      - name: limit
-        required: false
-        in: query
-        description: Number of results to return per page.
-        schema:
-          type: integer
-      - name: offset
-        required: false
-        in: query
-        description: The initial index from which to return the results.
-        schema:
-          type: integer
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
-      - in: query
-        name: workflow
-        schema:
-          type: integer
+        - name: limit
+          required: false
+          in: query
+          description: Number of results to return per page.
+          schema:
+            type: integer
+        - name: offset
+          required: false
+          in: query
+          description: The initial index from which to return the results.
+          schema:
+            type: integer
+        - name: ordering
+          required: false
+          in: query
+          description: Which field to use when ordering the results.
+          schema:
+            type: string
+        - name: search
+          required: false
+          in: query
+          description: A search term.
+          schema:
+            type: string
+        - in: query
+          name: workflow
+          schema:
+            type: integer
       tags:
-      - statuses
+        - statuses
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -2277,10 +2220,9 @@ paths:
           description: ''
     post:
       operationId: statuses_create
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       tags:
-      - statuses
+        - statuses
       requestBody:
         content:
           application/json:
@@ -2294,7 +2236,7 @@ paths:
               $ref: '#/components/schemas/WorkflowStatus'
         required: true
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '201':
           content:
@@ -2305,19 +2247,18 @@ paths:
   /api/statuses/{id}/:
     get:
       operationId: statuses_retrieve
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this workflow status.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this workflow status.
+          required: true
       tags:
-      - statuses
+        - statuses
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -2327,17 +2268,16 @@ paths:
           description: ''
     put:
       operationId: statuses_update
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this workflow status.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this workflow status.
+          required: true
       tags:
-      - statuses
+        - statuses
       requestBody:
         content:
           application/json:
@@ -2351,7 +2291,7 @@ paths:
               $ref: '#/components/schemas/WorkflowStatus'
         required: true
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -2361,17 +2301,16 @@ paths:
           description: ''
     patch:
       operationId: statuses_partial_update
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this workflow status.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this workflow status.
+          required: true
       tags:
-      - statuses
+        - statuses
       requestBody:
         content:
           application/json:
@@ -2384,7 +2323,7 @@ paths:
             schema:
               $ref: '#/components/schemas/PatchedWorkflowStatus'
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -2394,60 +2333,58 @@ paths:
           description: ''
     delete:
       operationId: statuses_destroy
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this workflow status.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this workflow status.
+          required: true
       tags:
-      - statuses
+        - statuses
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '204':
           description: No response body
   /api/transitions/:
     get:
       operationId: transitions_list
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       parameters:
-      - name: limit
-        required: false
-        in: query
-        description: Number of results to return per page.
-        schema:
-          type: integer
-      - name: offset
-        required: false
-        in: query
-        description: The initial index from which to return the results.
-        schema:
-          type: integer
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
-      - in: query
-        name: workflow
-        schema:
-          type: integer
+        - name: limit
+          required: false
+          in: query
+          description: Number of results to return per page.
+          schema:
+            type: integer
+        - name: offset
+          required: false
+          in: query
+          description: The initial index from which to return the results.
+          schema:
+            type: integer
+        - name: ordering
+          required: false
+          in: query
+          description: Which field to use when ordering the results.
+          schema:
+            type: string
+        - name: search
+          required: false
+          in: query
+          description: A search term.
+          schema:
+            type: string
+        - in: query
+          name: workflow
+          schema:
+            type: integer
       tags:
-      - transitions
+        - transitions
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -2457,10 +2394,9 @@ paths:
           description: ''
     post:
       operationId: transitions_create
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       tags:
-      - transitions
+        - transitions
       requestBody:
         content:
           application/json:
@@ -2474,7 +2410,7 @@ paths:
               $ref: '#/components/schemas/WorkflowTransition'
         required: true
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '201':
           content:
@@ -2485,19 +2421,18 @@ paths:
   /api/transitions/{id}/:
     get:
       operationId: transitions_retrieve
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this workflow transition.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this workflow transition.
+          required: true
       tags:
-      - transitions
+        - transitions
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -2507,56 +2442,54 @@ paths:
           description: ''
     delete:
       operationId: transitions_destroy
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this workflow transition.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this workflow transition.
+          required: true
       tags:
-      - transitions
+        - transitions
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '204':
           description: No response body
   /api/webhooks/:
     get:
       operationId: webhooks_list
-      description: Every queryset is filtered by the current workspace and every create
-        stamps it.
+      description: Every queryset is filtered by the current workspace and every create stamps it.
       parameters:
-      - name: limit
-        required: false
-        in: query
-        description: Number of results to return per page.
-        schema:
-          type: integer
-      - name: offset
-        required: false
-        in: query
-        description: The initial index from which to return the results.
-        schema:
-          type: integer
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
+        - name: limit
+          required: false
+          in: query
+          description: Number of results to return per page.
+          schema:
+            type: integer
+        - name: offset
+          required: false
+          in: query
+          description: The initial index from which to return the results.
+          schema:
+            type: integer
+        - name: ordering
+          required: false
+          in: query
+          description: Which field to use when ordering the results.
+          schema:
+            type: string
+        - name: search
+          required: false
+          in: query
+          description: A search term.
+          schema:
+            type: string
       tags:
-      - webhooks
+        - webhooks
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -2566,10 +2499,9 @@ paths:
           description: ''
     post:
       operationId: webhooks_create
-      description: Every queryset is filtered by the current workspace and every create
-        stamps it.
+      description: Every queryset is filtered by the current workspace and every create stamps it.
       tags:
-      - webhooks
+        - webhooks
       requestBody:
         content:
           application/json:
@@ -2583,7 +2515,7 @@ paths:
               $ref: '#/components/schemas/Webhook'
         required: true
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '201':
           content:
@@ -2594,19 +2526,18 @@ paths:
   /api/webhooks/{id}/:
     get:
       operationId: webhooks_retrieve
-      description: Every queryset is filtered by the current workspace and every create
-        stamps it.
+      description: Every queryset is filtered by the current workspace and every create stamps it.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this webhook.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this webhook.
+          required: true
       tags:
-      - webhooks
+        - webhooks
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -2616,17 +2547,16 @@ paths:
           description: ''
     put:
       operationId: webhooks_update
-      description: Every queryset is filtered by the current workspace and every create
-        stamps it.
+      description: Every queryset is filtered by the current workspace and every create stamps it.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this webhook.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this webhook.
+          required: true
       tags:
-      - webhooks
+        - webhooks
       requestBody:
         content:
           application/json:
@@ -2640,7 +2570,7 @@ paths:
               $ref: '#/components/schemas/Webhook'
         required: true
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -2650,17 +2580,16 @@ paths:
           description: ''
     patch:
       operationId: webhooks_partial_update
-      description: Every queryset is filtered by the current workspace and every create
-        stamps it.
+      description: Every queryset is filtered by the current workspace and every create stamps it.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this webhook.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this webhook.
+          required: true
       tags:
-      - webhooks
+        - webhooks
       requestBody:
         content:
           application/json:
@@ -2673,7 +2602,7 @@ paths:
             schema:
               $ref: '#/components/schemas/PatchedWebhook'
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -2683,38 +2612,36 @@ paths:
           description: ''
     delete:
       operationId: webhooks_destroy
-      description: Every queryset is filtered by the current workspace and every create
-        stamps it.
+      description: Every queryset is filtered by the current workspace and every create stamps it.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this webhook.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this webhook.
+          required: true
       tags:
-      - webhooks
+        - webhooks
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '204':
           description: No response body
   /api/webhooks/{id}/deliveries/:
     get:
       operationId: webhooks_deliveries_retrieve
-      description: Every queryset is filtered by the current workspace and every create
-        stamps it.
+      description: Every queryset is filtered by the current workspace and every create stamps it.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this webhook.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this webhook.
+          required: true
       tags:
-      - webhooks
+        - webhooks
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -2725,17 +2652,16 @@ paths:
   /api/webhooks/{id}/ping/:
     post:
       operationId: webhooks_ping_create
-      description: Every queryset is filtered by the current workspace and every create
-        stamps it.
+      description: Every queryset is filtered by the current workspace and every create stamps it.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this webhook.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this webhook.
+          required: true
       tags:
-      - webhooks
+        - webhooks
       requestBody:
         content:
           application/json:
@@ -2749,7 +2675,7 @@ paths:
               $ref: '#/components/schemas/Webhook'
         required: true
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -2760,17 +2686,16 @@ paths:
   /api/webhooks/{id}/redeliver/:
     post:
       operationId: webhooks_redeliver_create
-      description: '`{delivery}`: send that delivery''s event again, as a new delivery
-        with the same payload.'
+      description: '`{delivery}`: send that delivery''s event again, as a new delivery with the same payload.'
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this webhook.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this webhook.
+          required: true
       tags:
-      - webhooks
+        - webhooks
       requestBody:
         content:
           application/json:
@@ -2784,7 +2709,7 @@ paths:
               $ref: '#/components/schemas/Webhook'
         required: true
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -2795,17 +2720,16 @@ paths:
   /api/webhooks/{id}/rotate_secret/:
     post:
       operationId: webhooks_rotate_secret_create
-      description: New signing secret, effective for every delivery from now on (e.g.
-        after the old one leaked).
+      description: New signing secret, effective for every delivery from now on (e.g. after the old one leaked).
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this webhook.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this webhook.
+          required: true
       tags:
-      - webhooks
+        - webhooks
       requestBody:
         content:
           application/json:
@@ -2819,7 +2743,7 @@ paths:
               $ref: '#/components/schemas/Webhook'
         required: true
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -2830,12 +2754,11 @@ paths:
   /api/webhooks/events/:
     get:
       operationId: webhooks_events_retrieve
-      description: Every queryset is filtered by the current workspace and every create
-        stamps it.
+      description: Every queryset is filtered by the current workspace and every create stamps it.
       tags:
-      - webhooks
+        - webhooks
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -2846,37 +2769,36 @@ paths:
   /api/workflows/:
     get:
       operationId: workflows_list
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       parameters:
-      - name: limit
-        required: false
-        in: query
-        description: Number of results to return per page.
-        schema:
-          type: integer
-      - name: offset
-        required: false
-        in: query
-        description: The initial index from which to return the results.
-        schema:
-          type: integer
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
+        - name: limit
+          required: false
+          in: query
+          description: Number of results to return per page.
+          schema:
+            type: integer
+        - name: offset
+          required: false
+          in: query
+          description: The initial index from which to return the results.
+          schema:
+            type: integer
+        - name: ordering
+          required: false
+          in: query
+          description: Which field to use when ordering the results.
+          schema:
+            type: string
+        - name: search
+          required: false
+          in: query
+          description: A search term.
+          schema:
+            type: string
       tags:
-      - workflows
+        - workflows
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -2886,10 +2808,9 @@ paths:
           description: ''
     post:
       operationId: workflows_create
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       tags:
-      - workflows
+        - workflows
       requestBody:
         content:
           application/json:
@@ -2903,7 +2824,7 @@ paths:
               $ref: '#/components/schemas/Workflow'
         required: true
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '201':
           content:
@@ -2914,19 +2835,18 @@ paths:
   /api/workflows/{id}/:
     get:
       operationId: workflows_retrieve
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this workflow.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this workflow.
+          required: true
       tags:
-      - workflows
+        - workflows
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -2936,17 +2856,16 @@ paths:
           description: ''
     put:
       operationId: workflows_update
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this workflow.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this workflow.
+          required: true
       tags:
-      - workflows
+        - workflows
       requestBody:
         content:
           application/json:
@@ -2960,7 +2879,7 @@ paths:
               $ref: '#/components/schemas/Workflow'
         required: true
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -2970,17 +2889,16 @@ paths:
           description: ''
     patch:
       operationId: workflows_partial_update
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this workflow.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this workflow.
+          required: true
       tags:
-      - workflows
+        - workflows
       requestBody:
         content:
           application/json:
@@ -2993,7 +2911,7 @@ paths:
             schema:
               $ref: '#/components/schemas/PatchedWorkflow'
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -3003,56 +2921,54 @@ paths:
           description: ''
     delete:
       operationId: workflows_destroy
-      description: ModelViewSet that writes an audit entry (and webhook event) for
-        create/update/delete.
+      description: Every change is written to the audit log and sent to the workspace's subscribed webhooks.
       parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this workflow.
-        required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          description: A unique integer value identifying this workflow.
+          required: true
       tags:
-      - workflows
+        - workflows
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '204':
           description: No response body
   /api/workspaces/:
     get:
       operationId: workspaces_list
-      description: Workspaces the current user belongs to. Not tenant-scoped (it is
-        the tenant list).
+      description: Workspaces the current user belongs to. Not tenant-scoped (it is the tenant list).
       parameters:
-      - name: limit
-        required: false
-        in: query
-        description: Number of results to return per page.
-        schema:
-          type: integer
-      - name: offset
-        required: false
-        in: query
-        description: The initial index from which to return the results.
-        schema:
-          type: integer
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
+        - name: limit
+          required: false
+          in: query
+          description: Number of results to return per page.
+          schema:
+            type: integer
+        - name: offset
+          required: false
+          in: query
+          description: The initial index from which to return the results.
+          schema:
+            type: integer
+        - name: ordering
+          required: false
+          in: query
+          description: Which field to use when ordering the results.
+          schema:
+            type: string
+        - name: search
+          required: false
+          in: query
+          description: A search term.
+          schema:
+            type: string
       tags:
-      - workspaces
+        - workspaces
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -3062,10 +2978,9 @@ paths:
           description: ''
     post:
       operationId: workspaces_create
-      description: Workspaces the current user belongs to. Not tenant-scoped (it is
-        the tenant list).
+      description: Workspaces the current user belongs to. Not tenant-scoped (it is the tenant list).
       tags:
-      - workspaces
+        - workspaces
       requestBody:
         content:
           application/json:
@@ -3079,7 +2994,7 @@ paths:
               $ref: '#/components/schemas/Workspace'
         required: true
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '201':
           content:
@@ -3090,18 +3005,17 @@ paths:
   /api/workspaces/{slug}/:
     get:
       operationId: workspaces_retrieve
-      description: Workspaces the current user belongs to. Not tenant-scoped (it is
-        the tenant list).
+      description: Workspaces the current user belongs to. Not tenant-scoped (it is the tenant list).
       parameters:
-      - in: path
-        name: slug
-        schema:
-          type: string
-        required: true
+        - in: path
+          name: slug
+          schema:
+            type: string
+          required: true
       tags:
-      - workspaces
+        - workspaces
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -3111,16 +3025,15 @@ paths:
           description: ''
     patch:
       operationId: workspaces_partial_update
-      description: Workspaces the current user belongs to. Not tenant-scoped (it is
-        the tenant list).
+      description: Workspaces the current user belongs to. Not tenant-scoped (it is the tenant list).
       parameters:
-      - in: path
-        name: slug
-        schema:
-          type: string
-        required: true
+        - in: path
+          name: slug
+          schema:
+            type: string
+          required: true
       tags:
-      - workspaces
+        - workspaces
       requestBody:
         content:
           application/json:
@@ -3133,7 +3046,7 @@ paths:
             schema:
               $ref: '#/components/schemas/PatchedWorkspace'
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -3143,34 +3056,32 @@ paths:
           description: ''
     delete:
       operationId: workspaces_destroy
-      description: Workspaces the current user belongs to. Not tenant-scoped (it is
-        the tenant list).
+      description: Workspaces the current user belongs to. Not tenant-scoped (it is the tenant list).
       parameters:
-      - in: path
-        name: slug
-        schema:
-          type: string
-        required: true
+        - in: path
+          name: slug
+          schema:
+            type: string
+          required: true
       tags:
-      - workspaces
+        - workspaces
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '204':
           description: No response body
   /api/workspaces/{slug}/transfer/:
     post:
       operationId: workspaces_transfer_create
-      description: 'Owner only: `{user_id}` of another member becomes the owner; you
-        become an admin.'
+      description: 'Owner only: `{user_id}` of another member becomes the owner; you become an admin.'
       parameters:
-      - in: path
-        name: slug
-        schema:
-          type: string
-        required: true
+        - in: path
+          name: slug
+          schema:
+            type: string
+          required: true
       tags:
-      - workspaces
+        - workspaces
       requestBody:
         content:
           application/json:
@@ -3184,7 +3095,7 @@ paths:
               $ref: '#/components/schemas/Workspace'
         required: true
       security:
-      - jwtAuth: []
+        - jwtAuth: []
       responses:
         '200':
           content:
@@ -3196,8 +3107,8 @@ components:
   schemas:
     ActionEnum:
       enum:
-      - subscribe
-      - cancel
+        - subscribe
+        - cancel
       type: string
       description: |-
         * `subscribe` - subscribe
@@ -3222,7 +3133,7 @@ components:
           readOnly: true
         uploaded_by:
           allOf:
-          - $ref: '#/components/schemas/User'
+            - $ref: '#/components/schemas/User'
           readOnly: true
         download_url:
           type: string
@@ -3232,14 +3143,14 @@ components:
           format: date-time
           readOnly: true
       required:
-      - created_at
-      - download_url
-      - file
-      - filename
-      - id
-      - issue
-      - size
-      - uploaded_by
+        - created_at
+        - download_url
+        - file
+        - filename
+        - id
+        - issue
+        - size
+        - uploaded_by
     AuditLogAdmin:
       type: object
       description: The admin-only audit log also shows where each change came from.
@@ -3262,11 +3173,11 @@ components:
         changes: {}
         actor_email:
           oneOf:
-          - type: string
-            format: email
-            maxLength: 254
-          - type: string
-            maxLength: 0
+            - type: string
+              format: email
+              maxLength: 254
+            - type: string
+              maxLength: 0
         created_at:
           type: string
           format: date-time
@@ -3275,11 +3186,11 @@ components:
           type: string
           nullable: true
       required:
-      - action
-      - created_at
-      - entity_id
-      - entity_type
-      - id
+        - action
+        - created_at
+        - entity_id
+        - entity_type
+        - id
     BillingOverview:
       type: object
       properties:
@@ -3287,7 +3198,7 @@ components:
           $ref: '#/components/schemas/BillingPlanEnum'
         effective_plan:
           allOf:
-          - $ref: '#/components/schemas/BillingPlanEnum'
+            - $ref: '#/components/schemas/BillingPlanEnum'
           description: |-
             Plan whose limits apply (Free if past due)
 
@@ -3326,23 +3237,23 @@ components:
           type: boolean
           description: True for the owner
       required:
-      - can_manage
-      - cancel_at_period_end
-      - current_period_end
-      - effective_plan
-      - has_subscription
-      - limits
-      - mode
-      - plan
-      - plans
-      - status
-      - stripe_enabled
-      - usage
+        - can_manage
+        - cancel_at_period_end
+        - current_period_end
+        - effective_plan
+        - has_subscription
+        - limits
+        - mode
+        - plan
+        - plans
+        - status
+        - stripe_enabled
+        - usage
     BillingPlanEnum:
       enum:
-      - free
-      - pro
-      - business
+        - free
+        - pro
+        - business
       type: string
       description: |-
         * `free` - free
@@ -3372,15 +3283,15 @@ components:
           format: date-time
           readOnly: true
       required:
-      - created_at
-      - id
-      - name
-      - project
+        - created_at
+        - id
+        - name
+        - project
     CategoryEnum:
       enum:
-      - todo
-      - in_progress
-      - done
+        - todo
+        - in_progress
+        - done
       type: string
       description: |-
         * `todo` - To do
@@ -3392,7 +3303,7 @@ components:
         plan:
           $ref: '#/components/schemas/PaidPlanEnum'
       required:
-      - plan
+        - plan
     Comment:
       type: object
       description: |-
@@ -3409,7 +3320,7 @@ components:
           type: integer
         author:
           allOf:
-          - $ref: '#/components/schemas/User'
+            - $ref: '#/components/schemas/User'
           readOnly: true
         body:
           type: string
@@ -3422,46 +3333,46 @@ components:
           format: date-time
           readOnly: true
       required:
-      - author
-      - body
-      - created_at
-      - id
-      - issue
-      - updated_at
+        - author
+        - body
+        - created_at
+        - id
+        - issue
+        - updated_at
     EventsEnum:
       enum:
-      - issue.created
-      - issue.updated
-      - issue.moved
-      - issue.deleted
-      - comment.created
-      - comment.updated
-      - comment.deleted
-      - attachment.created
-      - attachment.deleted
-      - project.created
-      - project.updated
-      - project.deleted
-      - board.created
-      - board.updated
-      - board.deleted
-      - sprint.created
-      - sprint.updated
-      - sprint.deleted
-      - sprint.started
-      - sprint.completed
-      - workflow.created
-      - workflow.updated
-      - workflow.deleted
-      - status.created
-      - status.updated
-      - status.deleted
-      - transition.created
-      - transition.deleted
-      - member.added
-      - member.role_changed
-      - member.removed
-      - member.left
+        - issue.created
+        - issue.updated
+        - issue.moved
+        - issue.deleted
+        - comment.created
+        - comment.updated
+        - comment.deleted
+        - attachment.created
+        - attachment.deleted
+        - project.created
+        - project.updated
+        - project.deleted
+        - board.created
+        - board.updated
+        - board.deleted
+        - sprint.created
+        - sprint.updated
+        - sprint.deleted
+        - sprint.started
+        - sprint.completed
+        - workflow.created
+        - workflow.updated
+        - workflow.deleted
+        - status.created
+        - status.updated
+        - status.deleted
+        - transition.created
+        - transition.deleted
+        - member.added
+        - member.role_changed
+        - member.removed
+        - member.left
       type: string
       description: |-
         * `issue.created` - issue.created
@@ -3535,11 +3446,11 @@ components:
           nullable: true
         assignee_detail:
           allOf:
-          - $ref: '#/components/schemas/User'
+            - $ref: '#/components/schemas/User'
           readOnly: true
         reporter_detail:
           allOf:
-          - $ref: '#/components/schemas/User'
+            - $ref: '#/components/schemas/User'
           readOnly: true
         story_points:
           type: integer
@@ -3571,20 +3482,20 @@ components:
           format: date-time
           readOnly: true
       required:
-      - assignee_detail
-      - can_delete
-      - comment_count
-      - created_at
-      - id
-      - key
-      - number
-      - project
-      - rank
-      - reporter_detail
-      - status_category
-      - status_name
-      - title
-      - updated_at
+        - assignee_detail
+        - can_delete
+        - comment_count
+        - created_at
+        - id
+        - key
+        - number
+        - project
+        - rank
+        - reporter_detail
+        - status_category
+        - status_name
+        - title
+        - updated_at
     IssueMove:
       type: object
       properties:
@@ -3600,19 +3511,18 @@ components:
           type: integer
           description: Place the issue right before this issue.
       required:
-      - status
+        - status
     KindEnum:
       enum:
-      - kanban
-      - scrum
+        - kanban
+        - scrum
       type: string
       description: |-
         * `kanban` - Kanban
         * `scrum` - Scrum
     Me:
       type: object
-      description: The signed-in user, plus what the app needs to know about the public
-        demo.
+      description: The signed-in user, plus what the app needs to know about the public demo.
       properties:
         id:
           type: integer
@@ -3634,11 +3544,11 @@ components:
           type: boolean
           readOnly: true
       required:
-      - demo_mode
-      - display_name
-      - email
-      - id
-      - is_demo_account
+        - demo_mode
+        - display_name
+        - email
+        - id
+        - is_demo_account
     Membership:
       type: object
       properties:
@@ -3647,7 +3557,7 @@ components:
           readOnly: true
         user:
           allOf:
-          - $ref: '#/components/schemas/User'
+            - $ref: '#/components/schemas/User'
           readOnly: true
         email:
           type: string
@@ -3660,15 +3570,15 @@ components:
           format: date-time
           readOnly: true
       required:
-      - id
-      - joined_at
-      - user
+        - id
+        - joined_at
+        - user
     MockAction:
       type: object
       properties:
         action:
           allOf:
-          - $ref: '#/components/schemas/ActionEnum'
+            - $ref: '#/components/schemas/ActionEnum'
           default: subscribe
         plan:
           $ref: '#/components/schemas/PaidPlanEnum'
@@ -3685,14 +3595,14 @@ components:
             type: object
             additionalProperties: {}
       required:
-      - plan
-      - status
-      - webhooks
+        - plan
+        - status
+        - webhooks
     ModeEnum:
       enum:
-      - mock
-      - live
-      - disabled
+        - mock
+        - live
+        - disabled
       type: string
       description: |-
         * `mock` - mock
@@ -3727,18 +3637,18 @@ components:
           format: date-time
           readOnly: true
       required:
-      - created_at
-      - id
-      - issue
-      - issue_key
-      - message
-      - project
-      - verb
+        - created_at
+        - id
+        - issue
+        - issue_key
+        - message
+        - project
+        - verb
     PaginatedAttachmentList:
       type: object
       required:
-      - count
-      - results
+        - count
+        - results
       properties:
         count:
           type: integer
@@ -3760,8 +3670,8 @@ components:
     PaginatedAuditLogAdminList:
       type: object
       required:
-      - count
-      - results
+        - count
+        - results
       properties:
         count:
           type: integer
@@ -3783,8 +3693,8 @@ components:
     PaginatedBoardList:
       type: object
       required:
-      - count
-      - results
+        - count
+        - results
       properties:
         count:
           type: integer
@@ -3806,8 +3716,8 @@ components:
     PaginatedCommentList:
       type: object
       required:
-      - count
-      - results
+        - count
+        - results
       properties:
         count:
           type: integer
@@ -3829,8 +3739,8 @@ components:
     PaginatedIssueList:
       type: object
       required:
-      - count
-      - results
+        - count
+        - results
       properties:
         count:
           type: integer
@@ -3852,8 +3762,8 @@ components:
     PaginatedMembershipList:
       type: object
       required:
-      - count
-      - results
+        - count
+        - results
       properties:
         count:
           type: integer
@@ -3875,8 +3785,8 @@ components:
     PaginatedNotificationList:
       type: object
       required:
-      - count
-      - results
+        - count
+        - results
       properties:
         count:
           type: integer
@@ -3898,8 +3808,8 @@ components:
     PaginatedProjectList:
       type: object
       required:
-      - count
-      - results
+        - count
+        - results
       properties:
         count:
           type: integer
@@ -3921,8 +3831,8 @@ components:
     PaginatedReportList:
       type: object
       required:
-      - count
-      - results
+        - count
+        - results
       properties:
         count:
           type: integer
@@ -3944,8 +3854,8 @@ components:
     PaginatedSprintList:
       type: object
       required:
-      - count
-      - results
+        - count
+        - results
       properties:
         count:
           type: integer
@@ -3967,8 +3877,8 @@ components:
     PaginatedWebhookList:
       type: object
       required:
-      - count
-      - results
+        - count
+        - results
       properties:
         count:
           type: integer
@@ -3990,8 +3900,8 @@ components:
     PaginatedWorkflowList:
       type: object
       required:
-      - count
-      - results
+        - count
+        - results
       properties:
         count:
           type: integer
@@ -4013,8 +3923,8 @@ components:
     PaginatedWorkflowStatusList:
       type: object
       required:
-      - count
-      - results
+        - count
+        - results
       properties:
         count:
           type: integer
@@ -4036,8 +3946,8 @@ components:
     PaginatedWorkflowTransitionList:
       type: object
       required:
-      - count
-      - results
+        - count
+        - results
       properties:
         count:
           type: integer
@@ -4059,8 +3969,8 @@ components:
     PaginatedWorkspaceList:
       type: object
       required:
-      - count
-      - results
+        - count
+        - results
       properties:
         count:
           type: integer
@@ -4081,8 +3991,8 @@ components:
             $ref: '#/components/schemas/Workspace'
     PaidPlanEnum:
       enum:
-      - pro
-      - business
+        - pro
+        - business
       type: string
       description: |-
         * `pro` - pro
@@ -4097,8 +4007,8 @@ components:
           type: string
           writeOnly: true
       required:
-      - current_password
-      - new_password
+        - current_password
+        - new_password
     PatchedBoard:
       type: object
       description: |-
@@ -4138,7 +4048,7 @@ components:
           type: integer
         author:
           allOf:
-          - $ref: '#/components/schemas/User'
+            - $ref: '#/components/schemas/User'
           readOnly: true
         body:
           type: string
@@ -4189,11 +4099,11 @@ components:
           nullable: true
         assignee_detail:
           allOf:
-          - $ref: '#/components/schemas/User'
+            - $ref: '#/components/schemas/User'
           readOnly: true
         reporter_detail:
           allOf:
-          - $ref: '#/components/schemas/User'
+            - $ref: '#/components/schemas/User'
           readOnly: true
         story_points:
           type: integer
@@ -4226,8 +4136,7 @@ components:
           readOnly: true
     PatchedMe:
       type: object
-      description: The signed-in user, plus what the app needs to know about the public
-        demo.
+      description: The signed-in user, plus what the app needs to know about the public demo.
       properties:
         id:
           type: integer
@@ -4256,7 +4165,7 @@ components:
           readOnly: true
         user:
           allOf:
-          - $ref: '#/components/schemas/User'
+            - $ref: '#/components/schemas/User'
           readOnly: true
         email:
           type: string
@@ -4356,7 +4265,7 @@ components:
           nullable: true
         state:
           allOf:
-          - $ref: '#/components/schemas/StateEnum'
+            - $ref: '#/components/schemas/StateEnum'
           readOnly: true
         issue_count:
           type: integer
@@ -4467,10 +4376,10 @@ components:
           readOnly: true
     PriorityEnum:
       enum:
-      - low
-      - medium
-      - high
-      - critical
+        - low
+        - medium
+        - high
+        - critical
       type: string
       description: |-
         * `low` - Low
@@ -4509,12 +4418,12 @@ components:
           format: date-time
           readOnly: true
       required:
-      - board_id
-      - created_at
-      - id
-      - issue_count
-      - key
-      - name
+        - board_id
+        - created_at
+        - id
+        - issue_count
+        - key
+        - name
     Redirect:
       type: object
       properties:
@@ -4522,7 +4431,7 @@ components:
           type: string
           description: Stripe's hosted page, or the app's simulated page in mock mode
       required:
-      - url
+        - url
     Register:
       type: object
       properties:
@@ -4539,8 +4448,8 @@ components:
           type: string
           maxLength: 100
       required:
-      - email
-      - password
+        - email
+        - password
     Report:
       type: object
       properties:
@@ -4556,14 +4465,14 @@ components:
           format: date-time
           readOnly: true
       required:
-      - created_at
-      - id
+        - created_at
+        - id
     RoleEnum:
       enum:
-      - owner
-      - admin
-      - member
-      - viewer
+        - owner
+        - admin
+        - member
+        - viewer
       type: string
       description: |-
         * `owner` - Owner
@@ -4599,7 +4508,7 @@ components:
           nullable: true
         state:
           allOf:
-          - $ref: '#/components/schemas/StateEnum'
+            - $ref: '#/components/schemas/StateEnum'
           readOnly: true
         issue_count:
           type: integer
@@ -4610,17 +4519,17 @@ components:
           format: date-time
           readOnly: true
       required:
-      - created_at
-      - id
-      - issue_count
-      - name
-      - project
-      - state
+        - created_at
+        - id
+        - issue_count
+        - name
+        - project
+        - state
     StateEnum:
       enum:
-      - planned
-      - active
-      - closed
+        - planned
+        - active
+        - closed
       type: string
       description: |-
         * `planned` - Planned
@@ -4628,11 +4537,11 @@ components:
         * `closed` - Closed
     StatusEnum:
       enum:
-      - active
-      - trialing
-      - past_due
-      - canceled
-      - incomplete
+        - active
+        - trialing
+        - past_due
+        - canceled
+        - incomplete
       type: string
       description: |-
         * `active` - Active
@@ -4646,7 +4555,7 @@ components:
         status:
           type: string
       required:
-      - status
+        - status
     TokenBlacklist:
       type: object
       properties:
@@ -4654,7 +4563,7 @@ components:
           type: string
           writeOnly: true
       required:
-      - refresh
+        - refresh
     TokenObtainPair:
       type: object
       properties:
@@ -4671,10 +4580,10 @@ components:
           type: string
           readOnly: true
       required:
-      - access
-      - email
-      - password
-      - refresh
+        - access
+        - email
+        - password
+        - refresh
     TokenRefresh:
       type: object
       properties:
@@ -4684,14 +4593,14 @@ components:
         refresh:
           type: string
       required:
-      - access
-      - refresh
+        - access
+        - refresh
     TypeEnum:
       enum:
-      - task
-      - bug
-      - story
-      - epic
+        - task
+        - bug
+        - story
+        - epic
       type: string
       description: |-
         * `task` - Task
@@ -4715,9 +4624,9 @@ components:
           type: string
           readOnly: true
       required:
-      - display_name
-      - email
-      - id
+        - display_name
+        - email
+        - id
     Webhook:
       type: object
       properties:
@@ -4742,10 +4651,10 @@ components:
           format: date-time
           readOnly: true
       required:
-      - created_at
-      - id
-      - secret
-      - url
+        - created_at
+        - id
+        - secret
+        - url
     Workflow:
       type: object
       properties:
@@ -4773,12 +4682,12 @@ components:
           format: date-time
           readOnly: true
       required:
-      - created_at
-      - id
-      - is_default
-      - name
-      - statuses
-      - transitions
+        - created_at
+        - id
+        - is_default
+        - name
+        - statuses
+        - transitions
     WorkflowStatus:
       type: object
       description: |-
@@ -4807,9 +4716,9 @@ components:
           maximum: 2147483647
           minimum: 0
       required:
-      - id
-      - name
-      - workflow
+        - id
+        - name
+        - workflow
     WorkflowTransition:
       type: object
       properties:
@@ -4823,10 +4732,10 @@ components:
         to_status:
           type: integer
       required:
-      - from_status
-      - id
-      - to_status
-      - workflow
+        - from_status
+        - id
+        - to_status
+        - workflow
     Workspace:
       type: object
       properties:
@@ -4851,12 +4760,12 @@ components:
           type: string
           readOnly: true
       required:
-      - created_at
-      - id
-      - name
-      - plan
-      - role
-      - slug
+        - created_at
+        - id
+        - name
+        - plan
+        - role
+        - slug
   securitySchemes:
     jwtAuth:
       type: http

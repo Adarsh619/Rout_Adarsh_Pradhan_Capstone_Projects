@@ -4,7 +4,7 @@
 
 Each workspace has a plan whose limits the API enforces; going over a limit returns **HTTP 402** with an upgrade message. Stripe's webhook is the single source of truth for plan changes.
 
-## Plans (`apps/billing/plans.py`)
+## Plans (`src/modules/billing/plans.ts`)
 
 | Plan | Price | Projects | Members | Issues |
 |---|---|---|---|---|
@@ -12,17 +12,17 @@ Each workspace has a plan whose limits the API enforces; going over a limit retu
 | Pro | $10 / month | 20 | 50 | 10,000 |
 | Business | $25 / month | Unlimited | Unlimited | Unlimited |
 
-`enforce_limit()` runs before a project, member or issue is created. A past-due or cancelled subscription falls back to Free limits.
+`enforceLimit()` runs, under a lock on the subscription row, in the same transaction that creates a project, member or issue, so requests arriving at the same moment can't squeeze past the limit. A past-due or cancelled subscription falls back to Free limits.
 
 ## Upgrade flow
 
 ```mermaid
 sequenceDiagram
   participant O as Owner (browser)
-  participant A as Django API
+  participant A as Node.js API
   participant S as Stripe / stripe-mock
   O->>A: POST /billing/checkout/ {plan}
-  A->>S: Customer.create, checkout.Session.create
+  A->>S: customers.create, checkout.sessions.create
   A-->>O: checkout URL
   O->>S: pays (or confirms the simulated checkout)
   S->>A: signed checkout.session.completed + customer.subscription.created
@@ -60,12 +60,12 @@ Switching modes changes only `.env`, not code, and neither mode ever charges mon
 
 ## Safe against late, repeated and failed deliveries
 
-Stripe delivers each event at least once and in no guaranteed order, so the handler (`apps/billing/services.py`):
+Stripe delivers each event at least once and in no guaranteed order, so the handler (`processWebhook()` in `src/modules/billing/stripe.ts`):
 
 | Situation | What happens |
 |---|---|
 | The same event arrives twice | Applied once: processed event IDs are stored (`StripeEvent`), and a repeat returns `duplicate` |
-| An older event arrives after a newer one | Ignored: each subscription remembers the `created` time of the last event applied (`stripe_event_created`) |
+| An older event arrives after a newer one | Ignored: each subscription remembers the `created` time of the last event applied (`stripeEventCreated`) |
 | An event is about a different subscription (e.g. a late "deleted" for one the owner cancelled before resubscribing) | Ignored, so it can't downgrade a paying workspace |
 | Applying an event fails | Nothing is saved, not even the "processed" mark; Stripe gets a 500 and retries, and the retry is applied |
 | The owner tries to check out while already subscribed | Refused (400: "Use Manage subscription to change plans"), so nobody pays for two subscriptions. The Billing page shows **Switch plan**, which opens Manage, instead of **Upgrade** |

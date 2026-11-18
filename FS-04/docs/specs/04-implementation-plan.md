@@ -4,6 +4,9 @@
 
 A 14-day plan following the brief's seven steps, with milestones, deliverables and status. The code was built first and is now committed; the remaining work is the demo, presentation and reflection.
 
+> **v1 plan.** This plan was written for v1 (Django, Celery, JavaScript React). In v2.0.0 the stack moved to Node.js, Express, TypeScript, Prisma and Vitest, as the brief's updated tool list requires; the steps and features are the same. See [13 · Stack migration](../13-challenges-and-next-steps.md#stack-migration-to-nodejs-and-typescript-v200).
+
+
 ## Phases
 
 | Phase | Days | Brief step | Scope | Exit criteria | Status |

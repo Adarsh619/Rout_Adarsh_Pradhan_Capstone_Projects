@@ -8,35 +8,37 @@ This document defines **how** the product in the [PRD](01-prd.md) is built: stac
 
 | Layer | Technology (version) | Why |
 |---|---|---|
-| Language (backend) | Python 3.12 | Required by the brief (Django) |
-| Web framework | Django 5.2 LTS + Django REST Framework 3.17 | Mature ORM, admin, auth; DRF viewsets, permissions, filtering |
-| Auth | djangorestframework-simplejwt 5.5 | Stateless JWT for a SPA |
-| API docs | drf-spectacular 0.30 | OpenAPI 3 schema + Swagger UI |
-| Database | PostgreSQL 16 | Required; row locks, JSONB, strong constraints |
-| Queue / jobs | Celery 5.6 + Redis 7 | Required; retries, scheduling (beat) |
-| Billing | stripe-python 16 + Stripe Billing / `stripe-mock` | Required; official SDK; mock for invite-only regions |
-| Frontend | React 18, Vite 5, React Router 6 | Required; fast dev build |
+| Runtime / language (backend) | Node.js 24, TypeScript 6 (strict) | Required by the brief |
+| Web framework | Express 5 | Required; async handlers need no try/catch |
+| Validation | Zod 4 | Request bodies and settings checked at the edge, with field-level errors |
+| ORM | Prisma 7 (`@prisma/adapter-pg`) | Required; typed client generated from the schema, versioned migrations |
+| Auth | `jose` (JWT, HS256), bcryptjs | Stateless JWT for a SPA; refresh tokens recorded for rotation and logout |
+| API docs | OpenAPI 3 (`backend/openapi.yaml`), swagger-ui-express | Served at `/api/schema/` and `/api/docs/`; a test checks it against the routes |
+| Database | PostgreSQL 16 | Required; row locks, JSONB, partial indexes, triggers |
+| Queue / jobs | BullMQ 5 + Redis 7 | Retries with backoff, scheduled jobs (the Node.js counterpart of Celery) |
+| Billing | Stripe Node.js SDK + Stripe Billing / `stripe-mock` | Required; official SDK; mock for invite-only regions |
+| Frontend | React 18, TypeScript (strict), Vite 7, React Router 6 | Required; fast dev build, typed API data |
 | Drag-and-drop | @hello-pangea/dnd 17 | Accessible (keyboard) Kanban DnD |
-| Serving | gunicorn (API), nginx (SPA + proxy), WhiteNoise (admin static) | Production-style serving in containers |
+| Serving | Node.js (API), nginx (SPA + proxy) | Production-style serving in containers |
 | Containers | Docker, Docker Compose | Required; one-command stack |
 | CI/CD | GitHub Actions, GitHub Container Registry | Required; free for this repo |
-| Testing | pytest + pytest-django + coverage, Vitest + Testing Library, Playwright (manual E2E) | Fast unit/integration tests on real PostgreSQL |
-| Code quality | ruff (Python), ESLint (JS) | Enforced in CI |
+| Testing | Vitest + Supertest (API, real PostgreSQL), Vitest + Testing Library (UI), whole-stack smoke test | Required (Vitest); tests on the real database, not mocks |
+| Code quality | ESLint + typescript-eslint, `tsc` type-check | Enforced in CI |
 
 ## 2. Architecture
 
-Detailed in [03 · System architecture](../03-architecture.md). In short: React SPA → nginx → Django REST API (one instance for all tenants) → PostgreSQL; Redis → Celery worker / beat for background work; Stripe (or stripe-mock) for billing.
+Detailed in [03 · System architecture](../03-architecture.md). In short: React SPA → nginx → Node.js API (one instance for all tenants) → PostgreSQL through Prisma; Redis → BullMQ worker for background work and the schedule; Stripe (or stripe-mock) for billing.
 
 ## 3. Multi-tenancy
 
 | Requirement | Implementation |
 |---|---|
-| TR-T1 Shared schema | Abstract `TenantModel` adds an indexed `workspace_id` FK to every tenant table |
-| TR-T2 Tenant resolution | `X-Workspace: <slug>` header → membership lookup in `TenantScopedMixin.initial()` |
-| TR-T3 Scoped queries | `get_queryset()` filters by `request.workspace`; `perform_create()` stamps it |
-| TR-T4 Cross-tenant references | `TenantPKField` / `MemberPKField` restrict FK choices to the current workspace |
+| TR-T1 Shared schema | Every tenant table in `prisma/schema.prisma` has an indexed `workspaceId` FK |
+| TR-T2 Tenant resolution | `X-Workspace: <slug>` header → membership lookup in the `useWorkspace` middleware |
+| TR-T3 Scoped queries | Every query filters by `workspaceId`; every create sets it |
+| TR-T4 Cross-tenant references | `ref()` / `memberRef()` only accept rows and members of the current workspace |
 | TR-T5 Non-disclosure | Non-members get 404, not 403 |
-| TR-T6 Verification | Isolation tests in `tests/test_auth_and_tenancy.py` |
+| TR-T6 Verification | Isolation tests in `tests/auth.test.ts`; a 404 check for every resource in `tests/rules.test.ts` |
 
 ## 4. API standards
 
@@ -46,8 +48,8 @@ Detailed in [03 · System architecture](../03-architecture.md). In short: React 
 | Auth | `Authorization: Bearer <access JWT>`; access 60 min, refresh 7 days |
 | Tenant | `X-Workspace` header on all tenant-scoped endpoints |
 | Pagination | Limit/offset, default page size 100 |
-| Filtering | `django-filter` query params; `?search=`; `?ordering=` |
-| Errors | DRF error bodies; 400 validation, 401 auth, 402 plan limit, 403 role, 404 not found / other tenant |
+| Filtering | Exact-match query params (`?project=`, `?status=`…); `?search=`; `?ordering=` |
+| Errors | `{detail}` or `{field: [messages]}` bodies (the v1 shapes); 400 validation, 401 auth, 402 plan limit, 403 role, 404 not found / other tenant, 429 throttled |
 | Rate limiting | 2,000 requests/hour per user (`API_RATE_LIMIT`) |
 | Documentation | OpenAPI 3 at `/api/schema/`, Swagger UI at `/api/docs/`, committed `docs/openapi.yaml` |
 | Custom actions | Verb sub-routes: `/issues/{id}/move/`, `/sprints/{id}/start/`, `/webhooks/{id}/ping/` |
@@ -58,20 +60,20 @@ Full reference: [06 · API](../06-api.md).
 
 | Requirement | Implementation |
 |---|---|
-| Schema | 19 models, see [Backend schema](06-backend-schema.md) |
-| Integrity | Unique constraints (project key per workspace, issue number per project, membership, transitions); PROTECT on statuses and workflows in use |
+| Schema | 20 tables in `prisma/schema.prisma`, see [Backend schema](06-backend-schema.md) |
+| Integrity | Unique constraints (project key per workspace, issue number per project, membership, transitions); statuses and workflows in use can't be deleted (`onDelete: Restrict`); partial unique indexes, a check constraint and an append-only trigger in raw SQL |
 | Concurrency | `SELECT … FOR UPDATE` on project counter and on the destination column during moves |
-| Migrations | Django migrations committed; CI fails on missing migrations (`makemigrations --check`) |
-| Seed data | `manage.py seed_demo` (Faker, deterministic seed 42) |
+| Migrations | Prisma migrations committed (`prisma migrate dev`), applied on start (`prisma migrate deploy`); the tests run on a database built from them |
+| Seed data | `seed-demo.ts` (`@faker-js/faker`, deterministic seed 42) |
 
 ## 6. Background processing
 
 | Requirement | Implementation |
 |---|---|
-| Post-commit dispatch | `transaction.on_commit` for webhooks and emails |
+| Post-commit dispatch | `inTransaction()` after-commit hooks for webhooks and emails |
 | Retries | Webhook delivery: 5 attempts total, backoff 30/60/120/240 s |
-| Schedules | Celery beat: reminders daily 07:00 UTC; reports Mondays 06:00 UTC |
-| Testability | `CELERY_TASK_ALWAYS_EAGER=true` runs tasks inline in tests/dev |
+| Schedules | BullMQ job schedulers: reminders daily 07:00 UTC; reports Mondays 06:00 UTC; delivery-log clean-up 03:30 UTC; demo reset 21:00 UTC |
+| Testability | `JOBS_INLINE=true` runs jobs inline in tests and quick development |
 
 Details: [08 · Background jobs](../08-background-jobs.md).
 
@@ -116,14 +118,14 @@ All configuration comes from environment variables, listed in [14 · Setup](../1
 
 | Level | Tooling | Scope |
 |---|---|---|
-| Unit / integration (backend) | pytest on PostgreSQL | Models, permissions, API endpoints, tasks, billing |
-| Integration (Stripe) | pytest + `stripe-mock` service | Real SDK calls against Stripe's mock |
+| Unit / integration (backend) | Vitest + Supertest on PostgreSQL | Permissions, API endpoints, database rules, jobs, billing |
+| Integration (Stripe) | Vitest + `stripe-mock` service | Real SDK calls against Stripe's mock |
 | Unit (frontend) | Vitest + Testing Library | Board logic, components, API helpers |
-| End-to-end | Playwright (manual run) | Login, drag-and-drop, billing flow |
-| Performance guard | pytest query counting | Board endpoint query budget |
+| End-to-end | `scripts/smoke-test.sh` in CI (whole Docker stack); browser checks by hand | Sign-up to billing through nginx |
+| Performance guard | Prisma query counting in Vitest | Board endpoint query budget |
 
 Results: [12 · Testing](../12-testing.md).
 
 ## 12. CI/CD
 
-Lint + tests for backend and frontend on every push/PR touching `FS-04/`; on `main`, build and push Docker images to GHCR, then call deploy hooks if configured. See [11 · DevOps](../11-devops.md).
+Lint + tests for backend and frontend on every push/PR touching `FS-04/`; on `main`, build and push Docker images to GHCR, verify the published images, then deploy the live site. See [11 · DevOps](../11-devops.md).

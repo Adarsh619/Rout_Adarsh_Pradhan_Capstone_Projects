@@ -1,4 +1,4 @@
-# Full stack: PostgreSQL, Redis, Django API, Celery worker + beat, React (nginx), stripe-mock.
+# Full stack: PostgreSQL, Redis, the Node.js API, the BullMQ worker, React (nginx), stripe-mock.
 #   cp .env.example .env && docker compose up --build
 #   App: http://localhost:3000 (FRONTEND_PORT)   API docs: http://localhost:8000/api/docs/
 # Only the app's port is reachable from other machines; the database, API and stripe-mock ports are
@@ -57,27 +57,20 @@ services:
     <<: *backend
     environment:
       <<: *backend-env
-      RUN_MIGRATIONS: "1"
       TRUSTED_PROXY_COUNT: "1"  # the frontend's nginx; see docs/10-security.md
     ports:
       - "127.0.0.1:8000:8000"
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health/')"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8000/api/health/').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
       interval: 10s
       start_period: 30s
       retries: 10
 
-  # Workers start once the backend is healthy, i.e. after it has applied the migrations.
+  # The worker runs the background jobs and the schedule (BullMQ); no separate scheduler is needed.
+  # It starts once the backend is healthy, i.e. after the backend has applied the migrations.
   worker:
     <<: *backend
-    command: celery -A config worker -l info --concurrency 2
-    depends_on:
-      backend:
-        condition: service_healthy
-
-  beat:
-    <<: *backend
-    command: celery -A config beat -l info --schedule /tmp/celerybeat-schedule
+    command: node dist/worker.js
     depends_on:
       backend:
         condition: service_healthy
