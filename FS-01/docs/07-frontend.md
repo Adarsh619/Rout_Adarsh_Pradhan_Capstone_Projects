@@ -11,7 +11,7 @@ only; it never holds a secret, and everything it shows comes from the server.
 | Framework | React 19 + TypeScript, built with Vite |
 | Routing | React Router 7, one `<Routes>` table in `App.tsx` |
 | Server data | TanStack Query 5: caching, background refetch, `placeholderData` so lists don't flash while paging |
-| Styling | Tailwind CSS 4 with a small brand palette (`--color-brand-*` in `index.css`) |
+| Styling | Tailwind CSS 4 with a small palette in `index.css`: forest green for the brand (`--color-brand-*`), a cream page (`--color-cream`) and coral (`--color-cta-*`) only for buying actions (Add to cart, checkout, pay). White text on the green and coral buttons passes WCAG AA |
 | Tests | Vitest + Testing Library (jsdom); the API is faked at `fetch` with `mockApi` |
 
 ## Folder layout
@@ -75,7 +75,7 @@ The analytics and earnings pages use one small SVG component, `ColumnChart`, ins
 - the peak day is labelled; every other value is in a tooltip on hover or keyboard focus (each day's whole slot is the
   target, bigger than the bar)
 - **Show as table** gives the same numbers as an accessible table
-- one series, so no legend; the brand indigo was checked for lightness, chroma and 3:1 contrast on the page background
+- one series, so no legend; the brand green (`#2d6a4f`) has about 5.7:1 contrast on the cream page background, above the 3:1 charts need
 
 Status counts use simple labelled bars; headline figures are `StatTile`s. Ranges (7 / 30 / 90 days) are in one row
 above the charts and are computed in Indian time, like the API's.

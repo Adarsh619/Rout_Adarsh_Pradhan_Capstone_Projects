@@ -125,7 +125,7 @@ function PaymentPanel({ order, payment }: { order: Order; payment: PaymentStep }
           type="button"
           onClick={() => run("pay")}
           disabled={!!busy}
-          className="rounded-lg bg-brand-600 px-4 py-2 font-medium text-white hover:bg-brand-700 disabled:opacity-60"
+          className="rounded-lg bg-cta-600 px-4 py-2 font-medium text-white hover:bg-cta-700 disabled:opacity-60"
         >
           {busy === "pay" ? (razorpay ? "Waiting for Razorpay…" : "Paying…") : razorpay ? `Pay ${formatINR(payment.amount)} with Razorpay` : `Pay ${formatINR(payment.amount)} (test)`}
         </button>

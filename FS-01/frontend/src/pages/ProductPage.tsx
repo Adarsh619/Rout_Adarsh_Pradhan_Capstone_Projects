@@ -33,7 +33,7 @@ function AddToCart({ product }: { product: Product }) {
           type="button"
           onClick={() => add.mutate({ productId: product.id, qty })}
           disabled={add.isPending}
-          className="rounded-lg bg-brand-600 px-6 py-2 font-medium text-white hover:bg-brand-700 disabled:opacity-60"
+          className="rounded-lg bg-cta-600 px-6 py-2 font-medium text-white hover:bg-cta-700 disabled:opacity-60"
         >
           {add.isPending ? "Adding…" : "Add to cart"}
         </button>

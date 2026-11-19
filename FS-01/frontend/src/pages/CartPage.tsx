@@ -190,12 +190,12 @@ export function CartPage() {
         ) : cart.canCheckout ? (
           <Link
             to={status === "signedIn" ? "/checkout" : "/login?next=%2Fcheckout"}
-            className="block rounded-lg bg-brand-600 px-4 py-2 text-center font-medium text-white hover:bg-brand-700"
+            className="block rounded-lg bg-cta-600 px-4 py-2 text-center font-medium text-white hover:bg-cta-700"
           >
             {status === "signedIn" ? "Proceed to checkout" : "Sign in to check out"}
           </Link>
         ) : (
-          <button type="button" disabled className="w-full rounded-lg bg-brand-600 px-4 py-2 font-medium text-white opacity-50">
+          <button type="button" disabled className="w-full rounded-lg bg-cta-600 px-4 py-2 font-medium text-white opacity-50">
             Proceed to checkout
           </button>
         )}
