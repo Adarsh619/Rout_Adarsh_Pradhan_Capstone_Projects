@@ -30,7 +30,7 @@ jobs and **Stripe subscription billing** (test mode).
 | Tests | **Vitest** + Supertest (API, against real PostgreSQL), Vitest + Testing Library (frontend) |
 | Infra | **Docker** Compose · nginx · GitHub Actions (test → smoke-test → publish images → verify the published release → GitHub Release → live deploy) |
 
-**Status:** all seven steps of the brief are built and tested: **197 backend tests (96% line coverage)**, **62 frontend tests**, and a CI smoke test that starts the whole Docker stack and walks through a full user flow on every push. Version 2.0.0 moved the stack from Django/Python to the required Node.js/TypeScript/Prisma tools with the same API and features ([why and how](docs/13-challenges-and-next-steps.md#stack-migration-to-nodejs-and-typescript-v200)).
+**Status:** all seven steps of the brief are built and tested: **197 backend tests (96% line coverage)**, **63 frontend tests**, and a CI smoke test that starts the whole Docker stack and walks through a full user flow on every push. Version 2.0.0 moved the stack from Django/Python to the required Node.js/TypeScript/Prisma tools with the same API and features ([why and how](docs/13-challenges-and-next-steps.md#stack-migration-to-nodejs-and-typescript-v200)).
 
 ![Architecture](docs/assets/architecture.png)
 
@@ -139,7 +139,7 @@ The backend reads its settings from the environment. To skip the worker while de
 ```bash
 cd backend && npm test          # 197 tests: Vitest + Supertest on real PostgreSQL + stripe-mock (own database taskflow_test)
 cd backend && npm run test:coverage   # the same, failing below 90% line coverage
-cd frontend && npm test         # 62 tests: Vitest + Testing Library
+cd frontend && npm test         # 63 tests: Vitest + Testing Library
 bash scripts/smoke-test.sh http://localhost:3000   # the whole running stack, through nginx
 ```
 

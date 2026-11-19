@@ -2,6 +2,7 @@ import { ApiError, messageOf, type ErrorData } from "../api";
 import { useState, type FormEvent } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../auth";
+import PasswordField from "../components/PasswordField";
 
 // DRF returns {"field": ["message"]}; show each message next to its field.
 const fieldError = (data: ErrorData, field: string): string => {
@@ -85,26 +86,20 @@ export default function Account() {
           <input type="email" autoComplete="username" value={user.email} readOnly hidden />
           {/* Hints and errors sit outside the <label>, so the field's name stays just "New password". */}
           <div className="field">
-            <label>Current password
-              <input type="password" required autoComplete="current-password" value={pw.current} aria-describedby="current-password-error"
-                aria-invalid={Boolean(pwErrors.current)} onChange={(e) => setPw({ ...pw, current: e.target.value })} />
-            </label>
+            <PasswordField label="Current password" required autoComplete="current-password" value={pw.current} aria-describedby="current-password-error"
+              aria-invalid={Boolean(pwErrors.current)} onChange={(e) => setPw({ ...pw, current: e.target.value })} />
             {pwErrors.current && <span id="current-password-error" className="field-error">{pwErrors.current}</span>}
           </div>
           <div className="field">
-            <label>New password
-              <input type="password" required minLength={8} autoComplete="new-password" value={pw.next}
-                aria-invalid={Boolean(pwErrors.next)} aria-describedby="new-password-help" onChange={(e) => setPw({ ...pw, next: e.target.value })} />
-            </label>
+            <PasswordField label="New password" required minLength={8} autoComplete="new-password" value={pw.next}
+              aria-invalid={Boolean(pwErrors.next)} aria-describedby="new-password-help" onChange={(e) => setPw({ ...pw, next: e.target.value })} />
             {pwErrors.next
               ? <span id="new-password-help" className="field-error">{pwErrors.next}</span>
               : <span id="new-password-help" className="muted small">At least 8 characters, not only numbers, not a common password and not like your email.</span>}
           </div>
           <div className="field">
-            <label>Confirm new password
-              <input type="password" required autoComplete="new-password" value={pw.confirm} aria-describedby="confirm-password-error"
-                aria-invalid={mismatch} onChange={(e) => setPw({ ...pw, confirm: e.target.value })} />
-            </label>
+            <PasswordField label="Confirm new password" required autoComplete="new-password" value={pw.confirm} aria-describedby="confirm-password-error"
+              aria-invalid={mismatch} onChange={(e) => setPw({ ...pw, confirm: e.target.value })} />
             {mismatch && <span id="confirm-password-error" className="field-error">The passwords don't match.</span>}
           </div>
           {pwErrors.form && <div className="error" role="alert">{pwErrors.form}</div>}

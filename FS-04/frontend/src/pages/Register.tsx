@@ -2,6 +2,7 @@ import { messageOf } from "../api";
 import { useState, type FormEvent, type ChangeEvent } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth";
+import PasswordField from "../components/PasswordField";
 
 export default function Register() {
   const { user, register } = useAuth();
@@ -30,10 +31,8 @@ export default function Register() {
         <label>Full name<input autoFocus autoComplete="name" value={form.full_name} onChange={set("full_name")} /></label>
         <label>Email<input type="email" required autoComplete="email" value={form.email} onChange={set("email")} /></label>
         <div className="field">
-          <label>Password
-            <input type="password" required minLength={8} autoComplete="new-password" aria-describedby="password-rules"
-              value={form.password} onChange={set("password")} />
-          </label>
+          <PasswordField label="Password" required minLength={8} autoComplete="new-password" aria-describedby="password-rules"
+            value={form.password} onChange={set("password")} />
           <span id="password-rules" className="muted small">At least 8 characters, not only numbers, not a common password and not like your email.</span>
         </div>
         <label>Company / workspace name<input autoComplete="organization" value={form.workspace_name} onChange={set("workspace_name")} placeholder="Acme Corp" /></label>

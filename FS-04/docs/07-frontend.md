@@ -55,7 +55,7 @@ The sign-in page shows the demo login (`owner@acme.test / demo12345`). It's bake
 
 - **Dialogs** (`Modal.jsx`) are `role="dialog"` with `aria-modal` and a labelled title. Focus moves into the dialog when it opens, Tab and Shift+Tab stay inside it, Escape closes it, and focus returns to whatever opened it.
 - **Notifications** are buttons, so they work with the keyboard; the bell announces the unread count ("Notifications, 2 unread"); Escape or a click outside closes the panel. Opening a notification marks it read.
-- Visible focus ring on every control (`:focus-visible`), and correct `autocomplete` values so password managers fill the login and registration forms. Registration and the account page list the password rules under the field. Hints and errors sit **outside** the `<label>` (linked with `aria-describedby`), so a screen reader announces the field as just "New password" and reads the hint separately.
+- Visible focus ring on every control (`:focus-visible`), and correct `autocomplete` values so password managers fill the login and registration forms. Registration and the account page list the password rules under the field. Hints and errors sit **outside** the `<label>` (linked with `aria-describedby`), so a screen reader announces the field as just "New password" and reads the hint separately. Every password field (sign-in, sign-up and the three on the account page) has an eye button to show what was typed; it sits outside the `<label>` for the same reason, is a toggle (`aria-pressed`), and Edge's built-in reveal icon is hidden so only one shows.
 
 ## Polling
 

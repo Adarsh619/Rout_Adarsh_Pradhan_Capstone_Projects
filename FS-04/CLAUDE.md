@@ -74,7 +74,7 @@ npm run openapi                  # copy backend/openapi.yaml to docs/
 ```bash
 npm ci
 npm run lint            # ESLint + tsc (strict app config) + tsc -p tsconfig.test.json (tests)
-npx vitest run          # 62 tests
+npx vitest run          # 63 tests
 npm run build
 npm run dev             # http://localhost:5173, proxies /api to :8000
 ```

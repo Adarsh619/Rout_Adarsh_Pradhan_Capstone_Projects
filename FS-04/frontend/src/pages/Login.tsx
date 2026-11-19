@@ -2,6 +2,7 @@ import { messageOf } from "../api";
 import { useState, type FormEvent } from "react";
 import { Link, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../auth";
+import PasswordField from "../components/PasswordField";
 
 // The demo password is only useful where the demo data was seeded; hide it with VITE_DEMO_HINT=false.
 const SHOW_DEMO_HINT = import.meta.env.VITE_DEMO_HINT !== "false";
@@ -31,7 +32,7 @@ export default function Login() {
         <p className="muted">Sign in to your workspace</p>
         {sessionExpired && <div className="notice" role="status">Your session has expired. Please sign in again.</div>}
         <label>Email<input type="email" required autoFocus autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} /></label>
-        <label>Password<input type="password" required autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} /></label>
+        <PasswordField label="Password" required autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
         {error && <div className="error" role="alert">{error}</div>}
         <button className="primary" disabled={busy}>{busy ? "Signing in…" : "Sign in"}</button>
         <p className="small">No account? <Link to="/register">Create one</Link></p>

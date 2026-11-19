@@ -71,16 +71,22 @@ Screenshots: [board](../assets/screenshots/board.png), [issue](../assets/screens
 
 | Token | Light | Dark | Use |
 |---|---|---|---|
-| `--bg` | `#f6f7fb` | `#0f1220` | Page background |
-| `--panel` | `#ffffff` | `#181c2e` | Cards, panels, sidebar |
-| `--text` | `#1e2333` | `#e5e7f0` | Body text |
-| `--muted` | `#6b7280` | `#9aa0b4` | Secondary text, labels |
-| `--border` | `#e5e7eb` | `#2a2f45` | Borders, dividers |
-| `--primary` | `#4f46e5` | `#4f46e5` | Primary buttons, links, active nav, avatars |
-| `--danger` | `#dc2626` | `#dc2626` | Destructive actions, errors, limit warnings |
-| `--col` | `#eef0f5` | `#141829` | Board column background, badges |
+The palette is **navy, sand and tangerine** (it replaced the stock indigo after v2.0.0).
 
-Dark mode follows the operating system (`prefers-color-scheme`).
+| Token | Light | Dark | Use |
+|---|---|---|---|
+| `--bg` | `#efe6d6` (sand) | `#0f1a2b` | Page background |
+| `--panel` | `#fbf7ef` | `#16233a` | Cards, panels |
+| `--text` | `#1b2a41` (navy) | `#efe6d6` | Body text |
+| `--muted` | `#55627a` | `#a3aec2` | Secondary text, labels |
+| `--border` | `#ddd0ba` | `#26354f` | Borders, dividers |
+| `--primary` | `#f28c28` (tangerine) | `#f28c28` | Button fills, avatars, active tab underline, drop highlight |
+| `--primary-ink` | `#1b2a41` | `#1b2a41` | Text on tangerine (white on tangerine is too faint) |
+| `--link` | `#1b4f8a` | `#f5a04f` | Links, active nav and tab text, focus ring (tangerine text on sand is too faint) |
+| `--danger` | `#b42318` | `#dc2626` | Destructive actions, errors, limit warnings |
+| `--col` | `#e5dac6` | `#122036` | Board column background, badges |
+
+The sidebar is navy in both themes (`#1b2a41`; `#0b1322` in dark mode): it redefines the same variables, so everything inside it adapts. Dark mode follows the operating system (`prefers-color-scheme`).
 
 ### Meaning colours
 
@@ -88,7 +94,7 @@ Dark mode follows the operating system (`prefers-color-scheme`).
 |---|---|
 | Default statuses | To Do `#64748b` · In Progress `#2563eb` · In Review `#9333ea` · Done `#16a34a` (editable per status) |
 | Priority chips | Low blue · Medium yellow · High orange · Critical red |
-| Sprint state | Active green · Planned indigo · Closed grey |
+| Sprint state | Active green · Planned blue · Closed grey |
 | Issue type icons | 🐞 bug · 📗 story · ✅ task · ⚡ epic |
 
 ### Typography and shape
