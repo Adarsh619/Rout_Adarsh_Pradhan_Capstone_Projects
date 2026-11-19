@@ -27,6 +27,27 @@ describe("signing in", () => {
     expect(JSON.parse(loginCall[1]!.body as string)).toEqual({ email: `${role}@shopsphere.test`, password: "Sh0pSphere-demo" });
   });
 
+  it("shows and hides the password with the eye button, without submitting, and hides it when the form is sent", async () => {
+    const fetchSpy = mockApi({ "POST /api/v1/auth/login": () => errorResponse(401, "invalid_credentials", "Email or password is incorrect") });
+    renderWithProviders(<App />, { route: "/login" });
+    const password = await screen.findByLabelText("Password");
+    await userEvent.type(password, "Sh0pSphere-demo");
+    expect(password).toHaveAttribute("type", "password");
+
+    await userEvent.click(screen.getByRole("button", { name: "Show password" }));
+    expect(password).toHaveAttribute("type", "text");
+    expect(password).toHaveValue("Sh0pSphere-demo");
+    await userEvent.click(screen.getByRole("button", { name: "Hide password" }));
+    expect(password).toHaveAttribute("type", "password");
+    expect(fetchSpy.mock.calls.some(([url]) => String(url).endsWith("/auth/login"))).toBe(false);
+
+    await userEvent.click(screen.getByRole("button", { name: "Show password" }));
+    await userEvent.type(screen.getByLabelText("Email"), "x@example.com");
+    await userEvent.click(screen.getByRole("button", { name: "Sign in" }));
+    await waitFor(() => expect(password).toHaveAttribute("type", "password"));
+    expect(screen.getByRole("button", { name: "Show password" })).toBeInTheDocument();
+  });
+
   it("shows the server's message on a wrong password and stays on the page", async () => {
     mockApi({ "POST /api/v1/auth/login": () => errorResponse(401, "invalid_credentials", "Email or password is incorrect") });
     renderWithProviders(<App />, { route: "/login" });
