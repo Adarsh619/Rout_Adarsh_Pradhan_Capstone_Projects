@@ -92,7 +92,7 @@ The sidebar is navy in both themes (`#1b2a41`; `#0b1322` in dark mode): it redef
 
 | Element | Colours |
 |---|---|
-| Default statuses | To Do `#64748b` · In Progress `#2563eb` · In Review `#9333ea` · Done `#16a34a` (editable per status) |
+| Default statuses | To Do `#64748b` · In Progress `#2563eb` · In Review `#0ea5e9` · Done `#16a34a` (editable per status) |
 | Priority chips | Low blue · Medium yellow · High orange · Critical red |
 | Sprint state | Active green · Planned blue · Closed grey |
 | Issue type icons | 🐞 bug · 📗 story · ✅ task · ⚡ epic |

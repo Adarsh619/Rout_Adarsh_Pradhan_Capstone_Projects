@@ -5,7 +5,7 @@ import { badRequest } from "../../lib/errors.js";
 const DEFAULT_STATUSES = [
   { name: "To Do", category: "todo", color: "#64748b" },
   { name: "In Progress", category: "in_progress", color: "#2563eb" },
-  { name: "In Review", category: "in_progress", color: "#9333ea" },
+  { name: "In Review", category: "in_progress", color: "#0ea5e9" },
   { name: "Done", category: "done", color: "#16a34a" },
 ] as const;
 

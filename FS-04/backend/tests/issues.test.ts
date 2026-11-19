@@ -26,6 +26,8 @@ describe("projects and issues", () => {
     expect(project.key).toBe("WEB");
     const r = await api.get(`/api/boards/${project.board_id}/columns/`);
     expect(r.body.columns.map((c: { status: { name: string } }) => c.status.name)).toEqual(["To Do", "In Progress", "In Review", "Done"]);
+    // Colours match the navy/sand/tangerine UI: no violet (In Review used to be #9333ea).
+    expect(r.body.columns.map((c: { status: { color: string } }) => c.status.color)).toEqual(["#64748b", "#2563eb", "#0ea5e9", "#16a34a"]);
   });
 
   it("rejects a duplicate project key, and keys that aren't A-Z/0-9", async () => {
