@@ -1,5 +1,10 @@
-// Locally the API is on the same origin (/api is proxied); on Vercel VITE_API_URL points at the API server.
+// The API is on the same origin everywhere (/api is proxied by Vite, nginx or Vercel); VITE_API_URL can override it.
 const API_URL = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
+
+// Retry a failed query up to 3 times, but never when the server has answered 4xx (not found, not allowed, bad input):
+// asking again can't change that answer and only keeps the page on "Loading…".
+export const shouldRetry = (failures: number, error: unknown) =>
+  failures < 3 && !(error instanceof ApiError && error.status >= 400 && error.status < 500);
 
 export class ApiError extends Error {
   constructor(
