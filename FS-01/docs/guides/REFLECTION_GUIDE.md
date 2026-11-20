@@ -2,6 +2,8 @@
 
 [Index](../README.md) · [Presentation outline](PRESENTATION.md) · [Day plan](DAY_PLAN.md)
 
+> The finished reflection is [REFLECTION.md](REFLECTION.md).
+
 The brief asks for an **individual reflection from each intern on what they learned and what they owned**. This page
 gives a structure, questions to answer and the facts you can draw on. The reflection itself must be **in your own
 words**: reviewers read it to hear you, so write it yourself, then check it against the facts below.
